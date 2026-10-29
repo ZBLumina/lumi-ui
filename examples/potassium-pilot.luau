@@ -1,8 +1,8 @@
 -- Demo only: all callbacks affect this interface, never the game.
 local window = Lumi:CreateWindow({Title = "lumi", Status = "POTASSIUM / PILOT"})
-local overview = window:AddTab("Overview", {Description = "A quieter workspace. Every detail within reach.", Eyebrow = "STUDIO / GETTING STARTED"})
-local player = window:AddTab("Player", {Description = "A library playground for state and numerical controls."})
-local visuals = window:AddTab("Visuals", {Description = "Explore the presentation controls. No game effects."})
+local overview = window:AddTab("Overview", {Icon = "Grid", Description = "A quieter workspace. Every detail within reach.", Eyebrow = "STUDIO / GETTING STARTED"})
+local player = window:AddTab("Player", {Icon = "Sliders", Description = "A library playground for state and numerical controls."})
+local visuals = window:AddTab("Visuals", {Icon = "Layers", Description = "Explore the presentation controls. No game effects."})
 
 local interaction = overview:AddSection("Interaction", {Tag = "LIVE PREVIEW"})
 local enabled = interaction:AddToggle({Name = "Enable workspace", Description = "Keep your current session active.", Default = true,

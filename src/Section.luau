@@ -32,12 +32,16 @@ function Section:Row(options, kind, height)
     self._order += 1
     local row = UI.new("Frame", self.Content, {Name = (options.Name or kind) .. "Row",
         Size = UDim2.new(1, 0, 0, height or 56), LayoutOrder = self._order})
+    local selection = UI.frame(row, "SelectionWash", 6, 5, 0, 0, T.AccentWash, 4)
+    selection.Size = UDim2.new(1, -12, 1, -10)
+    selection.BackgroundTransparency, selection.Visible = 0.4, false
     local rule = UI.new("Frame", row, {Name = "Divider", Size = UDim2.new(1, -32, 0, 1),
         Position = UDim2.fromOffset(16, 0), BackgroundTransparency = 0, BackgroundColor3 = T.SoftLine})
     local title = UI.text(row, "Name", options.Name or kind, 16, 12, 330, 18, 14, T.Text, T.Medium)
     local description = UI.text(row, "Description", options.Description or "", 16, 33, 350, 15, 12, T.Muted)
     local control = {Name = options.Name or kind, Description = options.Description or "", Kind = kind,
-        Row = row, Section = self, Runtime = self.Tab.Window.Runtime, Label = title, DescriptionLabel = description}
+        Row = row, Section = self, Runtime = self.Tab.Window.Runtime, Label = title, DescriptionLabel = description,
+        SelectionWash = selection}
     control.FocusIndicator = UI.new("Frame", row, {Name = "FocusIndicator", Position = UDim2.fromOffset(0, 14),
         Size = UDim2.new(0, 1, 1, -28), BackgroundTransparency = 0.25, BackgroundColor3 = T.AccentSoft, Visible = false})
     function control:Focus() self.Section.Tab.Window:Focus(self) end
@@ -57,6 +61,7 @@ function Section:Row(options, kind, height)
     end
     table.insert(self.Controls, control)
     table.insert(self.Tab.Controls, control)
+    self.Tab:UpdateSummary()
     local rt = control.Runtime
     rt:Connect(row:GetPropertyChangedSignal("AbsoluteSize"), function() control:Relayout() end)
     task.defer(function() if not rt.Destroyed then control:Relayout() end end)

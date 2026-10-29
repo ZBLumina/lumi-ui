@@ -14,9 +14,13 @@ function Tab.new(window, name, options)
     button.LayoutOrder = index
     UI.corner(button, 6)
     self.Button = button
-    self.Number = UI.text(button, "Number", string.format("%02d", index), 12, 0, 24, 42, 10, T.Muted, T.Mono)
-    self.Label = UI.text(button, "Label", name, 43, 0, 104, 42, 13, T.Secondary, T.Medium)
-    self.Label.Size = UDim2.new(1, -50, 1, 0)
+    self.Icon, self.IconParts = UI.icon(button, options.Icon, 14, 13, T.Secondary)
+    self.Number = UI.text(button, "Number", "00", 0, 0, 24, 42, 11, T.Muted, T.Mono)
+    self.Number.Position = UDim2.new(1, -32, 0, 0)
+    self.Number.TextXAlignment = Enum.TextXAlignment.Right
+    self.Label = UI.text(button, "Label", name, 40, 0, 85, 42, 13, T.Secondary, T.Medium)
+    self.Outline = UI.stroke(button, T.AccentSoft)
+    self.Outline.Transparency, self.Outline.Enabled = 0.66, false
     self.Indicator = UI.frame(button, "Selected", 1, 14, 2, 14, T.Accent, 1)
     self.Indicator.Visible = false
     local page = UI.new("ScrollingFrame", window.Workspace, {
@@ -28,12 +32,18 @@ function Tab.new(window, name, options)
     self.Motion = Motion.new(window.Runtime, page)
     UI.new("UIPadding", page, {PaddingLeft = UDim.new(0, 26), PaddingRight = UDim.new(0, 26), PaddingTop = UDim.new(0, 22), PaddingBottom = UDim.new(0, 22)})
     UI.list(page, 14)
-    local header = UI.frame(page, "PageHeader", 0, 0, 644, 76)
-    header.Size = UDim2.new(1, 0, 0, 76)
+    local header = UI.frame(page, "PageHeader", 0, 0, 644, 82)
+    header.Size = UDim2.new(1, 0, 0, 82)
     header.LayoutOrder = 0
-    UI.text(header, "Eyebrow", options.Eyebrow or "LUMI / WORKSPACE", 0, 0, 540, 13, 9, T.Muted, T.Medium)
-    UI.text(header, "Title", name, 0, 20, 570, 30, 23, T.Text, T.Medium).Size = UDim2.new(1, 0, 0, 30)
-    UI.text(header, "Subtitle", self.Description, 0, 54, 620, 17, 12, T.Secondary).Size = UDim2.new(1, 0, 0, 17)
+    self.Header = header
+    UI.text(header, "Eyebrow", options.Eyebrow or string.format("WORKSPACE / %02d", index), 0, 0, 540, 13, 11, T.Muted, T.Medium).Size = UDim2.new(1, 0, 0, 13)
+    self.Title = UI.text(header, "Title", name, 0, 22, 570, 33, 27, T.Text, T.Medium)
+    UI.text(header, "Subtitle", self.Description, 0, 60, 620, 17, 12, T.Secondary).Size = UDim2.new(1, 0, 0, 17)
+    self.Summary = UI.frame(header, "PageSummary", 0, 22, 72, 44)
+    self.Summary.Position = UDim2.new(1, -72, 0, 20)
+    self.Count = UI.text(self.Summary, "Count", "00", 0, 0, 72, 26, 24, T.Accent, T.Mono)
+    self.Count.TextXAlignment = Enum.TextXAlignment.Right
+    UI.text(self.Summary, "Caption", "CONTROLS", 0, 29, 72, 15, 11, T.Muted, T.Mono).TextXAlignment = Enum.TextXAlignment.Right
     window.Runtime:Connect(button.Activated, function() window:SelectTab(self) end)
     window.Runtime:Connect(button.MouseEnter, function()
         if window._closing then return end
@@ -47,9 +57,41 @@ function Tab.new(window, name, options)
         if window.ActiveTab ~= self and not window._closing then window.Runtime:Tween(button, {BackgroundTransparency = 1}, 0.12) end
     end)
     window.Runtime:Connect(page:GetPropertyChangedSignal("CanvasPosition"), function() window:ClosePopup() end)
+    window.Runtime:Connect(button:GetPropertyChangedSignal("AbsoluteSize"), function() self:Relayout() end)
+    window.Runtime:Connect(header:GetPropertyChangedSignal("AbsoluteSize"), function() self:Relayout() end)
     table.insert(window.Tabs, self)
+    self:Relayout()
     if index == 1 then window:SelectTab(self) end
     return self
+end
+
+function Tab:Relayout()
+    local counts = (self.Window.SidebarWidth or 184) >= 170 and #self.Controls < 1000
+    self.Number.Visible = counts
+    self.Label.Size = UDim2.new(1, counts and -76 or -48, 1, 0)
+    local summary = self.Header.AbsoluteSize.X / math.max(0.1, self.Window.Scale) >= 360
+    self.Summary.Visible = summary
+    self.Title.Size = UDim2.new(1, summary and -88 or 0, 0, 33)
+end
+
+function Tab:UpdateSummary()
+    local count = #self.Controls
+    self.Number.Text = string.format("%02d", count)
+    self.Count.Text = string.format("%02d", count)
+    self:Relayout()
+end
+
+function Tab:SetActive(active, duration)
+    local rt = self.Window.Runtime
+    self.Button.BackgroundColor3 = T.AccentWash
+    rt:Tween(self.Button, {BackgroundTransparency = active and 0 or 1}, duration)
+    rt:Tween(self.Label, {TextColor3 = active and T.Accent or T.Secondary}, duration)
+    rt:Tween(self.Number, {TextColor3 = active and T.Secondary or T.Muted}, duration)
+    for _, part in ipairs(self.IconParts) do
+        rt:Tween(part, part:IsA("UIStroke") and {Color = active and T.Accent or T.Secondary}
+            or {BackgroundColor3 = active and T.Accent or T.Secondary}, duration)
+    end
+    self.Outline.Enabled, self.Indicator.Visible = active, active
 end
 
 function Tab:AddSection(name, options)

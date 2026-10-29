@@ -3,6 +3,7 @@ local UI = require("UI")
 local T = require("Theme")
 local Tab = require("Tab")
 local Motion = require("Motion")
+local Inspector = require("components/Inspector")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
@@ -31,9 +32,11 @@ function Window.new(options)
     local sidebar = UI.frame(main, "Sidebar", 0, 0, 184, 660, T.Sidebar, 12)
     self.Sidebar = sidebar
     UI.frame(sidebar, "InnerEdge", 174, 0, 10, 660, T.Sidebar)
-    UI.mark(sidebar, 21, 26, 27)
+    local brandTile = UI.frame(sidebar, "BrandTile", 21, 24, 30, 30, T.AccentWash, 7)
+    UI.stroke(brandTile, T.AccentSoft).Transparency = 0.65
+    UI.mark(brandTile, 5, 5, 20)
     UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 30, 25, T.Text, T.Medium)
-    UI.text(sidebar, "BrandSub", "INTERFACE STUDIO", 21, 65, 145, 14, 9, T.Muted, T.Medium)
+    UI.text(sidebar, "BrandSub", "INTERFACE LIBRARY", 21, 65, 145, 14, 11, T.Muted, T.Medium)
     UI.line(sidebar, 20, 100, 144)
     UI.text(sidebar, "Group", "WORKSPACE", 22, 122, 140, 16, 10, T.Muted, T.Medium)
     self.Navigation = UI.new("ScrollingFrame", sidebar, {
@@ -46,7 +49,7 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "Studio / 0.4.3", 33, 38, 110, 16, 11, T.Muted)
+    UI.text(footer, "Version", "Studio / 0.4.4", 33, 38, 110, 16, 11, T.Muted)
     UI.frame(main, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
     local chrome = UI.frame(main, "Chrome", 184, 0, 916, 48)
@@ -69,45 +72,14 @@ function Window.new(options)
 
     self.Workspace = UI.frame(main, "Workspace", 184, 48, 696, 584, T.Workspace)
     self.Workspace.ClipsDescendants = true
-    local inspector = UI.frame(main, "Inspector", 888, 60, 204, 560, T.Sidebar, 8)
-    self.Inspector = inspector
-    UI.stroke(inspector, T.SoftLine)
-    UI.text(inspector, "InspectorHeading", "INSPECTOR", 16, 19, 172, 16, 9, T.Muted, T.Medium)
-    self.DetailTitle = UI.text(inspector, "DetailTitle", "Your workspace", 16, 52, 172, 42, 18, T.Text, T.Medium)
-    self.DetailTitle.TextWrapped = true
-    self.DetailTitle.TextYAlignment = Enum.TextYAlignment.Top
-    self.DetailTitle.TextTruncate = Enum.TextTruncate.None
-    self.DetailDescription = UI.text(inspector, "Description", "Select a control to see its details.", 16, 103, 172, 46, 12, T.Secondary)
-    self.DetailDescription.TextWrapped = true
-    self.DetailDescription.TextTruncate = Enum.TextTruncate.None
-    self.DetailDescription.TextYAlignment = Enum.TextYAlignment.Top
-    local preview = UI.frame(inspector, "ValuePreview", 16, 164, 172, 148, T.Surface, 6)
-    UI.stroke(preview, T.SoftLine)
-    self.DetailKind = UI.text(preview, "Kind", "SELECTION", 14, 12, 144, 16, 9, T.Muted, T.Medium)
-    self.DetailValue = UI.text(preview, "Value", "Ready", 14, 38, 144, 35, 28, T.Accent, T.Font)
-    self.Bars = {}
-    for i = 1, 29 do
-        local height = (i - 1) % 7 == 0 and 23 or 14
-        self.Bars[i] = UI.frame(preview, "ValueBar", 14 + (i - 1) * 5.05, 119 - height, 1, height, T.Line)
-    end
-    UI.text(preview, "SessionLabel", "SESSION VALUE", 14, 125, 144, 15, 11, T.Muted, T.Mono)
-    UI.text(inspector, "Properties", "PROPERTIES", 16, 334, 172, 16, 9, T.Muted, T.Medium)
-    self.DetailRows = {}
-    for i, name in ipairs({"Page", "Section", "Type", "Range"}) do
-        local y = 361 + (i - 1) * 34
-        UI.text(inspector, name .. "Key", name, 16, y, 50, 24, 12, T.Muted)
-        self.DetailRows[i] = UI.text(inspector, name .. "Value", "--", 72, y, 116, 24, 12, T.Secondary)
-        self.DetailRows[i].TextXAlignment = Enum.TextXAlignment.Right
-        UI.line(inspector, 16, y + 29, 172)
-    end
-    UI.text(inspector, "Hint", "Changes stay in this session.", 16, 525, 172, 16, 10, T.Muted)
+    self.Context = Inspector.new(self)
 
     local status = UI.frame(main, "Statusbar", 184, 632, 916, 28, T.Shell)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
     UI.frame(status, "Dot", 22, 11, 5, 5, T.Green, 3)
     self.StatusText = UI.text(status, "State", "Ready", 35, 0, 560, 28, 10, T.Secondary)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.3", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.4", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -188,9 +160,17 @@ function Window:Fit()
     self.Sidebar.InnerEdge.Size = UDim2.fromOffset(10, self.Height)
     self.Sidebar.Brand.Size = UDim2.fromOffset(sideWidth - 70, 30)
     self.Sidebar.BrandSub.Size = UDim2.fromOffset(sideWidth - 40, 14)
+    self.Sidebar.BrandSub.Text = sideWidth < 170 and "UI LIBRARY" or "INTERFACE LIBRARY"
+    local short = self.Height < 480
+    local navTop = short and 112 or 153
+    self.Sidebar.BrandSub.Position = UDim2.fromOffset(21, short and 60 or 65)
+    self.Sidebar.Rule.Position = UDim2.fromOffset(20, short and 80 or 100)
+    self.Sidebar.Group.Position = UDim2.fromOffset(22, short and 89 or 122)
     self.Sidebar.Rule.Size = UDim2.fromOffset(sideWidth - 40, 1)
-    self.SidebarFooter.Position = UDim2.fromOffset(20, self.Height - 95)
-    self.SidebarFooter.Size = UDim2.fromOffset(sideWidth - 40, 76)
+    self.Navigation.Position = UDim2.fromOffset(12, navTop)
+    self.Navigation.Size = UDim2.new(1, -24, 1, -(navTop + (short and 80 or 105)))
+    self.SidebarFooter.Position = UDim2.fromOffset(20, self.Height - (short and 69 or 95))
+    self.SidebarFooter.Size = UDim2.fromOffset(sideWidth - 40, short and 56 or 76)
     self.SidebarFooter.Rule.Size = UDim2.fromOffset(sideWidth - 40, 1)
     self.SidebarFooter.Build.Size = UDim2.fromOffset(sideWidth - 73, 18)
     self.SidebarFooter.Version.Size = UDim2.fromOffset(sideWidth - 73, 16)
@@ -217,6 +197,7 @@ function Window:Fit()
     self.Chrome.TitleDrag.Size = UDim2.fromOffset(chromeWidth - 54, 48)
     self.Scale = math.min(1, math.max(0.1, (size.X - 32) / self.Width), math.max(0.1, (size.Y - 32) / self.Height))
     self.UIScale.Scale = self.Scale
+    for _, tab in ipairs(self.Tabs) do tab:Relayout() end
     self:SetCenter(self.Center or size / 2)
 end
 
@@ -285,8 +266,12 @@ Window._closeDropdown = Window.ClosePopup
 function Window:Focus(control)
     if self._destroyed or self._closing then return end
     local changed = self.SelectedControl ~= control
-    if self.SelectedControl and self.SelectedControl.FocusIndicator then self.SelectedControl.FocusIndicator.Visible = false end
+    if self.SelectedControl and self.SelectedControl.FocusIndicator then
+        self.SelectedControl.FocusIndicator.Visible = false
+        self.SelectedControl.SelectionWash.Visible = false
+    end
     self.SelectedControl = control
+    if control.SelectionWash then control.SelectionWash.Visible = true end
     if control.FocusIndicator then
         control.FocusIndicator.Visible = true
         if changed then
@@ -294,36 +279,16 @@ function Window:Focus(control)
             self.Runtime:Tween(control.FocusIndicator, {Size = UDim2.new(0, 1, 1, -28)}, 0.12)
         end
     end
-    self.DetailTitle.Text = control.Name
-    self.DetailDescription.Text = control.Description or ""
-    self.DetailKind.Text = string.upper(control.Kind)
-    local value
-    if control.Get then value = control:Get() end
-    local shown = value == nil and "No selection" or tostring(value)
-    if type(value) == "boolean" then shown = value and "Enabled" or "Disabled" end
-    if type(value) == "number" then shown = (control.Format and control:Format(value) or UI.format(value)) .. (control.Suffix or "") end
-    self.DetailValue.Text = shown
-    self.DetailValue.TextSize = #shown > 12 and 15 or 28
-    self.DetailRows[1].Text = control.Section.Tab.Name
-    self.DetailRows[2].Text = control.Section.Name
-    self.DetailRows[3].Text = control.Kind
-    self.DetailRows[4].Text = control.Range or "--"
-    local fraction = control.Fraction and control:Fraction() or ((value == false or value == nil) and 0 or 1)
-    self._barState = self._barState or {}
-    for i, bar in ipairs(self.Bars) do
-        local on = i / #self.Bars <= fraction
-        if self._barState[i] ~= on then
-            self._barState[i] = on
-            self.Runtime:Tween(bar, {BackgroundColor3 = on and T.Accent or T.Line}, Motion.Time.Value)
-        end
-    end
+    self.Context:Update(control)
     self.StatusText.Text = control.Section.Tab.Name .. " / " .. control.Section.Name .. " / " .. control.Name
 end
 
 function Window:SetDetails(title, description, status)
     if self._destroyed then return end
+    self.Context:Clear()
     self.DetailTitle.Text, self.DetailDescription.Text = title or "Details", description or ""
     self.DetailValue.Text = status or "Ready"
+    self.DetailValue.TextSize = #self.DetailValue.Text > 12 and 15 or 28
 end
 
 function Window:AddTab(name, options)
@@ -345,12 +310,8 @@ function Window:SelectTab(tab)
         item.Page.Position = UDim2.fromOffset(0, 0)
         local active = item == tab
         item.Page.Visible = active
-        item.Button.BackgroundColor3 = T.AccentWash
         local duration = previous and 0.12 or 0
-        self.Runtime:Tween(item.Button, {BackgroundTransparency = active and 0 or 1}, duration)
-        self.Runtime:Tween(item.Label, {TextColor3 = active and T.Accent or T.Secondary}, duration)
-        self.Runtime:Tween(item.Number, {TextColor3 = active and T.Accent or T.Muted}, duration)
-        item.Indicator.Visible = active
+        item:SetActive(active, duration)
     end
     if previous then
         tab.Page.Position = UDim2.fromOffset(0, 4)
@@ -358,7 +319,10 @@ function Window:SelectTab(tab)
         tab.Motion:Fade(0.35, 0, Motion.Time.Page)
     end
     self.Breadcrumb.Text = "Workspace  /  " .. tab.Name
-    if self.SelectedControl and self.SelectedControl.FocusIndicator then self.SelectedControl.FocusIndicator.Visible = false end
+    if self.SelectedControl and self.SelectedControl.FocusIndicator then
+        self.SelectedControl.FocusIndicator.Visible = false
+        self.SelectedControl.SelectionWash.Visible = false
+    end
     self.SelectedControl = nil
     if tab.Controls[1] then self:Focus(tab.Controls[1]) else self:SetDetails(tab.Name, tab.Description, "Ready") end
 end

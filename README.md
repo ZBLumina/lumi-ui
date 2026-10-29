@@ -1,6 +1,8 @@
 # Lumi UI
 
-A modular Luau interface library for Potassium. **v0.4.3 is a visual pilot**: warm charcoal surfaces, compact property groups, restrained motion, and a contextual inspector. Demo actions affect the interface only.
+A modular Luau interface library for Potassium. **v0.4.4 is a visual pilot**: warm charcoal surfaces, compact property groups, restrained motion, and a contextual inspector. Demo actions affect the interface only.
+
+The latest design pass adds native geometric navigation icons, actual control counts, a clearer page heading and an inset selection wash. The inspector now distinguishes numeric ranges, binary states, discrete options (including empty collections), and actions. Its graphics explain the selected control rather than showing the same meter everywhere. See the [context design and validation](docs/design/studio-v044-context.md).
 
 Motion uses short Quart Out transitions: a 220ms window entrance, 160ms user dismissal, 140ms page reveal, brief popovers, tactile button feedback and smooth slider presentation. Values and tab state change immediately; dragging follows the pointer directly. Use `Window:Close()` for animated dismissal; `Window:Destroy()` remains immediate for cleanup/reinjection. Set `Animations = false` in `CreateWindow` to disable interpolation and button pulses. See the [motion design and validation](docs/design/studio-v043-motion.md).
 
@@ -46,6 +48,8 @@ print(intensity:Get())
 
 All controls accept `Name`, `Description`, and `Callback`. Value controls expose `Get()`, `Set(value, silent?)`, and `Focus()`. Buttons expose `Press()` and a display status through `Get()`. Dropdowns also expose `Open()` / `Close()`.
 
+Tabs optionally accept `Icon = "Grid"`, `"Sliders"`, or `"Layers"`. Missing or unknown icon names use Grid. Icons use native GUI geometry; no external images or special font glyphs are required. Navigation counts hide on narrow sidebars to preserve tab labels.
+
 - Slider bounds normalize if reversed. Equal bounds stay fixed. Defaults and setters clamp; invalid/nonfinite numbers use safe finite fallbacks. `Step` defaults to 1. Both endpoints remain reachable. Click the numeric value to type a value; focused sliders support left/right arrows.
 - Dropdown defaults fall back to the first value when invalid; empty lists keep `nil`. Invalid setters leave state unchanged. Long lists scroll; menus close on outside click, Escape, tab change, content scroll, window move, or focus loss.
 - State changes precede protected asynchronous callbacks. Errors are logged without breaking the control. Destruction cancels suspended callbacks started by Lumi. Work independently spawned by user callbacks remains the caller's responsibility. A callback that destroys its own window may finish its current invocation safely.
@@ -74,6 +78,7 @@ src/
   Window.luau       shell, inspector, input, scaling
   Tab.luau          navigation and scrolling pages
   Section.luau      property groups and shared rows
+  components/      contextual inspector presentation
   controls/         Button, Toggle, Slider, Dropdown
 examples/potassium-pilot.luau   demo content
 scripts/build.mjs              standalone bundler

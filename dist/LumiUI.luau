@@ -242,12 +242,16 @@ function Section:Row(options, kind, height)
     self._order += 1
     local row = UI.new("Frame", self.Content, {Name = (options.Name or kind) .. "Row",
         Size = UDim2.new(1, 0, 0, height or 56), LayoutOrder = self._order})
+    local selection = UI.frame(row, "SelectionWash", 6, 5, 0, 0, T.AccentWash, 4)
+    selection.Size = UDim2.new(1, -12, 1, -10)
+    selection.BackgroundTransparency, selection.Visible = 0.4, false
     local rule = UI.new("Frame", row, {Name = "Divider", Size = UDim2.new(1, -32, 0, 1),
         Position = UDim2.fromOffset(16, 0), BackgroundTransparency = 0, BackgroundColor3 = T.SoftLine})
     local title = UI.text(row, "Name", options.Name or kind, 16, 12, 330, 18, 14, T.Text, T.Medium)
     local description = UI.text(row, "Description", options.Description or "", 16, 33, 350, 15, 12, T.Muted)
     local control = {Name = options.Name or kind, Description = options.Description or "", Kind = kind,
-        Row = row, Section = self, Runtime = self.Tab.Window.Runtime, Label = title, DescriptionLabel = description}
+        Row = row, Section = self, Runtime = self.Tab.Window.Runtime, Label = title, DescriptionLabel = description,
+        SelectionWash = selection}
     control.FocusIndicator = UI.new("Frame", row, {Name = "FocusIndicator", Position = UDim2.fromOffset(0, 14),
         Size = UDim2.new(0, 1, 1, -28), BackgroundTransparency = 0.25, BackgroundColor3 = T.AccentSoft, Visible = false})
     function control:Focus() self.Section.Tab.Window:Focus(self) end
@@ -267,6 +271,7 @@ function Section:Row(options, kind, height)
     end
     table.insert(self.Controls, control)
     table.insert(self.Tab.Controls, control)
+    self.Tab:UpdateSummary()
     local rt = control.Runtime
     rt:Connect(row:GetPropertyChangedSignal("AbsoluteSize"), function() control:Relayout() end)
     task.defer(function() if not rt.Destroyed then control:Relayout() end end)
@@ -306,9 +311,13 @@ function Tab.new(window, name, options)
     button.LayoutOrder = index
     UI.corner(button, 6)
     self.Button = button
-    self.Number = UI.text(button, "Number", string.format("%02d", index), 12, 0, 24, 42, 10, T.Muted, T.Mono)
-    self.Label = UI.text(button, "Label", name, 43, 0, 104, 42, 13, T.Secondary, T.Medium)
-    self.Label.Size = UDim2.new(1, -50, 1, 0)
+    self.Icon, self.IconParts = UI.icon(button, options.Icon, 14, 13, T.Secondary)
+    self.Number = UI.text(button, "Number", "00", 0, 0, 24, 42, 11, T.Muted, T.Mono)
+    self.Number.Position = UDim2.new(1, -32, 0, 0)
+    self.Number.TextXAlignment = Enum.TextXAlignment.Right
+    self.Label = UI.text(button, "Label", name, 40, 0, 85, 42, 13, T.Secondary, T.Medium)
+    self.Outline = UI.stroke(button, T.AccentSoft)
+    self.Outline.Transparency, self.Outline.Enabled = 0.66, false
     self.Indicator = UI.frame(button, "Selected", 1, 14, 2, 14, T.Accent, 1)
     self.Indicator.Visible = false
     local page = UI.new("ScrollingFrame", window.Workspace, {
@@ -320,12 +329,18 @@ function Tab.new(window, name, options)
     self.Motion = Motion.new(window.Runtime, page)
     UI.new("UIPadding", page, {PaddingLeft = UDim.new(0, 26), PaddingRight = UDim.new(0, 26), PaddingTop = UDim.new(0, 22), PaddingBottom = UDim.new(0, 22)})
     UI.list(page, 14)
-    local header = UI.frame(page, "PageHeader", 0, 0, 644, 76)
-    header.Size = UDim2.new(1, 0, 0, 76)
+    local header = UI.frame(page, "PageHeader", 0, 0, 644, 82)
+    header.Size = UDim2.new(1, 0, 0, 82)
     header.LayoutOrder = 0
-    UI.text(header, "Eyebrow", options.Eyebrow or "LUMI / WORKSPACE", 0, 0, 540, 13, 9, T.Muted, T.Medium)
-    UI.text(header, "Title", name, 0, 20, 570, 30, 23, T.Text, T.Medium).Size = UDim2.new(1, 0, 0, 30)
-    UI.text(header, "Subtitle", self.Description, 0, 54, 620, 17, 12, T.Secondary).Size = UDim2.new(1, 0, 0, 17)
+    self.Header = header
+    UI.text(header, "Eyebrow", options.Eyebrow or string.format("WORKSPACE / %02d", index), 0, 0, 540, 13, 11, T.Muted, T.Medium).Size = UDim2.new(1, 0, 0, 13)
+    self.Title = UI.text(header, "Title", name, 0, 22, 570, 33, 27, T.Text, T.Medium)
+    UI.text(header, "Subtitle", self.Description, 0, 60, 620, 17, 12, T.Secondary).Size = UDim2.new(1, 0, 0, 17)
+    self.Summary = UI.frame(header, "PageSummary", 0, 22, 72, 44)
+    self.Summary.Position = UDim2.new(1, -72, 0, 20)
+    self.Count = UI.text(self.Summary, "Count", "00", 0, 0, 72, 26, 24, T.Accent, T.Mono)
+    self.Count.TextXAlignment = Enum.TextXAlignment.Right
+    UI.text(self.Summary, "Caption", "CONTROLS", 0, 29, 72, 15, 11, T.Muted, T.Mono).TextXAlignment = Enum.TextXAlignment.Right
     window.Runtime:Connect(button.Activated, function() window:SelectTab(self) end)
     window.Runtime:Connect(button.MouseEnter, function()
         if window._closing then return end
@@ -339,9 +354,41 @@ function Tab.new(window, name, options)
         if window.ActiveTab ~= self and not window._closing then window.Runtime:Tween(button, {BackgroundTransparency = 1}, 0.12) end
     end)
     window.Runtime:Connect(page:GetPropertyChangedSignal("CanvasPosition"), function() window:ClosePopup() end)
+    window.Runtime:Connect(button:GetPropertyChangedSignal("AbsoluteSize"), function() self:Relayout() end)
+    window.Runtime:Connect(header:GetPropertyChangedSignal("AbsoluteSize"), function() self:Relayout() end)
     table.insert(window.Tabs, self)
+    self:Relayout()
     if index == 1 then window:SelectTab(self) end
     return self
+end
+
+function Tab:Relayout()
+    local counts = (self.Window.SidebarWidth or 184) >= 170 and #self.Controls < 1000
+    self.Number.Visible = counts
+    self.Label.Size = UDim2.new(1, counts and -76 or -48, 1, 0)
+    local summary = self.Header.AbsoluteSize.X / math.max(0.1, self.Window.Scale) >= 360
+    self.Summary.Visible = summary
+    self.Title.Size = UDim2.new(1, summary and -88 or 0, 0, 33)
+end
+
+function Tab:UpdateSummary()
+    local count = #self.Controls
+    self.Number.Text = string.format("%02d", count)
+    self.Count.Text = string.format("%02d", count)
+    self:Relayout()
+end
+
+function Tab:SetActive(active, duration)
+    local rt = self.Window.Runtime
+    self.Button.BackgroundColor3 = T.AccentWash
+    rt:Tween(self.Button, {BackgroundTransparency = active and 0 or 1}, duration)
+    rt:Tween(self.Label, {TextColor3 = active and T.Accent or T.Secondary}, duration)
+    rt:Tween(self.Number, {TextColor3 = active and T.Secondary or T.Muted}, duration)
+    for _, part in ipairs(self.IconParts) do
+        rt:Tween(part, part:IsA("UIStroke") and {Color = active and T.Accent or T.Secondary}
+            or {BackgroundColor3 = active and T.Accent or T.Secondary}, duration)
+    end
+    self.Outline.Enabled, self.Indicator.Visible = active, active
 end
 
 function Tab:AddSection(name, options)
@@ -448,6 +495,30 @@ function UI.mark(parent, x, y, size, color)
     return mark
 end
 
+-- Native geometric icons; no font glyphs or external asset dependency.
+function UI.icon(parent, style, x, y, color)
+    local icon = UI.frame(parent, "Icon", x, y, 16, 16)
+    local parts = {}
+    local function line(name, px, py, width, height)
+        local part = UI.frame(icon, name, px, py, width, height, color or T.Secondary, 1)
+        table.insert(parts, part)
+    end
+    if style == "Sliders" then
+        for i, offset in ipairs({4, 10, 7}) do
+            line("Track", 1, (i - 1) * 6 + 2, 14, 1)
+            line("Handle", offset, (i - 1) * 6, 2, 5)
+        end
+    elseif style == "Layers" then
+        for i = 0, 2 do
+            local layer = UI.frame(icon, "Layer", 1 + i * 2, 1 + i * 3, 10, 7, nil, 1)
+            table.insert(parts, UI.stroke(layer, color or T.Secondary))
+        end
+    else
+        for i = 0, 3 do line("Cell", (i % 2) * 9, math.floor(i / 2) * 9, 6, 6) end
+    end
+    return icon, parts
+end
+
 function UI.chevron(parent, x, y, color)
     local first = UI.frame(parent, "ChevronA", x, y, 6, 1, color or T.Secondary)
     local second = UI.frame(parent, "ChevronB", x + 4, y, 6, 1, color or T.Secondary)
@@ -489,6 +560,7 @@ local UI = __require("UI")
 local T = __require("Theme")
 local Tab = __require("Tab")
 local Motion = __require("Motion")
+local Inspector = __require("components/Inspector")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
@@ -517,9 +589,11 @@ function Window.new(options)
     local sidebar = UI.frame(main, "Sidebar", 0, 0, 184, 660, T.Sidebar, 12)
     self.Sidebar = sidebar
     UI.frame(sidebar, "InnerEdge", 174, 0, 10, 660, T.Sidebar)
-    UI.mark(sidebar, 21, 26, 27)
+    local brandTile = UI.frame(sidebar, "BrandTile", 21, 24, 30, 30, T.AccentWash, 7)
+    UI.stroke(brandTile, T.AccentSoft).Transparency = 0.65
+    UI.mark(brandTile, 5, 5, 20)
     UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 30, 25, T.Text, T.Medium)
-    UI.text(sidebar, "BrandSub", "INTERFACE STUDIO", 21, 65, 145, 14, 9, T.Muted, T.Medium)
+    UI.text(sidebar, "BrandSub", "INTERFACE LIBRARY", 21, 65, 145, 14, 11, T.Muted, T.Medium)
     UI.line(sidebar, 20, 100, 144)
     UI.text(sidebar, "Group", "WORKSPACE", 22, 122, 140, 16, 10, T.Muted, T.Medium)
     self.Navigation = UI.new("ScrollingFrame", sidebar, {
@@ -532,7 +606,7 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "Studio / 0.4.3", 33, 38, 110, 16, 11, T.Muted)
+    UI.text(footer, "Version", "Studio / 0.4.4", 33, 38, 110, 16, 11, T.Muted)
     UI.frame(main, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
     local chrome = UI.frame(main, "Chrome", 184, 0, 916, 48)
@@ -555,45 +629,14 @@ function Window.new(options)
 
     self.Workspace = UI.frame(main, "Workspace", 184, 48, 696, 584, T.Workspace)
     self.Workspace.ClipsDescendants = true
-    local inspector = UI.frame(main, "Inspector", 888, 60, 204, 560, T.Sidebar, 8)
-    self.Inspector = inspector
-    UI.stroke(inspector, T.SoftLine)
-    UI.text(inspector, "InspectorHeading", "INSPECTOR", 16, 19, 172, 16, 9, T.Muted, T.Medium)
-    self.DetailTitle = UI.text(inspector, "DetailTitle", "Your workspace", 16, 52, 172, 42, 18, T.Text, T.Medium)
-    self.DetailTitle.TextWrapped = true
-    self.DetailTitle.TextYAlignment = Enum.TextYAlignment.Top
-    self.DetailTitle.TextTruncate = Enum.TextTruncate.None
-    self.DetailDescription = UI.text(inspector, "Description", "Select a control to see its details.", 16, 103, 172, 46, 12, T.Secondary)
-    self.DetailDescription.TextWrapped = true
-    self.DetailDescription.TextTruncate = Enum.TextTruncate.None
-    self.DetailDescription.TextYAlignment = Enum.TextYAlignment.Top
-    local preview = UI.frame(inspector, "ValuePreview", 16, 164, 172, 148, T.Surface, 6)
-    UI.stroke(preview, T.SoftLine)
-    self.DetailKind = UI.text(preview, "Kind", "SELECTION", 14, 12, 144, 16, 9, T.Muted, T.Medium)
-    self.DetailValue = UI.text(preview, "Value", "Ready", 14, 38, 144, 35, 28, T.Accent, T.Font)
-    self.Bars = {}
-    for i = 1, 29 do
-        local height = (i - 1) % 7 == 0 and 23 or 14
-        self.Bars[i] = UI.frame(preview, "ValueBar", 14 + (i - 1) * 5.05, 119 - height, 1, height, T.Line)
-    end
-    UI.text(preview, "SessionLabel", "SESSION VALUE", 14, 125, 144, 15, 11, T.Muted, T.Mono)
-    UI.text(inspector, "Properties", "PROPERTIES", 16, 334, 172, 16, 9, T.Muted, T.Medium)
-    self.DetailRows = {}
-    for i, name in ipairs({"Page", "Section", "Type", "Range"}) do
-        local y = 361 + (i - 1) * 34
-        UI.text(inspector, name .. "Key", name, 16, y, 50, 24, 12, T.Muted)
-        self.DetailRows[i] = UI.text(inspector, name .. "Value", "--", 72, y, 116, 24, 12, T.Secondary)
-        self.DetailRows[i].TextXAlignment = Enum.TextXAlignment.Right
-        UI.line(inspector, 16, y + 29, 172)
-    end
-    UI.text(inspector, "Hint", "Changes stay in this session.", 16, 525, 172, 16, 10, T.Muted)
+    self.Context = Inspector.new(self)
 
     local status = UI.frame(main, "Statusbar", 184, 632, 916, 28, T.Shell)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
     UI.frame(status, "Dot", 22, 11, 5, 5, T.Green, 3)
     self.StatusText = UI.text(status, "State", "Ready", 35, 0, 560, 28, 10, T.Secondary)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.3", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.4", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -674,9 +717,17 @@ function Window:Fit()
     self.Sidebar.InnerEdge.Size = UDim2.fromOffset(10, self.Height)
     self.Sidebar.Brand.Size = UDim2.fromOffset(sideWidth - 70, 30)
     self.Sidebar.BrandSub.Size = UDim2.fromOffset(sideWidth - 40, 14)
+    self.Sidebar.BrandSub.Text = sideWidth < 170 and "UI LIBRARY" or "INTERFACE LIBRARY"
+    local short = self.Height < 480
+    local navTop = short and 112 or 153
+    self.Sidebar.BrandSub.Position = UDim2.fromOffset(21, short and 60 or 65)
+    self.Sidebar.Rule.Position = UDim2.fromOffset(20, short and 80 or 100)
+    self.Sidebar.Group.Position = UDim2.fromOffset(22, short and 89 or 122)
     self.Sidebar.Rule.Size = UDim2.fromOffset(sideWidth - 40, 1)
-    self.SidebarFooter.Position = UDim2.fromOffset(20, self.Height - 95)
-    self.SidebarFooter.Size = UDim2.fromOffset(sideWidth - 40, 76)
+    self.Navigation.Position = UDim2.fromOffset(12, navTop)
+    self.Navigation.Size = UDim2.new(1, -24, 1, -(navTop + (short and 80 or 105)))
+    self.SidebarFooter.Position = UDim2.fromOffset(20, self.Height - (short and 69 or 95))
+    self.SidebarFooter.Size = UDim2.fromOffset(sideWidth - 40, short and 56 or 76)
     self.SidebarFooter.Rule.Size = UDim2.fromOffset(sideWidth - 40, 1)
     self.SidebarFooter.Build.Size = UDim2.fromOffset(sideWidth - 73, 18)
     self.SidebarFooter.Version.Size = UDim2.fromOffset(sideWidth - 73, 16)
@@ -703,6 +754,7 @@ function Window:Fit()
     self.Chrome.TitleDrag.Size = UDim2.fromOffset(chromeWidth - 54, 48)
     self.Scale = math.min(1, math.max(0.1, (size.X - 32) / self.Width), math.max(0.1, (size.Y - 32) / self.Height))
     self.UIScale.Scale = self.Scale
+    for _, tab in ipairs(self.Tabs) do tab:Relayout() end
     self:SetCenter(self.Center or size / 2)
 end
 
@@ -771,8 +823,12 @@ Window._closeDropdown = Window.ClosePopup
 function Window:Focus(control)
     if self._destroyed or self._closing then return end
     local changed = self.SelectedControl ~= control
-    if self.SelectedControl and self.SelectedControl.FocusIndicator then self.SelectedControl.FocusIndicator.Visible = false end
+    if self.SelectedControl and self.SelectedControl.FocusIndicator then
+        self.SelectedControl.FocusIndicator.Visible = false
+        self.SelectedControl.SelectionWash.Visible = false
+    end
     self.SelectedControl = control
+    if control.SelectionWash then control.SelectionWash.Visible = true end
     if control.FocusIndicator then
         control.FocusIndicator.Visible = true
         if changed then
@@ -780,36 +836,16 @@ function Window:Focus(control)
             self.Runtime:Tween(control.FocusIndicator, {Size = UDim2.new(0, 1, 1, -28)}, 0.12)
         end
     end
-    self.DetailTitle.Text = control.Name
-    self.DetailDescription.Text = control.Description or ""
-    self.DetailKind.Text = string.upper(control.Kind)
-    local value
-    if control.Get then value = control:Get() end
-    local shown = value == nil and "No selection" or tostring(value)
-    if type(value) == "boolean" then shown = value and "Enabled" or "Disabled" end
-    if type(value) == "number" then shown = (control.Format and control:Format(value) or UI.format(value)) .. (control.Suffix or "") end
-    self.DetailValue.Text = shown
-    self.DetailValue.TextSize = #shown > 12 and 15 or 28
-    self.DetailRows[1].Text = control.Section.Tab.Name
-    self.DetailRows[2].Text = control.Section.Name
-    self.DetailRows[3].Text = control.Kind
-    self.DetailRows[4].Text = control.Range or "--"
-    local fraction = control.Fraction and control:Fraction() or ((value == false or value == nil) and 0 or 1)
-    self._barState = self._barState or {}
-    for i, bar in ipairs(self.Bars) do
-        local on = i / #self.Bars <= fraction
-        if self._barState[i] ~= on then
-            self._barState[i] = on
-            self.Runtime:Tween(bar, {BackgroundColor3 = on and T.Accent or T.Line}, Motion.Time.Value)
-        end
-    end
+    self.Context:Update(control)
     self.StatusText.Text = control.Section.Tab.Name .. " / " .. control.Section.Name .. " / " .. control.Name
 end
 
 function Window:SetDetails(title, description, status)
     if self._destroyed then return end
+    self.Context:Clear()
     self.DetailTitle.Text, self.DetailDescription.Text = title or "Details", description or ""
     self.DetailValue.Text = status or "Ready"
+    self.DetailValue.TextSize = #self.DetailValue.Text > 12 and 15 or 28
 end
 
 function Window:AddTab(name, options)
@@ -831,12 +867,8 @@ function Window:SelectTab(tab)
         item.Page.Position = UDim2.fromOffset(0, 0)
         local active = item == tab
         item.Page.Visible = active
-        item.Button.BackgroundColor3 = T.AccentWash
         local duration = previous and 0.12 or 0
-        self.Runtime:Tween(item.Button, {BackgroundTransparency = active and 0 or 1}, duration)
-        self.Runtime:Tween(item.Label, {TextColor3 = active and T.Accent or T.Secondary}, duration)
-        self.Runtime:Tween(item.Number, {TextColor3 = active and T.Accent or T.Muted}, duration)
-        item.Indicator.Visible = active
+        item:SetActive(active, duration)
     end
     if previous then
         tab.Page.Position = UDim2.fromOffset(0, 4)
@@ -844,7 +876,10 @@ function Window:SelectTab(tab)
         tab.Motion:Fade(0.35, 0, Motion.Time.Page)
     end
     self.Breadcrumb.Text = "Workspace  /  " .. tab.Name
-    if self.SelectedControl and self.SelectedControl.FocusIndicator then self.SelectedControl.FocusIndicator.Visible = false end
+    if self.SelectedControl and self.SelectedControl.FocusIndicator then
+        self.SelectedControl.FocusIndicator.Visible = false
+        self.SelectedControl.SelectionWash.Visible = false
+    end
     self.SelectedControl = nil
     if tab.Controls[1] then self:Focus(tab.Controls[1]) else self:SetDetails(tab.Name, tab.Description, "Ready") end
 end
@@ -879,6 +914,165 @@ function Window:Destroy()
 end
 
 return Window
+end
+
+__factories["components/Inspector"] = function(__require)
+-- src/components/Inspector.luau
+local UI = __require("UI")
+local T = __require("Theme")
+local Motion = __require("Motion")
+local Inspector = {}
+Inspector.__index = Inspector
+
+function Inspector.new(window)
+    local self = setmetatable({Window = window, Bars = {}, BarState = {}}, Inspector)
+    local frame = UI.frame(window.Main, "Inspector", 888, 60, 204, 560, T.Sidebar, 8)
+    window.Inspector = frame
+    UI.stroke(frame, T.SoftLine)
+    UI.text(frame, "InspectorHeading", "INSPECTOR", 16, 19, 172, 16, 11, T.Muted, T.Medium)
+    local scope = UI.frame(frame, "Scope", 176, 22, 10, 10)
+    UI.stroke(scope, T.AccentSoft)
+    UI.frame(scope, "Center", 4, 4, 2, 2, T.Accent)
+    window.DetailTitle = UI.text(frame, "DetailTitle", "Your workspace", 16, 52, 172, 42, 18, T.Text, T.Medium)
+    window.DetailTitle.TextWrapped = true
+    window.DetailTitle.TextYAlignment = Enum.TextYAlignment.Top
+    window.DetailTitle.TextTruncate = Enum.TextTruncate.None
+    window.DetailDescription = UI.text(frame, "Description", "Select a control to see its details.", 16, 103, 172, 46, 12, T.Secondary)
+    window.DetailDescription.TextWrapped = true
+    window.DetailDescription.TextTruncate = Enum.TextTruncate.None
+    window.DetailDescription.TextYAlignment = Enum.TextYAlignment.Top
+
+    local preview = UI.frame(frame, "ValuePreview", 16, 164, 172, 148, T.Surface, 6)
+    UI.stroke(preview, T.SoftLine)
+    window.DetailKind = UI.text(preview, "Kind", "SELECTION", 14, 12, 144, 16, 11, T.Muted, T.Medium)
+    window.DetailValue = UI.text(preview, "Value", "Ready", 14, 38, 144, 35, 28, T.Accent, T.Font)
+    self.Meta = UI.text(preview, "ValueContext", "WORKSPACE", 14, 125, 144, 15, 11, T.Muted, T.Mono)
+
+    self.Numeric = UI.frame(preview, "NumericRange", 14, 83, 144, 37)
+    for i = 1, 29 do
+        local height = (i - 1) % 7 == 0 and 23 or 14
+        self.Bars[i] = UI.frame(self.Numeric, "Tick", (i - 1) * 144 / 28, 29 - height, 1, height, T.Line)
+    end
+    self.Marker = UI.frame(self.Numeric, "Position", 0, 1, 2, 32, T.Accent, 1)
+    self.Marker.AnchorPoint = Vector2.new(0.5, 0)
+    self.Low = UI.text(preview, "LowerBound", "", 14, 125, 72, 15, 11, T.Muted, T.Mono)
+    self.High = UI.text(preview, "UpperBound", "", 86, 125, 72, 15, 11, T.Muted, T.Mono)
+    self.High.TextXAlignment = Enum.TextXAlignment.Right
+
+    self.Boolean = UI.frame(preview, "BooleanState", 14, 90, 144, 26)
+    self.States = {}
+    for index, name in ipairs({"OFF", "ON"}) do
+        local tile = UI.frame(self.Boolean, name, (index - 1) * 76, 0, 68, 26, T.Surface, 4)
+        local border = UI.stroke(tile, T.SoftLine)
+        local label = UI.text(tile, "Label", name, 0, 0, 68, 26, 11, T.Muted, T.Mono)
+        label.TextXAlignment = Enum.TextXAlignment.Center
+        self.States[index] = {Tile = tile, Border = border, Label = label}
+    end
+
+    self.Options = UI.frame(preview, "DiscreteOptions", 14, 98, 144, 8)
+    self.OptionMarks = {}
+    for i = 1, 12 do self.OptionMarks[i] = UI.frame(self.Options, "Option" .. i, 0, 0, 1, 4, T.Line, 1) end
+    self.ChoiceHint = UI.text(preview, "ChoiceHint", "", 14, 89, 144, 26, 11, T.Secondary, T.Mono)
+    self.Action = UI.frame(preview, "ActionGlyph", 14, 90, 144, 26)
+    UI.text(self.Action, "Label", "SESSION ACTION", 0, 0, 116, 26, 11, T.Secondary, T.Mono)
+    UI.frame(self.Action, "Stem", 124, 13, 18, 1, T.AccentSoft)
+    UI.frame(self.Action, "Upper", 136, 10, 7, 1, T.AccentSoft).Rotation = 45
+    UI.frame(self.Action, "Lower", 136, 16, 7, 1, T.AccentSoft).Rotation = -45
+
+    UI.text(frame, "Properties", "PROPERTIES", 16, 334, 172, 16, 11, T.Muted, T.Medium)
+    window.DetailRows = {}
+    for i, name in ipairs({"Page", "Section", "Type", "Range"}) do
+        local y = 361 + (i - 1) * 34
+        UI.text(frame, name .. "Key", name, 16, y, 50, 24, 12, T.Muted)
+        window.DetailRows[i] = UI.text(frame, name .. "Value", "--", 72, y, 116, 24, 12, T.Secondary)
+        window.DetailRows[i].TextXAlignment = Enum.TextXAlignment.Right
+        UI.line(frame, 16, y + 29, 172)
+    end
+    self.Hint = UI.text(frame, "Hint", "Select a property to inspect it.", 16, 519, 172, 28, 11, T.Muted)
+    self.Hint.TextWrapped = true
+    self.Hint.TextTruncate = Enum.TextTruncate.None
+    window.Bars = self.Bars
+    self:Clear()
+    return self
+end
+
+function Inspector:Clear()
+    self.Control = nil
+    self.Numeric.Visible, self.Boolean.Visible, self.Options.Visible = false, false, false
+    self.ChoiceHint.Visible, self.Action.Visible = false, false
+    self.Low.Visible, self.High.Visible, self.Meta.Visible = false, false, true
+    self.Meta.Text = "WORKSPACE"
+    self.Window.DetailKind.Text = "SELECTION"
+    for _, label in ipairs(self.Window.DetailRows) do label.Text = "--" end
+    self.Hint.Text = "Select a property to inspect it."
+end
+
+function Inspector:Update(control)
+    local window, rt = self.Window, self.Window.Runtime
+    local same = self.Control == control
+    self.Control = control
+    local value
+    if control.Get then value = control:Get() end
+    local shown = value == nil and "No selection" or tostring(value)
+    if type(value) == "boolean" then shown = value and "Enabled" or "Disabled" end
+    if type(value) == "number" then shown = (control.Format and control:Format(value) or UI.format(value)) .. (control.Suffix or "") end
+    window.DetailTitle.Text, window.DetailDescription.Text = control.Name, control.Description or ""
+    window.DetailKind.Text = string.upper(control.Kind)
+    window.DetailValue.Text, window.DetailValue.TextSize = shown, #shown > 12 and 15 or 28
+    window.DetailRows[1].Text, window.DetailRows[2].Text = control.Section.Tab.Name, control.Section.Name
+    window.DetailRows[3].Text, window.DetailRows[4].Text = control.Kind, control.Range or "--"
+    local numeric, boolean, choice = control.Kind == "Slider", control.Kind == "Toggle", control.Kind == "Dropdown"
+    self.Numeric.Visible, self.Boolean.Visible = numeric, boolean
+    self.Low.Visible, self.High.Visible, self.Meta.Visible = numeric, numeric, not numeric
+    self.Options.Visible, self.ChoiceHint.Visible = false, false
+    self.Action.Visible = control.Kind == "Button"
+    local duration = same and Motion.Time.Value or 0
+    if numeric then
+        local fraction = control:Fraction()
+        self.Low.Text = control:Format(control.Min)
+        self.High.Text = control.Min == control.Max and "FIXED" or control:Format(control.Max)
+        rt:Tween(self.Marker, {Position = UDim2.fromScale(fraction, 0)}, duration, "position")
+        for i, bar in ipairs(self.Bars) do
+            local on = (i - 1) / (#self.Bars - 1) <= fraction
+            if self.BarState[i] ~= on then
+                self.BarState[i] = on
+                rt:Tween(bar, {BackgroundColor3 = on and T.AccentSoft or T.Line}, duration)
+            end
+        end
+        self.Hint.Text = control.Min == control.Max and "This range has a fixed value." or "Drag the slider or type a value."
+    elseif boolean then
+        self.Meta.Text = "BINARY STATE"
+        for i, state in ipairs(self.States) do
+            local active = value == (i == 2)
+            rt:Tween(state.Tile, {BackgroundColor3 = active and T.AccentWash or T.Surface}, duration)
+            rt:Tween(state.Border, {Color = active and T.AccentSoft or T.SoftLine}, duration)
+            rt:Tween(state.Label, {TextColor3 = active and T.Accent or T.Muted}, duration)
+        end
+        self.Hint.Text = "Click to change this state."
+    elseif choice then
+        local count = #control.Values
+        local index = table.find(control.Values, value)
+        self.Meta.Text = index and string.format("OPTION %02d / %02d", index, count) or "NO OPTIONS"
+        self.Options.Visible = count > 0 and count <= #self.OptionMarks
+        self.ChoiceHint.Visible = not self.Options.Visible
+        self.ChoiceHint.Text = count == 0 and "EMPTY COLLECTION" or "SINGLE SELECTION"
+        for i, mark in ipairs(self.OptionMarks) do
+            mark.Visible = i <= count
+            if self.Options.Visible then
+                local width = (144 - (count - 1) * 4) / count
+                mark.Position = UDim2.fromOffset((i - 1) * (width + 4), 0)
+                mark.Size = UDim2.fromOffset(width, 4)
+                rt:Tween(mark, {BackgroundColor3 = i == index and T.Accent or T.Line}, duration)
+            end
+        end
+        self.Hint.Text = count == 0 and "No options in this collection." or "Choose an option from the menu."
+    else
+        self.Meta.Text = "ON DEMAND"
+        self.Hint.Text = "Activate to run this action."
+    end
+end
+
+return Inspector
 end
 
 __factories["controls/Button"] = function(__require)
@@ -1289,7 +1483,7 @@ local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
 if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
 
-local Lumi = {Version = "0.4.3", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.4.4", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] This library was destroyed; load a fresh library")

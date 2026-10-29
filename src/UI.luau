@@ -65,6 +65,30 @@ function UI.mark(parent, x, y, size, color)
     return mark
 end
 
+-- Native geometric icons; no font glyphs or external asset dependency.
+function UI.icon(parent, style, x, y, color)
+    local icon = UI.frame(parent, "Icon", x, y, 16, 16)
+    local parts = {}
+    local function line(name, px, py, width, height)
+        local part = UI.frame(icon, name, px, py, width, height, color or T.Secondary, 1)
+        table.insert(parts, part)
+    end
+    if style == "Sliders" then
+        for i, offset in ipairs({4, 10, 7}) do
+            line("Track", 1, (i - 1) * 6 + 2, 14, 1)
+            line("Handle", offset, (i - 1) * 6, 2, 5)
+        end
+    elseif style == "Layers" then
+        for i = 0, 2 do
+            local layer = UI.frame(icon, "Layer", 1 + i * 2, 1 + i * 3, 10, 7, nil, 1)
+            table.insert(parts, UI.stroke(layer, color or T.Secondary))
+        end
+    else
+        for i = 0, 3 do line("Cell", (i % 2) * 9, math.floor(i / 2) * 9, 6, 6) end
+    end
+    return icon, parts
+end
+
 function UI.chevron(parent, x, y, color)
     local first = UI.frame(parent, "ChevronA", x, y, 6, 1, color or T.Secondary)
     local second = UI.frame(parent, "ChevronB", x + 4, y, 6, 1, color or T.Secondary)
