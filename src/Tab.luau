@@ -1,6 +1,7 @@
 local UI = require("UI")
 local T = require("Theme")
 local Section = require("Section")
+local Motion = require("Motion")
 local Tab = {}
 Tab.__index = Tab
 
@@ -24,6 +25,7 @@ function Tab.new(window, name, options)
         Visible = false,
     })
     self.Page = page
+    self.Motion = Motion.new(window.Runtime, page)
     UI.new("UIPadding", page, {PaddingLeft = UDim.new(0, 26), PaddingRight = UDim.new(0, 26), PaddingTop = UDim.new(0, 22), PaddingBottom = UDim.new(0, 22)})
     UI.list(page, 14)
     local header = UI.frame(page, "PageHeader", 0, 0, 644, 76)
@@ -34,10 +36,15 @@ function Tab.new(window, name, options)
     UI.text(header, "Subtitle", self.Description, 0, 54, 620, 17, 12, T.Secondary).Size = UDim2.new(1, 0, 0, 17)
     window.Runtime:Connect(button.Activated, function() window:SelectTab(self) end)
     window.Runtime:Connect(button.MouseEnter, function()
-        if window.ActiveTab ~= self then button.BackgroundTransparency = 0; button.BackgroundColor3 = T.Surface end
+        if window._closing then return end
+        window:FinishEntrance()
+        if window.ActiveTab ~= self then
+            button.BackgroundColor3 = T.Surface
+            window.Runtime:Tween(button, {BackgroundTransparency = 0}, 0.12)
+        end
     end)
     window.Runtime:Connect(button.MouseLeave, function()
-        if window.ActiveTab ~= self then button.BackgroundTransparency = 1 end
+        if window.ActiveTab ~= self and not window._closing then window.Runtime:Tween(button, {BackgroundTransparency = 1}, 0.12) end
     end)
     window.Runtime:Connect(page:GetPropertyChangedSignal("CanvasPosition"), function() window:ClosePopup() end)
     table.insert(window.Tabs, self)

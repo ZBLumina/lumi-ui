@@ -16,14 +16,49 @@ function Runtime:Connect(signal, callback)
     return connection
 end
 
-function Runtime:Tween(object, properties, duration)
+function Runtime:CancelTween(object, channel)
+    local channels = self.Tweens[object]
+    if not channels then return end
+    channel = channel or "style"
+    if channels[channel] then channels[channel]:Cancel(); channels[channel] = nil end
+    if next(channels) == nil then self.Tweens[object] = nil end
+end
+
+function Runtime:Tween(object, properties, duration, channel)
     if self.Destroyed then return end
-    local previous = self.Tweens[object]
-    if previous then previous:Cancel() end
+    channel = channel or "style"
+    self:CancelTween(object, channel)
+    if self.Animations == false or duration == 0 then
+        for property, value in pairs(properties) do object[property] = value end
+        return
+    end
     local animation = TweenService:Create(object,
         TweenInfo.new(duration or 0.12, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), properties)
-    self.Tweens[object] = animation
+    self.Tweens[object] = self.Tweens[object] or {}
+    self.Tweens[object][channel] = animation
     animation:Play()
+    return animation
+end
+
+function Runtime:Delay(duration, callback)
+    if self.Destroyed then return end
+    local thread
+    thread = coroutine.create(function()
+        if self.Destroyed then self.Threads[thread] = nil; return end
+        local ok, problem = pcall(callback)
+        self.Threads[thread] = nil
+        if not ok then warn("[Lumi UI] delayed work error: " .. tostring(problem)) end
+    end)
+    self.Threads[thread] = true
+    task.delay(duration, thread)
+    return thread
+end
+
+function Runtime:CancelDelay(thread)
+    if thread and self.Threads[thread] and thread ~= coroutine.running() then
+        self.Threads[thread] = nil
+        if coroutine.status(thread) ~= "dead" then pcall(task.cancel, thread) end
+    end
 end
 
 function Runtime:Callback(callback, ...)
@@ -48,7 +83,9 @@ function Runtime:Destroy()
     if self.Destroyed then return end
     self.Destroyed = true
     for _, connection in ipairs(self.Connections) do connection:Disconnect() end
-    for _, animation in pairs(self.Tweens) do animation:Cancel() end
+    for _, channels in pairs(self.Tweens) do
+        for _, animation in pairs(channels) do animation:Cancel() end
+    end
     table.clear(self.Tweens)
     local current = coroutine.running()
     for thread in pairs(self.Threads) do

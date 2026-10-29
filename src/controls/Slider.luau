@@ -42,7 +42,7 @@ function Slider.new(section, options)
     UI.corner(track, 2)
     local fill = UI.frame(track, "Fill", 0, 0, 0, 2, T.Accent, 1)
     local thumb = UI.frame(track, "Thumb", 0, -5, 6, 12, T.Text, 2)
-    thumb.AnchorPoint = Vector2.new(0.5, 0)
+    thumb.AnchorPoint = Vector2.new(0.5, 0.5)
     local hit = UI.button(c.Row, "SliderInput", "", 18, 52, 0, 23)
     hit.Size = UDim2.new(1, -36, 0, 23)
     hit.ZIndex = 2
@@ -56,14 +56,28 @@ function Slider.new(section, options)
     high.Position = UDim2.new(1, -108, 0, 74)
     high.TextXAlignment = Enum.TextXAlignment.Right
     low.Visible, high.Visible = options.ShowBounds ~= false, options.ShowBounds ~= false
-    local function render()
+    local dragging, hovered, focused = false, false, false
+    local function emphasize()
+        local active = dragging or hovered or focused
+        rt:Tween(thumb, {Size = UDim2.fromOffset(active and 8 or 6, active and 14 or 12),
+            BackgroundColor3 = active and T.Accent or T.Text}, 0.10)
+    end
+    local function render(instant)
         local fraction = c:Fraction()
         box.Text = c:Format(value) .. c.Suffix
-        fill.Size = UDim2.new(fraction, 0, 1, 0)
-        thumb.Position = UDim2.new(fraction, 0, 0, -5)
+        local size = UDim2.new(fraction, 0, 1, 0)
+        local position = UDim2.new(fraction, 0, 0.5, 0)
+        if instant or dragging then
+            rt:CancelTween(fill)
+            rt:CancelTween(thumb, "position")
+            fill.Size, thumb.Position = size, position
+        else
+            rt:Tween(fill, {Size = size}, 0.10)
+            rt:Tween(thumb, {Position = position}, 0.10, "position")
+        end
     end
     function c:Set(nextValue, silent)
-        if rt.Destroyed then return false end
+        if rt.Destroyed or window._closing then return false end
         nextValue = normalize(nextValue)
         if nextValue == value then render(); return false end
         value = nextValue
@@ -74,36 +88,40 @@ function Slider.new(section, options)
     end
     rt:Connect(hit.InputBegan, function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        if window._closing then return end
         c:Focus()
         local function update(position)
             local fraction = math.clamp((position.X - track.AbsolutePosition.X) / math.max(1, track.AbsoluteSize.X), 0, 1)
             c:Set(minimum + fraction * (maximum - minimum))
         end
-        window:BeginPointer(input, update, function() rt:Tween(thumb, {BackgroundColor3 = T.Text}) end)
-        thumb.BackgroundColor3 = T.Accent
+        window:BeginPointer(input, update, function() dragging = false; emphasize() end)
+        dragging = true
+        emphasize()
         update(input.Position)
     end)
     local originalText
     rt:Connect(box.Focused, function()
         c:Focus()
-        border.Color = T.Accent
+        rt:Tween(border, {Color = T.Accent}, 0.12)
         box.Text = string.format("%.15g", value)
         originalText = box.Text
     end)
     rt:Connect(box.FocusLost, function()
         local parsed = tonumber(box.Text)
         if parsed and box.Text ~= originalText then c:Set(parsed) end
-        border.Color = T.Line
+        rt:Tween(border, {Color = T.Line}, 0.12)
         render()
     end)
-    rt:Connect(hit.SelectionGained, function() c:Focus(); thumb.BackgroundColor3 = T.Accent end)
-    rt:Connect(hit.SelectionLost, function() thumb.BackgroundColor3 = T.Text end)
+    rt:Connect(hit.MouseEnter, function() hovered = true; emphasize() end)
+    rt:Connect(hit.MouseLeave, function() hovered = false; emphasize() end)
+    rt:Connect(hit.SelectionGained, function() focused = true; c:Focus(); emphasize() end)
+    rt:Connect(hit.SelectionLost, function() focused = false; emphasize() end)
     rt:Connect(Input.InputBegan, function(input)
         if GuiService.SelectedObject ~= hit or Input:GetFocusedTextBox() then return end
         if input.KeyCode == Enum.KeyCode.Left then c:Set(value - step)
         elseif input.KeyCode == Enum.KeyCode.Right then c:Set(value + step) end
     end)
-    render()
+    render(true)
     return c
 end
 

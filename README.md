@@ -1,6 +1,8 @@
 # Lumi UI
 
-A modular Luau interface library for Potassium. **v0.4.2 is a visual pilot**: warm charcoal surfaces, compact property groups, deliberate interaction states, and a contextual inspector. Demo actions affect the interface only.
+A modular Luau interface library for Potassium. **v0.4.3 is a visual pilot**: warm charcoal surfaces, compact property groups, restrained motion, and a contextual inspector. Demo actions affect the interface only.
+
+Motion uses short Quart Out transitions: a 220ms window entrance, 160ms user dismissal, 140ms page reveal, brief popovers, tactile button feedback and smooth slider presentation. Values and tab state change immediately; dragging follows the pointer directly. Use `Window:Close()` for animated dismissal; `Window:Destroy()` remains immediate for cleanup/reinjection. Set `Animations = false` in `CreateWindow` to disable interpolation and button pulses. See the [motion design and validation](docs/design/studio-v043-motion.md).
 
 The readability pass raises text contrast, sets an 11px minimum for shared text labels, uses 14px medium-weight property names and 12px descriptions, and makes navigation, dropdown and inspector text easier to read. Layout and control behavior remain unchanged.
 
@@ -37,7 +39,8 @@ enabled:Set(true)           -- state first, callback asynchronously
 intensity:Set(40, true)     -- silent update
 intensity:Focus()           -- select in inspector
 print(intensity:Get())
--- Window:Destroy()         -- safe to repeat
+-- Window:Close()           -- short animated dismissal, safe to repeat
+-- Window:Destroy()         -- immediate cleanup, safe to repeat
 -- Lumi:Destroy()           -- destroys all owned windows
 ```
 

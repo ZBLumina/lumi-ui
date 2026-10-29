@@ -6,6 +6,7 @@ function Toggle.new(section, options)
     local c = section:Row(options, "Toggle", 58)
     local value = options.Default == true
     local rt = c.Runtime
+    local window = section.Tab.Window
     local input = UI.button(c.Row, "ToggleInput", "", 0, 0, 0, 58)
     input.Size = UDim2.fromScale(1, 1)
     input.ZIndex = 2
@@ -23,14 +24,17 @@ function Toggle.new(section, options)
     end
     local function render(instant)
         state.Text = value and "ON" or "OFF"
-        state.TextColor3 = value and T.Accent or T.Muted
-        outline.Color = value and T.AccentSoft or T.Line
+        local stateColor = value and T.Accent or T.Muted
+        local outlineColor = value and T.AccentSoft or T.Line
         local props = {BackgroundColor3 = value and T.AccentWash or T.Raised}
         local knobProps = {Position = UDim2.fromOffset(value and 20 or 4, 4), BackgroundColor3 = value and T.Accent or T.Secondary}
         if instant then
+            state.TextColor3, outline.Color = stateColor, outlineColor
             track.BackgroundColor3 = props.BackgroundColor3
             for k, v in pairs(knobProps) do thumb[k] = v end
         else
+            rt:Tween(state, {TextColor3 = stateColor}, 0.12)
+            rt:Tween(outline, {Color = outlineColor}, 0.12)
             rt:Tween(track, props)
             rt:Tween(thumb, knobProps)
         end
@@ -38,7 +42,7 @@ function Toggle.new(section, options)
     end
     c.Get = function() return value end
     function c:Set(nextValue, silent)
-        if rt.Destroyed then return false end
+        if rt.Destroyed or window._closing then return false end
         nextValue = nextValue == true
         if value == nextValue then return false end
         value = nextValue
@@ -47,7 +51,12 @@ function Toggle.new(section, options)
         if not silent then rt:Callback(options.Callback, value) end
         return true
     end
-    rt:Connect(input.Activated, function() c:Focus(); c:Set(not value) end)
+    rt:Connect(input.Activated, function()
+        if window._closing then return end
+        window:FinishEntrance()
+        c:Focus()
+        c:Set(not value)
+    end)
     rt:Connect(input.MouseEnter, function() rt:Tween(track, {BackgroundColor3 = T.Hover}) end)
     rt:Connect(input.MouseLeave, function() render(false) end)
     rt:Connect(input.SelectionGained, function() c:Focus(); outline.Color = T.Accent end)

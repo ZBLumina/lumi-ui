@@ -1,6 +1,7 @@
 local UI = require("UI")
 local T = require("Theme")
 local Runtime = require("Runtime")
+local Motion = require("Motion")
 local Dropdown = {}
 
 function Dropdown.new(section, options)
@@ -33,7 +34,7 @@ function Dropdown.new(section, options)
         return index and index / #values or 0
     end
     function c:Set(value, silent)
-        if rt.Destroyed or not table.find(values, value) then return false end
+        if rt.Destroyed or window._closing or not table.find(values, value) then return false end
         local changed = value ~= selected
         selected = value
         label.Text = tostring(selected)
@@ -41,15 +42,19 @@ function Dropdown.new(section, options)
         if changed and not silent then rt:Callback(options.Callback, selected) end
         return changed
     end
-    function c:Close()
-        if window.PopupOwner == self then window:ClosePopup() end
+    function c:Close(animated)
+        if window.PopupOwner == self then window:ClosePopup(animated) end
     end
     function c:Open()
-        if rt.Destroyed or not section.Tab.Page.Visible then return end
+        if rt.Destroyed or window._closing or not section.Tab.Page.Visible then return end
+        window:FinishEntrance()
         window:ClosePopup()
         self:Focus()
-        border.Color = T.Accent
+        rt:Tween(border, {Color = T.Accent}, 0.12)
+        rt:Tween(selector.ChevronA, {Rotation = -45}, 0.12)
+        rt:Tween(selector.ChevronB, {Rotation = 45}, 0.12)
         local popupRuntime = Runtime.new()
+        popupRuntime.Animations = rt.Animations
         local scale = window.Scale
         local relative = (selector.AbsolutePosition - window.Main.AbsolutePosition) / scale
         local width = selector.AbsoluteSize.X / scale
@@ -64,11 +69,17 @@ function Dropdown.new(section, options)
         local menu = UI.frame(window.Main, "DropdownPopover", x, y, width, height, T.Raised, 7)
         menu.ZIndex = 101
         UI.stroke(menu, T.Line)
+        local motion = Motion.new(popupRuntime, menu)
         window.OpenDropdown, window.PopupOwner = menu, self
+        window._popupMotion = motion
         window.Blocker.Visible = true
         window._popupCleanup = function()
             popupRuntime:Destroy()
-            if not rt.Destroyed then border.Color = T.Line end
+            if not rt.Destroyed then
+                rt:Tween(border, {Color = T.Line}, 0.12)
+                rt:Tween(selector.ChevronA, {Rotation = 45}, 0.12)
+                rt:Tween(selector.ChevronB, {Rotation = -45}, 0.12)
+            end
         end
         UI.text(menu, "Caption", "SELECT OPTION", 11, 4, 198, 25, 9, T.Muted, T.Mono)
         local scroller = UI.new("ScrollingFrame", menu, {Name = "Options", Position = UDim2.fromOffset(5, 31),
@@ -87,12 +98,19 @@ function Dropdown.new(section, options)
             UI.text(item, "Label", value, 8, 0, 167, 32, 13, value == selected and T.Accent or T.Text).Size = UDim2.new(1, -38, 0, 32)
             if value == selected then UI.check(item, width - 39, 13) end
             UI.hover(popupRuntime, item, value == selected and T.AccentWash or T.Raised, T.Hover)
-            popupRuntime:Connect(item.Activated, function() c:Set(value); c:Close() end)
+            popupRuntime:Connect(item.Activated, function()
+                if window.PopupOwner ~= c or window.OpenDropdown ~= menu then return end
+                c:Set(value)
+                c:Close(true)
+            end)
         end
+        menu.Position = UDim2.fromOffset(x, math.clamp(y + (upward and -4 or 4), 8, window.Height - height - 8))
+        popupRuntime:Tween(menu, {Position = UDim2.fromOffset(x, y)}, Motion.Time.Menu, "position")
+        motion:Fade(0.45, 0, Motion.Time.Menu)
     end
     UI.hover(rt, selector, T.Raised, T.Hover)
     rt:Connect(selector.Activated, function()
-        if window.PopupOwner == c then c:Close() else c:Open() end
+        if window.PopupOwner == c then c:Close(true) else c:Open() end
     end)
     rt:Connect(selector.SelectionGained, function() c:Focus(); border.Color = T.Accent end)
     rt:Connect(selector.SelectionLost, function() if window.PopupOwner ~= c then border.Color = T.Line end end)

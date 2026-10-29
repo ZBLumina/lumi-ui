@@ -2,12 +2,15 @@ local Runtime = require("Runtime")
 local UI = require("UI")
 local T = require("Theme")
 local Tab = require("Tab")
+local Motion = require("Motion")
 local Input = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 local Window = {}
 Window.__index = Window
 
 function Window.new(options)
     local rt = Runtime.new()
+    rt.Animations = options.Animations ~= false
     local root = rt:Mount()
     local self = setmetatable({Runtime = rt, Root = root, Tabs = {}, _destroyed = false,
         Width = 1100, Height = 660, Scale = 1, OpenDropdown = nil}, Window)
@@ -43,7 +46,7 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "Studio / 0.4.2", 33, 38, 110, 16, 11, T.Muted)
+    UI.text(footer, "Version", "Studio / 0.4.3", 33, 38, 110, 16, 11, T.Muted)
     UI.frame(main, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
     local chrome = UI.frame(main, "Chrome", 184, 0, 916, 48)
@@ -60,7 +63,7 @@ function Window.new(options)
     local cb = UI.frame(close, "CloseB", 9, 14, 12, 1, T.Secondary)
     ca.Rotation, cb.Rotation = 45, -45
     UI.hover(rt, close, T.Shell, T.Hover)
-    rt:Connect(close.Activated, function() self:Destroy() end)
+    rt:Connect(close.Activated, function() self:Close() end)
     self.CloseButton = close
     UI.line(chrome, 0, 47, 916)
 
@@ -104,14 +107,14 @@ function Window.new(options)
     UI.line(status, 0, 0, 916)
     UI.frame(status, "Dot", 22, 11, 5, 5, T.Green, 3)
     self.StatusText = UI.text(status, "State", "Ready", 35, 0, 560, 28, 10, T.Secondary)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.2", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.3", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
     self.Blocker.Size = UDim2.fromScale(1, 1)
     self.Blocker.ZIndex = 90
     self.Blocker.Visible = false
-    rt:Connect(self.Blocker.Activated, function() self:ClosePopup() end)
+    rt:Connect(self.Blocker.Activated, function() self:ClosePopup(true) end)
 
     rt:Connect(drag.InputBegan, function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
@@ -133,10 +136,11 @@ function Window.new(options)
     end)
     rt:Connect(Input.WindowFocusReleased, function() self:EndPointer(); self:ClosePopup() end)
     rt:Connect(Input.InputBegan, function(input)
-        if input.KeyCode == Enum.KeyCode.Escape then self:ClosePopup(); self:EndPointer() end
+        if input.KeyCode == Enum.KeyCode.Escape then self:ClosePopup(true); self:EndPointer() end
     end)
     local viewport = UI.new("Frame", root, {Name = "Viewport", Size = UDim2.fromScale(1, 1)})
     self.Viewport = viewport
+    self.Motion = Motion.new(rt, main)
     rt:Connect(viewport:GetPropertyChangedSignal("AbsoluteSize"), function() self:Fit() end)
     rt:OnCleanup(function()
         self._destroyed = true
@@ -144,14 +148,32 @@ function Window.new(options)
         self:ClosePopup()
     end)
     self:Fit()
+    task.defer(function()
+        if self._destroyed or self._closing or self._entranceInterrupted or rt.Animations == false then return end
+        self.UIScale.Scale = self.Scale * 0.99
+        rt:Tween(self.UIScale, {Scale = self.Scale}, Motion.Time.Open)
+        self.Motion:Fade(0.8, 0, Motion.Time.Open)
+    end)
     return self
 end
 
+function Window:FinishEntrance(interrupt)
+    if interrupt ~= false then self._entranceInterrupted = true end
+    if self._closing or not self.Motion.Active then return end
+    self.Motion:Finish()
+    self.Runtime:CancelTween(self.UIScale)
+    self.UIScale.Scale = self.Scale
+end
+
 function Window:Fit()
-    if self._destroyed then return end
-    self:ClosePopup()
+    if self._destroyed or self._closing then return end
     local size = self.Viewport.AbsoluteSize
     if size.X <= 0 or size.Y <= 0 then return end
+    if self._lastViewport == size then return end
+    local resized = self._lastViewport ~= nil
+    self._lastViewport = size
+    self:FinishEntrance(resized)
+    self:ClosePopup()
     local compact = size.X < 850 or size.Y < 692
     self.Width = compact and math.max(320, math.min(1100, size.X - 32)) or 1100
     self.Height = math.max(280, math.min(660, size.Y - 32))
@@ -208,6 +230,8 @@ function Window:SetCenter(center)
 end
 
 function Window:BeginPointer(input, update, finish)
+    if self._destroyed or self._closing then return end
+    self:FinishEntrance()
     self:EndPointer()
     self._pointer, self._pointerUpdate, self._pointerFinish = input, update, finish
 end
@@ -218,26 +242,58 @@ function Window:EndPointer()
     if finish then finish() end
 end
 
-function Window:ClosePopup()
-    local popup = self.OpenDropdown
-    self.OpenDropdown = nil
-    if popup then popup:Destroy() end
-    if self._popupCleanup then
-        local cleanup = self._popupCleanup
-        self._popupCleanup = nil
-        cleanup()
+function Window:ClosePopup(animated)
+    if self._retiringPopup then
+        local retiring = self._retiringPopup
+        self._retiringPopup = nil
+        retiring.Popup:Destroy()
+        retiring.Cleanup()
     end
+    local popup = self.OpenDropdown
+    local cleanup, motion = self._popupCleanup, self._popupMotion
+    self.OpenDropdown = nil
+    self._popupCleanup, self._popupMotion = nil, nil
     self.PopupOwner = nil
     if self.Blocker then self.Blocker.Visible = false end
+    if not popup then return end
+    local selected = GuiService.SelectedObject
+    if selected and selected:IsDescendantOf(popup) then GuiService.SelectedObject = nil end
+    for _, item in ipairs(popup:GetDescendants()) do
+        if item:IsA("GuiButton") then item.Selectable = false; item.Active = false end
+    end
+    if animated and self.Runtime.Animations ~= false and not self._destroyed and not self._closing and motion then
+        -- Remove interaction immediately while its short visual exit finishes.
+        local shield = UI.button(popup, "Dismissed", "", 0, 0, 0, 0)
+        shield.Size, shield.ZIndex = UDim2.fromScale(1, 1), 150
+        shield.Selectable = false
+        local retiring = {Popup = popup, Cleanup = cleanup}
+        self._retiringPopup = retiring
+        motion:Fade(0, 1, Motion.Time.Dismiss, function()
+            if self._retiringPopup ~= retiring then return end
+            self._retiringPopup = nil
+            popup:Destroy()
+            cleanup()
+        end)
+    else
+        popup:Destroy()
+        if cleanup then cleanup() end
+    end
 end
 
 Window._closeDropdown = Window.ClosePopup
 
 function Window:Focus(control)
-    if self._destroyed then return end
+    if self._destroyed or self._closing then return end
+    local changed = self.SelectedControl ~= control
     if self.SelectedControl and self.SelectedControl.FocusIndicator then self.SelectedControl.FocusIndicator.Visible = false end
     self.SelectedControl = control
-    if control.FocusIndicator then control.FocusIndicator.Visible = true end
+    if control.FocusIndicator then
+        control.FocusIndicator.Visible = true
+        if changed then
+            control.FocusIndicator.Size = UDim2.fromOffset(1, 0)
+            self.Runtime:Tween(control.FocusIndicator, {Size = UDim2.new(0, 1, 1, -28)}, 0.12)
+        end
+    end
     self.DetailTitle.Text = control.Name
     self.DetailDescription.Text = control.Description or ""
     self.DetailKind.Text = string.upper(control.Kind)
@@ -253,7 +309,14 @@ function Window:Focus(control)
     self.DetailRows[3].Text = control.Kind
     self.DetailRows[4].Text = control.Range or "--"
     local fraction = control.Fraction and control:Fraction() or ((value == false or value == nil) and 0 or 1)
-    for i, bar in ipairs(self.Bars) do bar.BackgroundColor3 = i / #self.Bars <= fraction and T.Accent or T.Line end
+    self._barState = self._barState or {}
+    for i, bar in ipairs(self.Bars) do
+        local on = i / #self.Bars <= fraction
+        if self._barState[i] ~= on then
+            self._barState[i] = on
+            self.Runtime:Tween(bar, {BackgroundColor3 = on and T.Accent or T.Line}, Motion.Time.Value)
+        end
+    end
     self.StatusText.Text = control.Section.Tab.Name .. " / " .. control.Section.Name .. " / " .. control.Name
 end
 
@@ -269,23 +332,58 @@ function Window:AddTab(name, options)
 end
 
 function Window:SelectTab(tab)
-    if self._destroyed or not table.find(self.Tabs, tab) then return end
+    if self._destroyed or self._closing or not table.find(self.Tabs, tab) then return end
+    if self.ActiveTab then self:FinishEntrance() end
     self:EndPointer()
     self:ClosePopup()
+    if self.ActiveTab == tab then return end
+    local previous = self.ActiveTab
     self.ActiveTab = tab
     for _, item in ipairs(self.Tabs) do
+        item.Motion:Finish()
+        self.Runtime:CancelTween(item.Page, "position")
+        item.Page.Position = UDim2.fromOffset(0, 0)
         local active = item == tab
         item.Page.Visible = active
-        item.Button.BackgroundTransparency = active and 0 or 1
         item.Button.BackgroundColor3 = T.AccentWash
-        item.Label.TextColor3 = active and T.Accent or T.Secondary
-        item.Number.TextColor3 = active and T.Accent or T.Muted
+        local duration = previous and 0.12 or 0
+        self.Runtime:Tween(item.Button, {BackgroundTransparency = active and 0 or 1}, duration)
+        self.Runtime:Tween(item.Label, {TextColor3 = active and T.Accent or T.Secondary}, duration)
+        self.Runtime:Tween(item.Number, {TextColor3 = active and T.Accent or T.Muted}, duration)
         item.Indicator.Visible = active
+    end
+    if previous then
+        tab.Page.Position = UDim2.fromOffset(0, 4)
+        self.Runtime:Tween(tab.Page, {Position = UDim2.fromOffset(0, 0)}, Motion.Time.Page, "position")
+        tab.Motion:Fade(0.35, 0, Motion.Time.Page)
     end
     self.Breadcrumb.Text = "Workspace  /  " .. tab.Name
     if self.SelectedControl and self.SelectedControl.FocusIndicator then self.SelectedControl.FocusIndicator.Visible = false end
     self.SelectedControl = nil
     if tab.Controls[1] then self:Focus(tab.Controls[1]) else self:SetDetails(tab.Name, tab.Description, "Ready") end
+end
+
+function Window:Close()
+    if self._destroyed or self._closing then return end
+    self:FinishEntrance()
+    self._closing = true
+    self:EndPointer()
+    self:ClosePopup()
+    local focused = Input:GetFocusedTextBox()
+    if focused and focused:IsDescendantOf(self.Root) then focused:ReleaseFocus() end
+    local selected = GuiService.SelectedObject
+    if selected and selected:IsDescendantOf(self.Root) then GuiService.SelectedObject = nil end
+    if self.Runtime.Animations == false then self:Destroy(); return end
+    for _, tab in ipairs(self.Tabs) do
+        tab.Motion:Finish()
+        self.Runtime:CancelTween(tab.Page, "position")
+        tab.Page.Position = UDim2.fromOffset(0, 0)
+    end
+    local shield = UI.button(self.Main, "ClosingShield", "", 0, 0, 0, 0)
+    shield.Size, shield.ZIndex = UDim2.fromScale(1, 1), 200
+    shield.Selectable = false
+    self.Runtime:Tween(self.UIScale, {Scale = self.Scale * 0.99}, Motion.Time.Close)
+    self.Motion:Fade(0, 1, Motion.Time.Close, function() self:Destroy() end)
 end
 
 function Window:Destroy()
