@@ -38,10 +38,10 @@ function Slider.new(section, options)
     local border = UI.stroke(box, T.Line)
     c.ValueInput = box
     local track = UI.new("Frame", c.Row, {Name = "Track", Position = UDim2.fromOffset(18, 62),
-        Size = UDim2.new(1, -36, 0, 3), BackgroundTransparency = 0, BackgroundColor3 = T.Line})
+        Size = UDim2.new(1, -36, 0, 2), BackgroundTransparency = 0, BackgroundColor3 = T.Line})
     UI.corner(track, 2)
-    local fill = UI.frame(track, "Fill", 0, 0, 0, 3, T.Accent, 2)
-    local thumb = UI.frame(track, "Thumb", 0, -5, 7, 13, T.Text, 2)
+    local fill = UI.frame(track, "Fill", 0, 0, 0, 2, T.Accent, 1)
+    local thumb = UI.frame(track, "Thumb", 0, -5, 6, 12, T.Text, 2)
     thumb.AnchorPoint = Vector2.new(0.5, 0)
     local hit = UI.button(c.Row, "SliderInput", "", 18, 52, 0, 23)
     hit.Size = UDim2.new(1, -36, 0, 23)

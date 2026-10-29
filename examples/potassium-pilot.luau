@@ -14,7 +14,7 @@ local mode = interaction:AddDropdown({Name = "Interaction mode", Description = "
 local tools = overview:AddSection("Session tools", {Tag = "LOCAL SESSION"})
 tools:AddButton({Name = "Preview action", Description = "Try a protected, placeholder callback.", Action = "Run preview",
     Callback = function() print("[Lumi demo] preview complete") end})
-tools:AddButton({Name = "Restore defaults", Description = "Reset the three properties above.", Action = "Restore",
+tools:AddButton({Name = "Restore defaults", Description = "Reset the three properties above.", Action = "Restore", Variant = "Secondary",
     Callback = function() enabled:Set(true, true); intensity:Set(65, true); mode:Set("Balanced", true); intensity:Focus() end})
 
 local values = player:AddSection("Input laboratory", {Tag = "PLACEHOLDERS"})
@@ -23,7 +23,7 @@ values:AddSlider({Name = "Response", Description = "A compact numerical property
 values:AddDropdown({Name = "Profile", Description = "A single available option.", Values = {"Local preview"}})
 local safety = player:AddSection("Range boundaries", {Tag = "FIXED VALUE"})
 safety:AddSlider({Name = "Fixed range", Description = "Equal bounds remain a fixed value.", Min = 10, Max = 10, Default = 100})
-safety:AddButton({Name = "Inspect input", Description = "Exercises a placeholder action.", Action = "Inspect"})
+safety:AddButton({Name = "Inspect input", Description = "Exercises a placeholder action.", Action = "Inspect", Variant = "Secondary"})
 
 local presentation = visuals:AddSection("Presentation", {Tag = "UI ONLY"})
 presentation:AddToggle({Name = "Overlay preview", Description = "A demo state. No game overlay is created.", Default = false})

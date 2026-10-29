@@ -2,6 +2,8 @@
 
 Environment: actual Roblox client, Potassium PID 7740, 1920 x 1080 viewport, gethui available. Tests and source were dispatched with Potassium's execute_script and read back from its console. Native screenshots and mouse actions used the Windows Computer Use integration. No game state was changed by library logic.
 
+Update: the later [v0.4.1 finesse pass](studio-v04-finesse.md) completes the compact visual review left pending in this historical record and records its current validation.
+
 ## Baseline and design review
 
 Inspected every tracked file at e6c89df: README, v0.1 design and plan, standalone v0.3 pilot, stable loader. Ran the original raw loader successfully and viewed it in Roblox. The old render had overlapping navigation icons/labels, 8–10px copy, redundant row surfaces, unused dark workspace and a generic inspector. README still identified v0.2 while the artifact was v0.3.

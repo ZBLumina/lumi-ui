@@ -28,7 +28,7 @@ function UI.corner(parent, radius)
 end
 
 function UI.stroke(parent, color)
-    return UI.new("UIStroke", parent, {Color = color or T.Line, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
+    return UI.new("UIStroke", parent, {Color = color or T.Line, Thickness = 1, Transparency = 0.16, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
 end
 
 function UI.text(parent, name, text, x, y, width, height, size, color, font)

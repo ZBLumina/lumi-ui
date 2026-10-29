@@ -18,16 +18,18 @@ function Window.new(options)
     self.Main = main
     self.UIScale = UI.new("UIScale", main, {Scale = 1})
     local shadow = UI.frame(main, "Shadow", -6, 5, 1112, 664, Color3.fromRGB(15, 13, 11), 15)
-    shadow.BackgroundTransparency = 0.45
+    shadow.BackgroundTransparency = 0.65
     shadow.ZIndex = 0
     self.Shadow = shadow
     UI.stroke(main, T.Line)
+    self.TopEdge = UI.frame(main, "TopEdge", 12, 0, 1076, 1, T.Secondary)
+    self.TopEdge.BackgroundTransparency = 0.88
 
     local sidebar = UI.frame(main, "Sidebar", 0, 0, 184, 660, T.Sidebar, 12)
     self.Sidebar = sidebar
     UI.frame(sidebar, "InnerEdge", 174, 0, 10, 660, T.Sidebar)
-    UI.mark(sidebar, 20, 25, 30)
-    UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 30, 27, T.Text, T.Bold)
+    UI.mark(sidebar, 21, 26, 27)
+    UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 30, 25, T.Text, T.Medium)
     UI.text(sidebar, "BrandSub", "INTERFACE STUDIO", 21, 65, 145, 14, 9, T.Muted, T.Medium)
     UI.line(sidebar, 20, 100, 144)
     UI.text(sidebar, "Group", "WORKSPACE", 22, 122, 140, 16, 10, T.Muted, T.Medium)
@@ -41,14 +43,14 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "Visual pilot / 0.4", 33, 38, 110, 16, 10, T.Muted)
+    UI.text(footer, "Version", "Studio / 0.4.1", 33, 38, 110, 16, 10, T.Muted)
     UI.frame(main, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
     local chrome = UI.frame(main, "Chrome", 184, 0, 916, 48)
     self.Chrome = chrome
     local drag = UI.button(chrome, "TitleDrag", "", 0, 0, 862, 48)
     self.Breadcrumb = UI.text(drag, "Breadcrumb", "Workspace  /  Overview", 24, 0, 400, 48, 11, T.Secondary)
-    local tag = UI.frame(chrome, "Status", 690, 14, 156, 22, T.Raised, 5)
+    local tag = UI.frame(chrome, "Status", 690, 14, 156, 22)
     UI.frame(tag, "StatusDot", 10, 8, 6, 6, T.Green, 3)
     UI.text(tag, "StatusLabel", options.Status or "LOCAL WORKSPACE", 23, 0, 127, 22, 9, T.Secondary, T.Medium)
     self.StatusTag = tag
@@ -64,44 +66,45 @@ function Window.new(options)
 
     self.Workspace = UI.frame(main, "Workspace", 184, 48, 696, 584, T.Workspace)
     self.Workspace.ClipsDescendants = true
-    local inspector = UI.frame(main, "Inspector", 880, 48, 220, 584, T.Sidebar)
+    local inspector = UI.frame(main, "Inspector", 888, 60, 204, 560, T.Sidebar, 8)
     self.Inspector = inspector
-    UI.frame(inspector, "InspectorRule", 0, 0, 1, 584, T.SoftLine)
-    UI.text(inspector, "InspectorHeading", "CONTROL DETAILS", 20, 23, 180, 16, 10, T.Muted, T.Medium)
-    self.DetailTitle = UI.text(inspector, "DetailTitle", "Your workspace", 20, 55, 180, 48, 19, T.Text, T.Medium)
+    UI.stroke(inspector, T.SoftLine)
+    UI.text(inspector, "InspectorHeading", "INSPECTOR", 16, 19, 172, 16, 9, T.Muted, T.Medium)
+    self.DetailTitle = UI.text(inspector, "DetailTitle", "Your workspace", 16, 52, 172, 42, 18, T.Text, T.Medium)
     self.DetailTitle.TextWrapped = true
     self.DetailTitle.TextYAlignment = Enum.TextYAlignment.Top
     self.DetailTitle.TextTruncate = Enum.TextTruncate.None
-    self.DetailDescription = UI.text(inspector, "Description", "Select a control to see its details.", 20, 110, 180, 56, 11, T.Secondary)
+    self.DetailDescription = UI.text(inspector, "Description", "Select a control to see its details.", 16, 103, 172, 46, 11, T.Secondary)
     self.DetailDescription.TextWrapped = true
     self.DetailDescription.TextTruncate = Enum.TextTruncate.None
     self.DetailDescription.TextYAlignment = Enum.TextYAlignment.Top
-    local preview = UI.frame(inspector, "ValuePreview", 20, 182, 180, 136, T.Surface, 8)
+    local preview = UI.frame(inspector, "ValuePreview", 16, 164, 172, 148, T.Surface, 6)
     UI.stroke(preview, T.SoftLine)
-    self.DetailKind = UI.text(preview, "Kind", "SELECTION", 14, 12, 152, 16, 9, T.Muted, T.Medium)
-    self.DetailValue = UI.text(preview, "Value", "Ready", 14, 36, 152, 35, 25, T.Accent, T.Medium)
+    self.DetailKind = UI.text(preview, "Kind", "SELECTION", 14, 12, 144, 16, 9, T.Muted, T.Medium)
+    self.DetailValue = UI.text(preview, "Value", "Ready", 14, 38, 144, 35, 28, T.Accent, T.Font)
     self.Bars = {}
-    for i = 1, 23 do
-        local height = 9 + i
-        self.Bars[i] = UI.frame(preview, "ValueBar", 14 + (i - 1) * 6.6, 115 - height, 3, height, T.Line, 1)
+    for i = 1, 29 do
+        local height = (i - 1) % 7 == 0 and 23 or 14
+        self.Bars[i] = UI.frame(preview, "ValueBar", 14 + (i - 1) * 5.05, 119 - height, 1, height, T.Line)
     end
-    UI.text(inspector, "Properties", "PROPERTIES", 20, 344, 180, 16, 10, T.Muted, T.Medium)
+    UI.text(preview, "SessionLabel", "SESSION VALUE", 14, 128, 144, 11, 8, T.Muted, T.Mono)
+    UI.text(inspector, "Properties", "PROPERTIES", 16, 334, 172, 16, 9, T.Muted, T.Medium)
     self.DetailRows = {}
     for i, name in ipairs({"Page", "Section", "Type", "Range"}) do
-        local y = 371 + (i - 1) * 34
-        UI.text(inspector, name .. "Key", name, 20, y, 58, 24, 11, T.Muted)
-        self.DetailRows[i] = UI.text(inspector, name .. "Value", "--", 80, y, 120, 24, 11, T.Secondary, T.Medium)
+        local y = 361 + (i - 1) * 34
+        UI.text(inspector, name .. "Key", name, 16, y, 50, 24, 11, T.Muted)
+        self.DetailRows[i] = UI.text(inspector, name .. "Value", "--", 72, y, 116, 24, 11, T.Secondary)
         self.DetailRows[i].TextXAlignment = Enum.TextXAlignment.Right
-        UI.line(inspector, 20, y + 29, 180)
+        UI.line(inspector, 16, y + 29, 172)
     end
-    UI.text(inspector, "Hint", "Changes stay in this session.", 20, 541, 180, 16, 10, T.Muted)
+    UI.text(inspector, "Hint", "Changes stay in this session.", 16, 525, 172, 16, 10, T.Muted)
 
     local status = UI.frame(main, "Statusbar", 184, 632, 916, 28, T.Shell)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
     UI.frame(status, "Dot", 22, 11, 5, 5, T.Green, 3)
     self.StatusText = UI.text(status, "State", "Ready", 35, 0, 560, 28, 10, T.Secondary)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4", 730, 0, 160, 28, 9, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.1", 730, 0, 160, 28, 9, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -156,6 +159,7 @@ function Window:Fit()
     local sideWidth = self.SidebarWidth
     self.Inspector.Visible = not compact
     self.Main.Size = UDim2.fromOffset(self.Width, self.Height)
+    self.TopEdge.Size = UDim2.fromOffset(self.Width - 24, 1)
     self.Shadow.Size = UDim2.fromOffset(self.Width + 12, self.Height + 4)
     self.Sidebar.Size = UDim2.fromOffset(sideWidth, self.Height)
     self.Sidebar.InnerEdge.Position = UDim2.fromOffset(sideWidth - 10, 0)
@@ -179,8 +183,8 @@ function Window:Fit()
     self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, chromeWidth - (self.StatusTag.Visible and 260 or 80)), 48)
     self.Workspace.Position = UDim2.fromOffset(sideWidth, 48)
     self.Workspace.Size = UDim2.fromOffset(chromeWidth - (compact and 0 or 220), self.Height - 76)
-    self.Inspector.Position = UDim2.fromOffset(self.Width - 220, 48)
-    self.Inspector.Size = UDim2.fromOffset(220, self.Height - 76)
+    self.Inspector.Position = UDim2.fromOffset(self.Width - 212, 60)
+    self.Inspector.Size = UDim2.fromOffset(204, self.Height - 100)
     self.Statusbar.Position = UDim2.fromOffset(sideWidth, self.Height - 28)
     self.Statusbar.Size = UDim2.fromOffset(chromeWidth, 28)
     self.Chrome.Rule.Size = UDim2.fromOffset(chromeWidth, 1)
@@ -231,7 +235,9 @@ Window._closeDropdown = Window.ClosePopup
 
 function Window:Focus(control)
     if self._destroyed then return end
+    if self.SelectedControl and self.SelectedControl.FocusIndicator then self.SelectedControl.FocusIndicator.Visible = false end
     self.SelectedControl = control
+    if control.FocusIndicator then control.FocusIndicator.Visible = true end
     self.DetailTitle.Text = control.Name
     self.DetailDescription.Text = control.Description or ""
     self.DetailKind.Text = string.upper(control.Kind)
@@ -241,7 +247,7 @@ function Window:Focus(control)
     if type(value) == "boolean" then shown = value and "Enabled" or "Disabled" end
     if type(value) == "number" then shown = (control.Format and control:Format(value) or UI.format(value)) .. (control.Suffix or "") end
     self.DetailValue.Text = shown
-    self.DetailValue.TextSize = #shown > 12 and 16 or 25
+    self.DetailValue.TextSize = #shown > 12 and 15 or 28
     self.DetailRows[1].Text = control.Section.Tab.Name
     self.DetailRows[2].Text = control.Section.Name
     self.DetailRows[3].Text = control.Kind
@@ -277,6 +283,7 @@ function Window:SelectTab(tab)
         item.Indicator.Visible = active
     end
     self.Breadcrumb.Text = "Workspace  /  " .. tab.Name
+    if self.SelectedControl and self.SelectedControl.FocusIndicator then self.SelectedControl.FocusIndicator.Visible = false end
     self.SelectedControl = nil
     if tab.Controls[1] then self:Focus(tab.Controls[1]) else self:SetDetails(tab.Name, tab.Description, "Ready") end
 end

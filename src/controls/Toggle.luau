@@ -11,22 +11,22 @@ function Toggle.new(section, options)
     input.ZIndex = 2
     c.Input = input
     local state = UI.text(input, "State", "", 0, 0, 36, 58, 10, T.Secondary, T.Mono)
-    state.Position = UDim2.new(1, -112, 0, 0)
-    local track = UI.frame(input, "Switch", 0, 18, 43, 23, T.Raised, 5)
-    track.Position = UDim2.new(1, -59, 0, 18)
+    state.Position = UDim2.new(1, -100, 0, 0)
+    local track = UI.frame(input, "Switch", 0, 19, 36, 20, T.Raised, 6)
+    track.Position = UDim2.new(1, -52, 0, 19)
     local outline = UI.stroke(track, T.Line)
-    local thumb = UI.frame(track, "Thumb", 4, 4, 13, 15, T.Secondary, 3)
-    local notch = UI.frame(thumb, "Notch", 6, 4, 1, 7, T.Ink)
+    local thumb = UI.frame(track, "Thumb", 4, 4, 12, 12, T.Secondary, 4)
+    local notch = UI.frame(thumb, "Notch", 6, 4, 1, 4, T.Ink)
     c.Layout = function(narrow)
-        track.Position = UDim2.new(1, -59, 0, narrow and 12 or 18)
+        track.Position = UDim2.new(1, -52, 0, narrow and 13 or 19)
         state.Size = UDim2.fromOffset(36, narrow and 46 or 58)
     end
     local function render(instant)
         state.Text = value and "ON" or "OFF"
         state.TextColor3 = value and T.Accent or T.Muted
-        outline.Color = value and T.Accent or T.Line
+        outline.Color = value and T.AccentSoft or T.Line
         local props = {BackgroundColor3 = value and T.AccentWash or T.Raised}
-        local knobProps = {Position = UDim2.fromOffset(value and 26 or 4, 4), BackgroundColor3 = value and T.Accent or T.Secondary}
+        local knobProps = {Position = UDim2.fromOffset(value and 20 or 4, 4), BackgroundColor3 = value and T.Accent or T.Secondary}
         if instant then
             track.BackgroundColor3 = props.BackgroundColor3
             for k, v in pairs(knobProps) do thumb[k] = v end

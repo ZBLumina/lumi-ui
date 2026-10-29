@@ -19,7 +19,7 @@ function Section.new(tab, name, options)
     local header = UI.new("Frame", frame, {Name = "SectionHeader", Size = UDim2.new(1, 0, 0, 43), LayoutOrder = 0})
     local index = #tab.Sections + 1
     UI.text(header, "Index", string.format("%02d", index), 16, 0, 26, 43, 10, T.Muted, T.Mono)
-    UI.text(header, "Title", name, 45, 0, 440, 43, 12, T.Text, T.Medium).Size = UDim2.new(1, -190, 0, 43)
+    UI.text(header, "Title", name, 45, 0, 440, 43, 13, T.Text, T.Medium).Size = UDim2.new(1, -190, 0, 43)
     local tag = UI.text(header, "Tag", options.Tag or "PROPERTIES", 510, 0, 116, 43, 9, T.Muted, T.Mono)
     tag.TextXAlignment = Enum.TextXAlignment.Right
     tag.Position = UDim2.new(1, -132, 0, 0)
@@ -34,10 +34,12 @@ function Section:Row(options, kind, height)
         Size = UDim2.new(1, 0, 0, height or 56), LayoutOrder = self._order})
     local rule = UI.new("Frame", row, {Name = "Divider", Size = UDim2.new(1, -32, 0, 1),
         Position = UDim2.fromOffset(16, 0), BackgroundTransparency = 0, BackgroundColor3 = T.SoftLine})
-    local title = UI.text(row, "Name", options.Name or kind, 16, 12, 330, 18, 13, T.Text, T.Medium)
-    local description = UI.text(row, "Description", options.Description or "", 16, 33, 350, 15, 10, T.Muted)
+    local title = UI.text(row, "Name", options.Name or kind, 16, 12, 330, 18, 13, T.Text, T.Font)
+    local description = UI.text(row, "Description", options.Description or "", 16, 33, 350, 15, 11, T.Muted)
     local control = {Name = options.Name or kind, Description = options.Description or "", Kind = kind,
         Row = row, Section = self, Runtime = self.Tab.Window.Runtime, Label = title, DescriptionLabel = description}
+    control.FocusIndicator = UI.new("Frame", row, {Name = "FocusIndicator", Position = UDim2.fromOffset(0, 14),
+        Size = UDim2.new(0, 1, 1, -28), BackgroundTransparency = 0.25, BackgroundColor3 = T.AccentSoft, Visible = false})
     function control:Focus() self.Section.Tab.Window:Focus(self) end
     function control:Refresh()
         if self.Section.Tab.Window.SelectedControl == self then self:Focus() end
@@ -48,7 +50,7 @@ function Section:Row(options, kind, height)
         title.Size = UDim2.new(1, -reserve, 0, 18)
         description.Size = UDim2.new(1, -(kind == "Toggle" and narrow and 32 or reserve), 0, 15)
         description.Position = UDim2.fromOffset(16, kind == "Toggle" and narrow and 43 or 33)
-        description.TextSize = narrow and 11 or 10
+        description.TextSize = 11
         local rowHeight = narrow and ((kind == "Dropdown" or kind == "Button") and 96 or (kind == "Toggle" and 68 or height)) or height
         row.Size = UDim2.new(1, 0, 0, rowHeight or 56)
         if self.Layout then self.Layout(narrow) end
