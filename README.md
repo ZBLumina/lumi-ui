@@ -2,11 +2,11 @@
 
 A high-quality Luau UI library for executor environments.
 
-> **Status:** experimental pilot (`v0.1`). The first target environment is Potassium.
+> **Status:** experimental visual pilot (`v0.2`). The first target environment is Potassium.
 
-## Run the placeholder pilot
+## Run the current pilot
 
-For the current executor test, run this single line in Potassium:
+Run this single line in Potassium:
 
 ```luau
 loadstring(game:HttpGet("https://raw.githubusercontent.com/ZBLumina/lumi-ui/main/dist/LumiUI.pilot.luau"))()
@@ -14,18 +14,28 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/ZBLumina/lumi-ui/main
 
 The same loader is stored in [`examples/potassium-loader.luau`](examples/potassium-loader.luau). The standalone artifact lives at [`dist/LumiUI.pilot.luau`](dist/LumiUI.pilot.luau).
 
-This build intentionally contains placeholder controls only. It does not contain game-specific behavior. Re-running it should replace the previous Lumi pilot root instead of stacking duplicate windows.
+This build contains placeholder controls only; it does not contain game-specific behavior. Re-running it replaces the previous Lumi pilot root instead of stacking duplicate windows.
 
-## Pilot goals
+## v0.2 visual direction
 
-The first iteration intentionally stays small. It exists to validate the architecture, interaction feel, and visual direction before adding advanced systems.
+The second pilot keeps the working Luau API but rebuilds the presentation around a denser desktop-style layout:
 
-Current pilot surface:
+- narrower navigation rail with active states
+- dedicated page headers and clearer hierarchy
+- compact contextual inspector
+- layered charcoal surfaces instead of one flat grey field
+- cream/taupe Lumi accents used for state and selection
+- redesigned button, toggle, slider, and dropdown components
+- floating dropdown menus
+- restrained hover and transition feedback
+- Potassium status/footer treatment instead of the old debug badge
+
+## Current pilot surface
 
 - draggable main window
 - sidebar tabs
 - central content area
-- right-side inspector panel
+- right-side contextual inspector
 - sections
 - button
 - toggle
@@ -56,20 +66,16 @@ General:AddToggle({
 })
 ```
 
-## Design direction
-
-The pilot takes structural inspiration from dense desktop-style tool UIs: sidebar navigation, a focused workspace, compact controls, and an optional inspector/details column. The visual language itself is original to Lumi: dark charcoal surfaces, warm cream/taupe accents, restrained borders, and short functional animations.
-
 ## What to test in Potassium
 
 1. The window appears once and is centered.
-2. The top bar can drag the complete window.
+2. The top bar drags the complete window and its shadow together.
 3. `Home`, `Player`, and `Visuals` switch pages correctly.
-4. Toggle animations and state changes work.
+4. Toggle animation and state changes work.
 5. The slider follows the mouse and remains inside its range.
-6. The dropdown opens and selects values.
+6. The dropdown opens as a floating menu and selects values.
 7. The placeholder button invokes its callback.
-8. The inspector updates when controls are used.
+8. The context panel updates when controls are used.
 9. Re-running the one-line loader replaces the previous UI.
 10. The close button destroys the pilot cleanly.
 
