@@ -1,6 +1,8 @@
 # Lumi UI
 
-A modular Luau interface library for Potassium. **v0.4.1 is a visual pilot**: warm charcoal surfaces, compact property groups, deliberate interaction states, and a contextual inspector. Demo actions affect the interface only.
+A modular Luau interface library for Potassium. **v0.4.2 is a visual pilot**: warm charcoal surfaces, compact property groups, deliberate interaction states, and a contextual inspector. Demo actions affect the interface only.
+
+The readability pass raises text contrast, sets an 11px minimum for shared text labels, uses 14px medium-weight property names and 12px descriptions, and makes navigation, dropdown and inspector text easier to read. Layout and control behavior remain unchanged.
 
 The finesse pass refines type weights, outlines and spacing; gives the inspector its own inset surface and fine value ruler; and preserves comfortable hit areas behind more delicate visible controls. Buttons accept `Variant = "Secondary"` for a quiet outlined treatment. The default remains the cream primary action. See the [finesse notes](docs/design/studio-v04-finesse.md).
 

@@ -137,8 +137,8 @@ function Section:Row(options, kind, height)
         Size = UDim2.new(1, 0, 0, height or 56), LayoutOrder = self._order})
     local rule = UI.new("Frame", row, {Name = "Divider", Size = UDim2.new(1, -32, 0, 1),
         Position = UDim2.fromOffset(16, 0), BackgroundTransparency = 0, BackgroundColor3 = T.SoftLine})
-    local title = UI.text(row, "Name", options.Name or kind, 16, 12, 330, 18, 13, T.Text, T.Font)
-    local description = UI.text(row, "Description", options.Description or "", 16, 33, 350, 15, 11, T.Muted)
+    local title = UI.text(row, "Name", options.Name or kind, 16, 12, 330, 18, 14, T.Text, T.Medium)
+    local description = UI.text(row, "Description", options.Description or "", 16, 33, 350, 15, 12, T.Muted)
     local control = {Name = options.Name or kind, Description = options.Description or "", Kind = kind,
         Row = row, Section = self, Runtime = self.Tab.Window.Runtime, Label = title, DescriptionLabel = description}
     control.FocusIndicator = UI.new("Frame", row, {Name = "FocusIndicator", Position = UDim2.fromOffset(0, 14),
@@ -153,7 +153,7 @@ function Section:Row(options, kind, height)
         title.Size = UDim2.new(1, -reserve, 0, 18)
         description.Size = UDim2.new(1, -(kind == "Toggle" and narrow and 32 or reserve), 0, 15)
         description.Position = UDim2.fromOffset(16, kind == "Toggle" and narrow and 43 or 33)
-        description.TextSize = 11
+        description.TextSize = 12
         local rowHeight = narrow and ((kind == "Dropdown" or kind == "Button") and 96 or (kind == "Toggle" and 68 or height)) or height
         row.Size = UDim2.new(1, 0, 0, rowHeight or 56)
         if self.Layout then self.Layout(narrow) end
@@ -199,7 +199,7 @@ function Tab.new(window, name, options)
     UI.corner(button, 6)
     self.Button = button
     self.Number = UI.text(button, "Number", string.format("%02d", index), 12, 0, 24, 42, 10, T.Muted, T.Mono)
-    self.Label = UI.text(button, "Label", name, 43, 0, 104, 42, 13, T.Secondary, T.Font)
+    self.Label = UI.text(button, "Label", name, 43, 0, 104, 42, 13, T.Secondary, T.Medium)
     self.Label.Size = UDim2.new(1, -50, 1, 0)
     self.Indicator = UI.frame(button, "Selected", 1, 14, 2, 14, T.Accent, 1)
     self.Indicator.Visible = false
@@ -216,7 +216,7 @@ function Tab.new(window, name, options)
     header.LayoutOrder = 0
     UI.text(header, "Eyebrow", options.Eyebrow or "LUMI / WORKSPACE", 0, 0, 540, 13, 9, T.Muted, T.Medium)
     UI.text(header, "Title", name, 0, 20, 570, 30, 23, T.Text, T.Medium).Size = UDim2.new(1, 0, 0, 30)
-    UI.text(header, "Subtitle", self.Description, 0, 54, 620, 17, 11, T.Secondary).Size = UDim2.new(1, 0, 0, 17)
+    UI.text(header, "Subtitle", self.Description, 0, 54, 620, 17, 12, T.Secondary).Size = UDim2.new(1, 0, 0, 17)
     window.Runtime:Connect(button.Activated, function() window:SelectTab(self) end)
     window.Runtime:Connect(button.MouseEnter, function()
         if window.ActiveTab ~= self then button.BackgroundTransparency = 0; button.BackgroundColor3 = T.Surface end
@@ -248,9 +248,9 @@ return {
     Hover = Color3.fromRGB(50, 51, 46),
     Line = Color3.fromRGB(61, 61, 55),
     SoftLine = Color3.fromRGB(44, 45, 40),
-    Text = Color3.fromRGB(234, 233, 225),
-    Secondary = Color3.fromRGB(183, 182, 170),
-    Muted = Color3.fromRGB(149, 148, 136),
+    Text = Color3.fromRGB(245, 244, 237),
+    Secondary = Color3.fromRGB(211, 210, 199),
+    Muted = Color3.fromRGB(185, 184, 172),
     Accent = Color3.fromRGB(244, 230, 186),
     AccentHover = Color3.fromRGB(251, 241, 212),
     AccentSoft = Color3.fromRGB(153, 144, 116),
@@ -303,7 +303,7 @@ end
 function UI.text(parent, name, text, x, y, width, height, size, color, font)
     return UI.new("TextLabel", parent, {
         Name = name, Text = tostring(text or ""), Position = UDim2.fromOffset(x, y),
-        Size = UDim2.fromOffset(width, height), TextSize = size or 13,
+        Size = UDim2.fromOffset(width, height), TextSize = math.max(size or 13, 11),
         TextColor3 = color or T.Text, Font = font or T.Font,
         TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
     })
@@ -312,7 +312,7 @@ end
 function UI.button(parent, name, text, x, y, width, height)
     return UI.new("TextButton", parent, {
         Name = name, Text = text or "", Position = UDim2.fromOffset(x, y),
-        Size = UDim2.fromOffset(width, height), Font = T.Medium, TextSize = 12,
+        Size = UDim2.fromOffset(width, height), Font = T.Medium, TextSize = 13,
         TextColor3 = T.Text, Active = true,
     })
 end
@@ -415,7 +415,7 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "Studio / 0.4.1", 33, 38, 110, 16, 10, T.Muted)
+    UI.text(footer, "Version", "Studio / 0.4.2", 33, 38, 110, 16, 11, T.Muted)
     UI.frame(main, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
     local chrome = UI.frame(main, "Chrome", 184, 0, 916, 48)
@@ -446,7 +446,7 @@ function Window.new(options)
     self.DetailTitle.TextWrapped = true
     self.DetailTitle.TextYAlignment = Enum.TextYAlignment.Top
     self.DetailTitle.TextTruncate = Enum.TextTruncate.None
-    self.DetailDescription = UI.text(inspector, "Description", "Select a control to see its details.", 16, 103, 172, 46, 11, T.Secondary)
+    self.DetailDescription = UI.text(inspector, "Description", "Select a control to see its details.", 16, 103, 172, 46, 12, T.Secondary)
     self.DetailDescription.TextWrapped = true
     self.DetailDescription.TextTruncate = Enum.TextTruncate.None
     self.DetailDescription.TextYAlignment = Enum.TextYAlignment.Top
@@ -459,13 +459,13 @@ function Window.new(options)
         local height = (i - 1) % 7 == 0 and 23 or 14
         self.Bars[i] = UI.frame(preview, "ValueBar", 14 + (i - 1) * 5.05, 119 - height, 1, height, T.Line)
     end
-    UI.text(preview, "SessionLabel", "SESSION VALUE", 14, 128, 144, 11, 8, T.Muted, T.Mono)
+    UI.text(preview, "SessionLabel", "SESSION VALUE", 14, 125, 144, 15, 11, T.Muted, T.Mono)
     UI.text(inspector, "Properties", "PROPERTIES", 16, 334, 172, 16, 9, T.Muted, T.Medium)
     self.DetailRows = {}
     for i, name in ipairs({"Page", "Section", "Type", "Range"}) do
         local y = 361 + (i - 1) * 34
-        UI.text(inspector, name .. "Key", name, 16, y, 50, 24, 11, T.Muted)
-        self.DetailRows[i] = UI.text(inspector, name .. "Value", "--", 72, y, 116, 24, 11, T.Secondary)
+        UI.text(inspector, name .. "Key", name, 16, y, 50, 24, 12, T.Muted)
+        self.DetailRows[i] = UI.text(inspector, name .. "Value", "--", 72, y, 116, 24, 12, T.Secondary)
         self.DetailRows[i].TextXAlignment = Enum.TextXAlignment.Right
         UI.line(inspector, 16, y + 29, 172)
     end
@@ -476,7 +476,7 @@ function Window.new(options)
     UI.line(status, 0, 0, 916)
     UI.frame(status, "Dot", 22, 11, 5, 5, T.Green, 3)
     self.StatusText = UI.text(status, "State", "Ready", 35, 0, 560, 28, 10, T.Secondary)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.1", 730, 0, 160, 28, 9, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.2", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -740,7 +740,7 @@ function Dropdown.new(section, options)
     selector.ZIndex = 2
     UI.corner(selector, 5)
     local border = UI.stroke(selector, T.Line)
-    local label = UI.text(selector, "Selection", selected == nil and "No options" or selected, 12, 0, 178, 31, 12, T.Secondary)
+    local label = UI.text(selector, "Selection", selected == nil and "No options" or selected, 12, 0, 178, 31, 13, T.Secondary)
     UI.chevron(selector, 197, 15)
     c.Input, c.Values = selector, values
     c.Layout = function(narrow)
@@ -807,7 +807,7 @@ function Dropdown.new(section, options)
             item.BackgroundColor3 = value == selected and T.AccentWash or T.Raised
             item.ZIndex = 103
             UI.corner(item, 4)
-            UI.text(item, "Label", value, 8, 0, 167, 32, 12, value == selected and T.Accent or T.Text).Size = UDim2.new(1, -38, 0, 32)
+            UI.text(item, "Label", value, 8, 0, 167, 32, 13, value == selected and T.Accent or T.Text).Size = UDim2.new(1, -38, 0, 32)
             if value == selected then UI.check(item, width - 39, 13) end
             UI.hover(popupRuntime, item, value == selected and T.AccentWash or T.Raised, T.Hover)
             popupRuntime:Connect(item.Activated, function() c:Set(value); c:Close() end)
@@ -1009,7 +1009,7 @@ local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
 if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
 
-local Lumi = {Version = "0.4.1", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.4.2", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] This library was destroyed; load a fresh library")

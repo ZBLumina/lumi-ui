@@ -34,7 +34,7 @@ end
 function UI.text(parent, name, text, x, y, width, height, size, color, font)
     return UI.new("TextLabel", parent, {
         Name = name, Text = tostring(text or ""), Position = UDim2.fromOffset(x, y),
-        Size = UDim2.fromOffset(width, height), TextSize = size or 13,
+        Size = UDim2.fromOffset(width, height), TextSize = math.max(size or 13, 11),
         TextColor3 = color or T.Text, Font = font or T.Font,
         TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
     })
@@ -43,7 +43,7 @@ end
 function UI.button(parent, name, text, x, y, width, height)
     return UI.new("TextButton", parent, {
         Name = name, Text = text or "", Position = UDim2.fromOffset(x, y),
-        Size = UDim2.fromOffset(width, height), Font = T.Medium, TextSize = 12,
+        Size = UDim2.fromOffset(width, height), Font = T.Medium, TextSize = 13,
         TextColor3 = T.Text, Active = true,
     })
 end

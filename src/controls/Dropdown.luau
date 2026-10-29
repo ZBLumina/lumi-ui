@@ -17,7 +17,7 @@ function Dropdown.new(section, options)
     selector.ZIndex = 2
     UI.corner(selector, 5)
     local border = UI.stroke(selector, T.Line)
-    local label = UI.text(selector, "Selection", selected == nil and "No options" or selected, 12, 0, 178, 31, 12, T.Secondary)
+    local label = UI.text(selector, "Selection", selected == nil and "No options" or selected, 12, 0, 178, 31, 13, T.Secondary)
     UI.chevron(selector, 197, 15)
     c.Input, c.Values = selector, values
     c.Layout = function(narrow)
@@ -84,7 +84,7 @@ function Dropdown.new(section, options)
             item.BackgroundColor3 = value == selected and T.AccentWash or T.Raised
             item.ZIndex = 103
             UI.corner(item, 4)
-            UI.text(item, "Label", value, 8, 0, 167, 32, 12, value == selected and T.Accent or T.Text).Size = UDim2.new(1, -38, 0, 32)
+            UI.text(item, "Label", value, 8, 0, 167, 32, 13, value == selected and T.Accent or T.Text).Size = UDim2.new(1, -38, 0, 32)
             if value == selected then UI.check(item, width - 39, 13) end
             UI.hover(popupRuntime, item, value == selected and T.AccentWash or T.Raised, T.Hover)
             popupRuntime:Connect(item.Activated, function() c:Set(value); c:Close() end)

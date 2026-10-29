@@ -43,7 +43,7 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "Studio / 0.4.1", 33, 38, 110, 16, 10, T.Muted)
+    UI.text(footer, "Version", "Studio / 0.4.2", 33, 38, 110, 16, 11, T.Muted)
     UI.frame(main, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
     local chrome = UI.frame(main, "Chrome", 184, 0, 916, 48)
@@ -74,7 +74,7 @@ function Window.new(options)
     self.DetailTitle.TextWrapped = true
     self.DetailTitle.TextYAlignment = Enum.TextYAlignment.Top
     self.DetailTitle.TextTruncate = Enum.TextTruncate.None
-    self.DetailDescription = UI.text(inspector, "Description", "Select a control to see its details.", 16, 103, 172, 46, 11, T.Secondary)
+    self.DetailDescription = UI.text(inspector, "Description", "Select a control to see its details.", 16, 103, 172, 46, 12, T.Secondary)
     self.DetailDescription.TextWrapped = true
     self.DetailDescription.TextTruncate = Enum.TextTruncate.None
     self.DetailDescription.TextYAlignment = Enum.TextYAlignment.Top
@@ -87,13 +87,13 @@ function Window.new(options)
         local height = (i - 1) % 7 == 0 and 23 or 14
         self.Bars[i] = UI.frame(preview, "ValueBar", 14 + (i - 1) * 5.05, 119 - height, 1, height, T.Line)
     end
-    UI.text(preview, "SessionLabel", "SESSION VALUE", 14, 128, 144, 11, 8, T.Muted, T.Mono)
+    UI.text(preview, "SessionLabel", "SESSION VALUE", 14, 125, 144, 15, 11, T.Muted, T.Mono)
     UI.text(inspector, "Properties", "PROPERTIES", 16, 334, 172, 16, 9, T.Muted, T.Medium)
     self.DetailRows = {}
     for i, name in ipairs({"Page", "Section", "Type", "Range"}) do
         local y = 361 + (i - 1) * 34
-        UI.text(inspector, name .. "Key", name, 16, y, 50, 24, 11, T.Muted)
-        self.DetailRows[i] = UI.text(inspector, name .. "Value", "--", 72, y, 116, 24, 11, T.Secondary)
+        UI.text(inspector, name .. "Key", name, 16, y, 50, 24, 12, T.Muted)
+        self.DetailRows[i] = UI.text(inspector, name .. "Value", "--", 72, y, 116, 24, 12, T.Secondary)
         self.DetailRows[i].TextXAlignment = Enum.TextXAlignment.Right
         UI.line(inspector, 16, y + 29, 172)
     end
@@ -104,7 +104,7 @@ function Window.new(options)
     UI.line(status, 0, 0, 916)
     UI.frame(status, "Dot", 22, 11, 5, 5, T.Green, 3)
     self.StatusText = UI.text(status, "State", "Ready", 35, 0, 560, 28, 10, T.Secondary)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.1", 730, 0, 160, 28, 9, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.2", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
