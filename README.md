@@ -1,84 +1,78 @@
 # Lumi UI
 
-A high-quality Luau UI library for executor environments.
+A modular Luau interface library for Potassium. **v0.4 is a visual pilot**: warm desktop surfaces, compact property groups, deliberate interaction states, and a contextual inspector. Demo actions affect the interface only.
 
-> **Status:** experimental visual pilot (`v0.2`). The first target environment is Potassium.
-
-## Run the current pilot
-
-Run this single line in Potassium:
+## Run the pilot
 
 ```luau
 loadstring(game:HttpGet("https://raw.githubusercontent.com/ZBLumina/lumi-ui/main/dist/LumiUI.pilot.luau"))()
 ```
 
-The same loader is stored in [`examples/potassium-loader.luau`](examples/potassium-loader.luau). The standalone artifact lives at [`dist/LumiUI.pilot.luau`](dist/LumiUI.pilot.luau).
+The loader follows `main`. To preview an unmerged branch, replace `main` with that branch or a commit SHA. `examples/potassium-loader.luau` retains the stable loader.
 
-This build contains placeholder controls only; it does not contain game-specific behavior. Re-running it replaces the previous Lumi pilot root instead of stacking duplicate windows.
+## Use the library
 
-## v0.2 visual direction
-
-The second pilot keeps the working Luau API but rebuilds the presentation around a denser desktop-style layout:
-
-- narrower navigation rail with active states
-- dedicated page headers and clearer hierarchy
-- compact contextual inspector
-- layered charcoal surfaces instead of one flat grey field
-- cream/taupe Lumi accents used for state and selection
-- redesigned button, toggle, slider, and dropdown components
-- floating dropdown menus
-- restrained hover and transition feedback
-- Potassium status/footer treatment instead of the old debug badge
-
-## Current pilot surface
-
-- draggable main window
-- sidebar tabs
-- central content area
-- right-side contextual inspector
-- sections
-- button
-- toggle
-- slider
-- dropdown
-- lightweight transitions
-- clean reinjection / destroy behavior
-- executor-aware GUI mounting (`gethui()` with `CoreGui` fallback)
-
-## Intended API
+`dist/LumiUI.luau` returns the library without creating demo content. `dist/LumiUI.pilot.luau` includes the three-page playground.
 
 ```luau
-local Lumi = -- library
+local Lumi = loadstring(game:HttpGet("https://raw.githubusercontent.com/ZBLumina/lumi-ui/main/dist/LumiUI.luau"))()
+local Window = Lumi:CreateWindow({Title = "Lumi"})
+local Home = Window:AddTab("Home", {Description = "Your local workspace."})
+local General = Home:AddSection("General")
 
-local Window = Lumi:CreateWindow({
-    Title = "Lumi",
-})
+local enabled = General:AddToggle({Name = "Enabled", Default = false,
+    Callback = function(value) print(value) end})
+local intensity = General:AddSlider({Name = "Intensity", Min = 0, Max = 100,
+    Default = 65, Step = 1, Suffix = "%", Callback = function(value) print(value) end})
+General:AddDropdown({Name = "Mode", Values = {"Default", "Smooth", "Precise"},
+    Default = "Default", Callback = function(value) print(value) end})
+General:AddButton({Name = "Execute", Action = "Run preview",
+    Callback = function() print("Executed") end})
 
-local Main = Window:AddTab("Home")
-local General = Main:AddSection("General")
-
-General:AddToggle({
-    Name = "Enabled",
-    Default = false,
-    Callback = function(value)
-        print("Toggle:", value)
-    end,
-})
+enabled:Set(true)           -- state first, callback asynchronously
+intensity:Set(40, true)     -- silent update
+intensity:Focus()           -- select in inspector
+print(intensity:Get())
+-- Window:Destroy()         -- safe to repeat
+-- Lumi:Destroy()           -- destroys all owned windows
 ```
 
-## What to test in Potassium
+All controls accept `Name`, `Description`, and `Callback`. Value controls expose `Get()`, `Set(value, silent?)`, and `Focus()`. Buttons expose `Press()` and a display status through `Get()`. Dropdowns also expose `Open()` / `Close()`.
 
-1. The window appears once and is centered.
-2. The top bar drags the complete window and its shadow together.
-3. `Home`, `Player`, and `Visuals` switch pages correctly.
-4. Toggle animation and state changes work.
-5. The slider follows the mouse and remains inside its range.
-6. The dropdown opens as a floating menu and selects values.
-7. The placeholder button invokes its callback.
-8. The context panel updates when controls are used.
-9. Re-running the one-line loader replaces the previous UI.
-10. The close button destroys the pilot cleanly.
+- Slider bounds normalize if reversed. Equal bounds stay fixed. Defaults and setters clamp; invalid/nonfinite numbers use safe finite fallbacks. `Step` defaults to 1. Both endpoints remain reachable. Click the numeric value to type a value; focused sliders support left/right arrows.
+- Dropdown defaults fall back to the first value when invalid; empty lists keep `nil`. Invalid setters leave state unchanged. Long lists scroll; menus close on outside click, Escape, tab change, content scroll, window move, or focus loss.
+- State changes precede protected asynchronous callbacks. Errors are logged without breaking the control. Destruction cancels suspended callbacks started by Lumi. Work independently spawned by user callbacks remains the caller's responsibility. A callback that destroys its own window may finish its current invocation safely.
+- Each load replaces the previous Lumi library through an executor environment registry. Windows within the same library remain independent. Mounting tries `gethui()`, `CoreGui`, then an existing `PlayerGui`. Destruction disconnects tracked input/service connections and cancels active UI tweens.
+- The desktop canvas is 1100 x 660. Narrow or short viewports hide the inspector, reduce the window's dimensions, and scroll content. Narrow property rows stack their actions below their labels, retaining 13px body text at 640 x 360. Extremely small viewports can still scale down. Mouse and touch paths are implemented; the validation record states which paths were exercised.
 
-If Potassium reports an error, preserve the exact error text and line number so the failing component can be isolated without redesigning unaffected code.
+Known pilot limitation: changing a dropdown programmatically while its menu is open updates the stored value and selector, but the menu's selection marker refreshes on reopening. Close the menu before programmatic updates when the visual marker matters.
 
-See [`docs/design/pilot-v0.1.md`](docs/design/pilot-v0.1.md) and the implementation plan under [`docs/superpowers/plans/`](docs/superpowers/plans/).
+## Develop and build
+
+Requires Node.js 18+; no npm dependencies.
+
+```sh
+npm run build
+npm run check
+```
+
+Edit `src/`, then build. Do not edit generated `dist/` files. Modules use literal source-root-relative imports such as `require("controls/Slider")`; the bundler resolves them locally and rejects missing/circular imports. No module is downloaded at runtime.
+
+```text
+src/
+  init.luau         API and reinjection registry
+  Runtime.luau      mounting, connections, tweens, cleanup
+  Theme.luau        warm Lumi tokens
+  UI.luau           native GUI primitives
+  Window.luau       shell, inspector, input, scaling
+  Tab.luau          navigation and scrolling pages
+  Section.luau      property groups and shared rows
+  controls/         Button, Toggle, Slider, Dropdown
+examples/potassium-pilot.luau   demo content
+scripts/build.mjs              standalone bundler
+tests/runtime.spec.luau        real Roblox assertions
+```
+
+The build also generates `tests/runtime.bundle.luau` (Git-ignored). Execute the whole file through Potassium in a Roblox client. It uses real Instances/service connections, creates temporary windows, prints a `[LUMI TEST] summary`, and cleans up. Two warnings from intentionally throwing callbacks are expected; failures end with an error.
+
+Visual quality is assessed in Roblox separately from the assertion suite. See the [design](docs/superpowers/specs/2026-10-29-studio-design.md), [plan](docs/superpowers/plans/2026-10-29-studio-v04.md), and [validation](docs/design/studio-v04-validation.md).
