@@ -1,6 +1,6 @@
 # Lumi UI
 
-Biblioteca modular de interfaces en Luau para Potassium. **v0.4.9 simplifica la presentación: sin etiqueta de prueba, contadores de controles, símbolo decorativo del inspector ni ruta de selección en el pie.** Conserva el inspector separado, los títulos destacados, las superficies de carbón cálido, los acentos crema y las animaciones sutiles. Toda la interfaz y la demostración están en español. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
+Biblioteca modular de interfaces en Luau para Potassium. **v0.4.10 añade seguimiento suave del inspector y minimización en una cápsula superior.** Conserva la presentación simplificada, los títulos destacados, las superficies de carbón cálido y los acentos crema. Toda la interfaz y la demostración están en español. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
 
 Los textos propios de la biblioteca se concentran en `src/Textos.luau`: navegación, etiquetas, estados, ayudas, tipos de control, listas vacías y confirmaciones. La demostración también traduce todos sus títulos, descripciones y opciones. Se conservan los nombres de producto Lumi UI, Potassium y Luau, junto con los identificadores técnicos de la API. Los textos personalizados que proporciona quien usa la biblioteca se muestran tal como se reciben.
 
@@ -38,6 +38,9 @@ intensidad:Set(40, true)  -- El segundo argumento omite la función asociada.
 intensidad:Focus()        -- Selecciona el control en el inspector.
 print(intensidad:Get())
 -- ventana:Close()        -- Cierre animado; se puede repetir de forma segura.
+-- ventana:Minimize()     -- Oculta los paneles y muestra la cápsula superior.
+-- ventana:Restore()      -- Recupera la misma ventana y sus valores.
+-- ventana:IsMinimized()  -- Devuelve el estado lógico de minimización.
 -- ventana:Destroy()      -- Limpieza inmediata; se puede repetir.
 -- Lumi:Destroy()         -- Cierra todas las ventanas de esta biblioteca.
 ```
@@ -57,6 +60,10 @@ Las páginas aceptan opcionalmente `Icon = "Grid"`, `"Sliders"` o `"Layers"`: cu
 El inspector distingue rangos numéricos, estados, opciones discretas y acciones. Ajusta el tamaño de sus valores según el ancho real del texto. La sombra combina una caída ambiental suave con una sombra de contacto y acompaña las esquinas, el tamaño y las animaciones del panel.
 
 Las transiciones usan una desaceleración breve: apertura de 220 ms, cierre de 160 ms, cambio de página de 140 ms y menús de aparición rápida. Los valores cambian inmediatamente y el arrastre sigue al cursor. `Window:Close()` anima el cierre; `Window:Destroy()` limpia inmediatamente. `CreateWindow({Animations = false})` desactiva la interpolación y los pequeños pulsos de los botones.
+
+Al arrastrar la cabecera, el inspector acompaña el movimiento con un retraso de 140 ms, sin rebote y con desplazamiento limitado. Se mantiene una separación mínima de 6 px durante el movimiento y vuelve a los 12 px de reposo. La geometría y los cambios de posición por código se ajustan inmediatamente.
+
+El botón de minimizar, junto al cierre, oculta los dos paneles con una transición de 180 ms y deja una cápsula centrada arriba. Pulsa la cápsula para restaurar la misma posición, página, selección y valores. Minimizar cierra los menús y libera el foco de edición y el puntero. El cambio de tamaño, las pulsaciones rápidas, el cierre y la recarga cancelan las transiciones anteriores. `Animations = false` hace inmediatos el seguimiento, la minimización y la restauración.
 
 ## Ejecución y limpieza
 

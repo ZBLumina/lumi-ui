@@ -48,7 +48,7 @@ function Dropdown.new(section, options)
         if window.PopupOwner == self then window:ClosePopup(animated) end
     end
     function c:Open()
-        if rt.Destroyed or window._closing or not section.Tab.Page.Visible then return end
+        if rt.Destroyed or window._closing or window.Minimized or not section.Tab.Page.Visible then return end
         window:FinishEntrance()
         window:ClosePopup()
         self:Focus()

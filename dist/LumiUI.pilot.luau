@@ -695,6 +695,7 @@ local Tab = __require("Tab")
 local Motion = __require("Motion")
 local Inspector = __require("components/Inspector")
 local Shadow = __require("components/Shadow")
+local Presentation = __require("components/WindowPresentation")
 local Textos = __require("Textos")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
@@ -708,7 +709,7 @@ function Window.new(options)
     rt.Animations = options.Animations ~= false
     local root = rt:Mount()
     local self = setmetatable({Runtime = rt, Root = root, Tabs = {}, _destroyed = false,
-        Width = 1100, Height = DESKTOP_HEIGHT, Scale = 1, OpenDropdown = nil}, Window)
+        Width = 1100, Height = DESKTOP_HEIGHT, Scale = 1, OpenDropdown = nil, Minimized = false}, Window)
     -- A transparent assembly moves both independently painted surfaces together.
     local main = UI.frame(root, "Main", 0, 0, 1100, DESKTOP_HEIGHT)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -743,7 +744,7 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "v0.4.9", 33, 38, 110, 16, 11, T.Muted)
+    UI.text(footer, "Version", "v0.4.10", 33, 38, 110, 16, 11, T.Muted)
     UI.frame(panel, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
     local chrome = UI.frame(panel, "Chrome", 184, 0, 680, 48)
@@ -758,6 +759,12 @@ function Window.new(options)
     UI.hover(rt, close, T.Shell, T.Hover)
     rt:Connect(close.Activated, function() self:Close() end)
     self.CloseButton = close
+    local minimize = UI.button(chrome, "Minimize", "", 600, 9, 30, 30)
+    UI.corner(minimize, 5)
+    UI.frame(minimize, "Dash", 9, 15, 12, 1, T.Secondary)
+    UI.hover(rt, minimize, T.Shell, T.Hover)
+    rt:Connect(minimize.Activated, function() self:Minimize() end)
+    self.MinimizeButton = minimize
     UI.line(chrome, 0, 47, 916)
 
     self.Workspace = UI.frame(panel, "Workspace", 184, 48, 680, 584, T.Workspace)
@@ -768,7 +775,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.9", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.10", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -783,8 +790,8 @@ function Window.new(options)
         local start, origin = input.Position, self.Center
         self:BeginPointer(input, function(position)
             local delta = Vector2.new(position.X - start.X, position.Y - start.Y)
-            self:SetCenter(origin + delta)
-        end)
+            self:SetCenter(origin + delta, true)
+        end, function() self.Presentation:SettleFollow() end)
     end)
     rt:Connect(Input.InputChanged, function(input)
         if not self._pointer then return end
@@ -802,6 +809,7 @@ function Window.new(options)
     local viewport = UI.new("Frame", root, {Name = "Viewport", Size = UDim2.fromScale(1, 1)})
     self.Viewport = viewport
     self.Motion = Motion.new(rt, main)
+    self.Presentation = Presentation.new(self)
     rt:Connect(viewport:GetPropertyChangedSignal("AbsoluteSize"), function() self:Fit() end)
     rt:OnCleanup(function()
         self._destroyed = true
@@ -820,6 +828,7 @@ end
 
 function Window:FinishEntrance(interrupt)
     if interrupt ~= false then self._entranceInterrupted = true end
+    if self.Presentation and self.Presentation.State ~= "expanded" then return end
     if self._closing or not self.Motion.Active then return end
     self.Motion:Finish()
     self.Runtime:CancelTween(self.UIScale)
@@ -870,7 +879,8 @@ function Window:Fit()
     self.Chrome.Position = UDim2.fromOffset(sideWidth, 0)
     self.Chrome.Size = UDim2.fromOffset(chromeWidth, 48)
     self.CloseButton.Position = UDim2.fromOffset(chromeWidth - 44, 9)
-    self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, chromeWidth - 80), 48)
+    self.MinimizeButton.Position = UDim2.fromOffset(chromeWidth - 80, 9)
+    self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, chromeWidth - 116), 48)
     self.Workspace.Position = UDim2.fromOffset(sideWidth, 48)
     self.Workspace.Size = UDim2.fromOffset(chromeWidth, self.Height - 76)
     self.Inspector.Position = UDim2.fromOffset(self.PanelWidth + PANEL_GAP, 0)
@@ -881,24 +891,29 @@ function Window:Fit()
     self.Statusbar.Rule.Size = UDim2.fromOffset(chromeWidth, 1)
     self.StatusVersion.Position = UDim2.fromOffset(chromeWidth - 186, 0)
     self.StatusVersion.Visible = chromeWidth >= 650
-    self.Chrome.TitleDrag.Size = UDim2.fromOffset(chromeWidth - 54, 48)
+    self.Chrome.TitleDrag.Size = UDim2.fromOffset(chromeWidth - 90, 48)
     self.Scale = math.min(1, math.max(0.1, (size.X - 32) / self.Width), math.max(0.1, (size.Y - 32) / self.Height))
     self.UIScale.Scale = self.Scale
     for _, tab in ipairs(self.Tabs) do tab:Relayout() end
     self:SetCenter(self.Center or size / 2)
+    self.Presentation:Fit()
 end
 
-function Window:SetCenter(center)
+function Window:SetCenter(center, follow)
+    if not follow then self.Presentation:FinishTransition() end
+    local previous = self.Center
     local size = self.Viewport.AbsoluteSize
     local half = Vector2.new(self.Width * self.Scale / 2, self.Height * self.Scale / 2)
     local x = math.clamp(center.X, half.X + 8, math.max(half.X + 8, size.X - half.X - 8))
     local y = math.clamp(center.Y, half.Y + 8, math.max(half.Y + 8, size.Y - half.Y - 8))
     self.Center = Vector2.new(x, y)
     self.Main.Position = UDim2.fromOffset(x, y)
+    if follow and previous then self.Presentation:Follow(self.Center - previous)
+    else self.Presentation:StopFollow() end
 end
 
 function Window:BeginPointer(input, update, finish)
-    if self._destroyed or self._closing then return end
+    if self._destroyed or self._closing or self.Minimized then return end
     self:FinishEntrance()
     self:EndPointer()
     self._pointer, self._pointerUpdate, self._pointerFinish = input, update, finish
@@ -1013,22 +1028,37 @@ function Window:SelectTab(tab)
     if tab.Controls[1] then self:Focus(tab.Controls[1]) else self:SetDetails(tab.Name, tab.Description, Textos.listo) end
 end
 
-function Window:Close()
-    if self._destroyed or self._closing then return end
-    self:FinishEntrance()
-    self._closing = true
-    self:EndPointer()
-    self:ClosePopup()
+function Window:ReleaseInput()
     local focused = Input:GetFocusedTextBox()
     if focused and focused:IsDescendantOf(self.Root) then focused:ReleaseFocus() end
     local selected = GuiService.SelectedObject
     if selected and selected:IsDescendantOf(self.Root) then GuiService.SelectedObject = nil end
-    if self.Runtime.Animations == false then self:Destroy(); return end
+end
+
+function Window:FinishPages()
     for _, tab in ipairs(self.Tabs) do
         tab.Motion:Finish()
         self.Runtime:CancelTween(tab.Page, "position")
         tab.Page.Position = UDim2.fromOffset(0, 0)
     end
+end
+
+function Window:Minimize() return self.Presentation:Minimize() end
+function Window:Restore() return self.Presentation:Restore() end
+function Window:IsMinimized() return self.Minimized end
+
+function Window:Close()
+    if self._destroyed or self._closing then return end
+    self:FinishEntrance()
+    self.Presentation:FinishTransition()
+    self:EndPointer()
+    self.Presentation:StopFollow()
+    self._closing = true
+    self:ClosePopup()
+    self:ReleaseInput()
+    if self.Runtime.Animations == false then self:Destroy(); return end
+    self:FinishPages()
+    if self.Minimized then self.Presentation:CloseMinimized(); return end
     local shield = UI.button(self.Main, "ClosingShield", "", 0, 0, 0, 0)
     shield.Size, shield.ZIndex = UDim2.fromScale(1, 1), 200
     shield.Selectable = false
@@ -1258,6 +1288,159 @@ end
 return Shadow
 end
 
+__factories["components/WindowPresentation"] = function(__require)
+-- src/components/WindowPresentation.luau
+local UI = __require("UI")
+local T = __require("Theme")
+local Motion = __require("Motion")
+local Shadow = __require("components/Shadow")
+local Presentation = {}
+Presentation.__index = Presentation
+local TRANSITION, FOLLOW = 0.18, 0.14
+
+function Presentation.new(window)
+    local rt = window.Runtime
+    local self = setmetatable({Window = window, State = "expanded"}, Presentation)
+    self.Motion = Motion.new(rt, window.Main)
+    local capsule = UI.button(window.Root, "RestoreCapsule", "", 0, 16, 148, 38)
+    capsule.ZIndex = 201
+    capsule.AnchorPoint = Vector2.new(.5, 0)
+    capsule.BackgroundColor3, capsule.BackgroundTransparency = T.Shell, 0
+    capsule.Visible = false
+    UI.corner(capsule, 19)
+    UI.stroke(capsule, T.Line)
+    Shadow.new(capsule, 19)
+    UI.mark(capsule, 13, 9, 20)
+    UI.text(capsule, "Label", window.Sidebar.Brand.Text, 42, 0, 70, 38, 15, T.Text, T.Medium)
+    UI.chevron(capsule, 125, 18)
+    self.CapsuleScale = UI.new("UIScale", capsule, {Scale = 1})
+    self.CapsuleMotion = Motion.new(rt, capsule)
+    window.Capsule = capsule
+    UI.hover(rt, capsule, T.Shell, T.Raised)
+    rt:Connect(capsule.Activated, function() window:Restore() end)
+    local shield = UI.button(window.Main, "PresentationShield", "", 0, 0, 0, 0)
+    shield.Size, shield.ZIndex = UDim2.fromScale(1, 1), 200
+    shield.Selectable, shield.Visible = false, false
+    self.Shield = shield
+    return self
+end
+
+function Presentation:Home()
+    return UDim2.fromOffset(self.Window.PanelWidth + 12, 0)
+end
+
+function Presentation:StopFollow()
+    local w = self.Window
+    w.Runtime:CancelTween(w.Inspector, "follow")
+    w.Inspector.Position = self:Home()
+end
+
+function Presentation:SettleFollow()
+    local w = self.Window
+    if w.Runtime.Destroyed then return end
+    w.Runtime:Tween(w.Inspector, {Position = self:Home()}, FOLLOW, "follow")
+end
+
+function Presentation:Follow(delta)
+    local w = self.Window
+    if not w.Inspector.Visible or w.Runtime.Animations == false or w.Minimized then self:StopFollow(); return end
+    local home = self:Home()
+    local position = w.Inspector.Position
+    local x = math.clamp(position.X.Offset - delta.X / w.Scale, home.X.Offset - 6, home.X.Offset + 16)
+    local y = math.clamp(position.Y.Offset - delta.Y / w.Scale, -14, 14)
+    -- Constrain the trailing surface against the actual fitted viewport. Keep
+    -- at least 6px of open space between it and the principal panel.
+    local left = w.Center.X - w.Width * w.Scale / 2
+    local top = w.Center.Y - w.Height * w.Scale / 2
+    local maximumX = (w.Viewport.AbsoluteSize.X - 8 - left) / w.Scale - w.Inspector.Size.X.Offset
+    local minimumY = (8 - top) / w.Scale
+    local maximumY = (w.Viewport.AbsoluteSize.Y - 8 - top) / w.Scale - w.Height
+    x = math.clamp(x, home.X.Offset - 6, math.max(home.X.Offset - 6, maximumX))
+    y = math.clamp(y, minimumY, math.max(minimumY, maximumY))
+    w.Runtime:CancelTween(w.Inspector, "follow")
+    w.Inspector.Position = UDim2.fromOffset(x, y)
+    self:SettleFollow()
+end
+
+function Presentation:Fit()
+    local w = self.Window
+    self:FinishTransition()
+    local viewport = w.Viewport.AbsoluteSize
+    self.CapsuleHome = UDim2.fromOffset(viewport.X / 2, math.min(16, math.max(8, viewport.Y - 46)))
+    w.Capsule.Position = self.CapsuleHome
+end
+
+function Presentation:FinishTransition()
+    if self.State ~= "minimizing" and self.State ~= "restoring" then return end
+    local w, rt = self.Window, self.Window.Runtime
+    self.Motion:Finish()
+    self.CapsuleMotion:Finish()
+    rt:CancelTween(w.UIScale, "presentation")
+    rt:CancelTween(w.Main, "presentation")
+    rt:CancelTween(self.CapsuleScale, "presentation")
+    rt:CancelTween(w.Capsule, "presentation")
+    w.UIScale.Scale, self.CapsuleScale.Scale = w.Scale, 1
+    w.Main.Position = UDim2.fromOffset(w.Center.X, w.Center.Y)
+    w.Capsule.Position = self.CapsuleHome
+    w.Main.Visible, w.Capsule.Visible = not w.Minimized, w.Minimized
+    self.Shield.Visible = false
+    self.State = w.Minimized and "minimized" or "expanded"
+end
+
+function Presentation:Prepare()
+    local w = self.Window
+    w:FinishEntrance()
+    self:FinishTransition()
+    w:EndPointer()
+    w:ClosePopup()
+    w:ReleaseInput()
+    self:StopFollow()
+    w:FinishPages()
+end
+
+function Presentation:Minimize()
+    local w, rt = self.Window, self.Window.Runtime
+    if w._destroyed or w._closing or w.Minimized then return false end
+    self:Prepare()
+    w.Minimized, self.State = true, "minimizing"
+    w.Capsule.Visible = true
+    self.Shield.Visible = true
+    if rt.Animations == false then self:FinishTransition(); return true end
+    self.CapsuleScale.Scale = .94
+    rt:Tween(self.CapsuleScale, {Scale = 1}, TRANSITION, "presentation")
+    self.CapsuleMotion:Fade(.65, 0, TRANSITION)
+    rt:Tween(w.UIScale, {Scale = w.Scale * .98}, TRANSITION, "presentation")
+    rt:Tween(w.Main, {Position = UDim2.fromOffset(w.Center.X, w.Center.Y - 10)}, TRANSITION, "presentation")
+    self.Motion:Fade(0, 1, TRANSITION, function() self:FinishTransition() end)
+    return true
+end
+
+function Presentation:Restore()
+    local w, rt = self.Window, self.Window.Runtime
+    if w._destroyed or w._closing or not w.Minimized then return false end
+    self:Prepare()
+    w.Minimized, self.State = false, "restoring"
+    w.Main.Visible = true
+    self.Shield.Visible = true
+    if rt.Animations == false then self:FinishTransition(); return true end
+    w.UIScale.Scale = w.Scale * .98
+    w.Main.Position = UDim2.fromOffset(w.Center.X, w.Center.Y - 10)
+    rt:Tween(w.UIScale, {Scale = w.Scale}, TRANSITION, "presentation")
+    rt:Tween(w.Main, {Position = UDim2.fromOffset(w.Center.X, w.Center.Y)}, TRANSITION, "presentation")
+    self.CapsuleMotion:Fade(0, 1, TRANSITION)
+    self.Motion:Fade(.65, 0, TRANSITION, function() self:FinishTransition() end)
+    return true
+end
+
+function Presentation:CloseMinimized()
+    local w = self.Window
+    w.Capsule.Selectable = false
+    self.CapsuleMotion:Fade(0, 1, Motion.Time.Close, function() w:Destroy() end)
+end
+
+return Presentation
+end
+
 __factories["controls/Button"] = function(__require)
 -- src/controls/Button.luau
 local UI = __require("UI")
@@ -1390,7 +1573,7 @@ function Dropdown.new(section, options)
         if window.PopupOwner == self then window:ClosePopup(animated) end
     end
     function c:Open()
-        if rt.Destroyed or window._closing or not section.Tab.Page.Visible then return end
+        if rt.Destroyed or window._closing or window.Minimized or not section.Tab.Page.Visible then return end
         window:FinishEntrance()
         window:ClosePopup()
         self:Focus()
@@ -1700,7 +1883,7 @@ local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
 if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
 
-local Lumi = {Version = "0.4.9", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.4.10", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] La biblioteca está cerrada; vuelve a cargarla para continuar")
