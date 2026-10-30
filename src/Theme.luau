@@ -1,5 +1,6 @@
 return {
     Shell = Color3.fromRGB(21, 22, 20),
+    Shadow = Color3.fromRGB(8, 8, 7),
     Sidebar = Color3.fromRGB(24, 25, 23),
     Workspace = Color3.fromRGB(28, 29, 27),
     Surface = Color3.fromRGB(34, 35, 32),

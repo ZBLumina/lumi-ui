@@ -4,6 +4,7 @@ local T = require("Theme")
 local Tab = require("Tab")
 local Motion = require("Motion")
 local Inspector = require("components/Inspector")
+local Shadow = require("components/Shadow")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
@@ -21,10 +22,7 @@ function Window.new(options)
     main.Position = UDim2.fromScale(0.5, 0.5)
     self.Main = main
     self.UIScale = UI.new("UIScale", main, {Scale = 1})
-    local shadow = UI.frame(main, "Shadow", -6, 5, 1112, 664, Color3.fromRGB(15, 13, 11), 15)
-    shadow.BackgroundTransparency = 0.65
-    shadow.ZIndex = 0
-    self.Shadow = shadow
+    self.Shadow = Shadow.new(main, 12)
     UI.stroke(main, T.Line)
     self.TopEdge = UI.frame(main, "TopEdge", 12, 0, 1076, 1, T.Secondary)
     self.TopEdge.BackgroundTransparency = 0.88
@@ -49,7 +47,7 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "Studio / 0.4.4", 33, 38, 110, 16, 11, T.Muted)
+    UI.text(footer, "Version", "Studio / 0.4.5", 33, 38, 110, 16, 11, T.Muted)
     UI.frame(main, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
     local chrome = UI.frame(main, "Chrome", 184, 0, 916, 48)
@@ -75,11 +73,12 @@ function Window.new(options)
     self.Context = Inspector.new(self)
 
     local status = UI.frame(main, "Statusbar", 184, 632, 916, 28, T.Shell)
+    UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
     UI.frame(status, "Dot", 22, 11, 5, 5, T.Green, 3)
     self.StatusText = UI.text(status, "State", "Ready", 35, 0, 560, 28, 10, T.Secondary)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.4", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.5", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -154,7 +153,6 @@ function Window:Fit()
     self.Inspector.Visible = not compact
     self.Main.Size = UDim2.fromOffset(self.Width, self.Height)
     self.TopEdge.Size = UDim2.fromOffset(self.Width - 24, 1)
-    self.Shadow.Size = UDim2.fromOffset(self.Width + 12, self.Height + 4)
     self.Sidebar.Size = UDim2.fromOffset(sideWidth, self.Height)
     self.Sidebar.InnerEdge.Position = UDim2.fromOffset(sideWidth - 10, 0)
     self.Sidebar.InnerEdge.Size = UDim2.fromOffset(10, self.Height)

@@ -402,6 +402,7 @@ __factories["Theme"] = function(__require)
 -- src/Theme.luau
 return {
     Shell = Color3.fromRGB(21, 22, 20),
+    Shadow = Color3.fromRGB(8, 8, 7),
     Sidebar = Color3.fromRGB(24, 25, 23),
     Workspace = Color3.fromRGB(28, 29, 27),
     Surface = Color3.fromRGB(34, 35, 32),
@@ -561,6 +562,7 @@ local T = __require("Theme")
 local Tab = __require("Tab")
 local Motion = __require("Motion")
 local Inspector = __require("components/Inspector")
+local Shadow = __require("components/Shadow")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
@@ -578,10 +580,7 @@ function Window.new(options)
     main.Position = UDim2.fromScale(0.5, 0.5)
     self.Main = main
     self.UIScale = UI.new("UIScale", main, {Scale = 1})
-    local shadow = UI.frame(main, "Shadow", -6, 5, 1112, 664, Color3.fromRGB(15, 13, 11), 15)
-    shadow.BackgroundTransparency = 0.65
-    shadow.ZIndex = 0
-    self.Shadow = shadow
+    self.Shadow = Shadow.new(main, 12)
     UI.stroke(main, T.Line)
     self.TopEdge = UI.frame(main, "TopEdge", 12, 0, 1076, 1, T.Secondary)
     self.TopEdge.BackgroundTransparency = 0.88
@@ -606,7 +605,7 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "Studio / 0.4.4", 33, 38, 110, 16, 11, T.Muted)
+    UI.text(footer, "Version", "Studio / 0.4.5", 33, 38, 110, 16, 11, T.Muted)
     UI.frame(main, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
     local chrome = UI.frame(main, "Chrome", 184, 0, 916, 48)
@@ -632,11 +631,12 @@ function Window.new(options)
     self.Context = Inspector.new(self)
 
     local status = UI.frame(main, "Statusbar", 184, 632, 916, 28, T.Shell)
+    UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
     UI.frame(status, "Dot", 22, 11, 5, 5, T.Green, 3)
     self.StatusText = UI.text(status, "State", "Ready", 35, 0, 560, 28, 10, T.Secondary)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.4", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.5", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -711,7 +711,6 @@ function Window:Fit()
     self.Inspector.Visible = not compact
     self.Main.Size = UDim2.fromOffset(self.Width, self.Height)
     self.TopEdge.Size = UDim2.fromOffset(self.Width - 24, 1)
-    self.Shadow.Size = UDim2.fromOffset(self.Width + 12, self.Height + 4)
     self.Sidebar.Size = UDim2.fromOffset(sideWidth, self.Height)
     self.Sidebar.InnerEdge.Position = UDim2.fromOffset(sideWidth - 10, 0)
     self.Sidebar.InnerEdge.Size = UDim2.fromOffset(10, self.Height)
@@ -1073,6 +1072,44 @@ function Inspector:Update(control)
 end
 
 return Inspector
+end
+
+__factories["components/Shadow"] = function(__require)
+-- src/components/Shadow.luau
+local UI = __require("UI")
+local T = __require("Theme")
+local Shadow = {}
+
+-- Ambient softness plus a tighter contact edge. Native antialiased silhouettes
+-- avoid stretching a small bitmap and scale with the window automatically.
+local profiles = {
+    {Name = "Ambient", Spread = 44, Inset = 8, Sigma = 14, Opacity = 0.34, Offset = 8, Samples = 32},
+    {Name = "Contact", Spread = 9, Inset = 2, Sigma = 2.5, Opacity = 0.18, Offset = 1.5, Samples = 12},
+}
+
+function Shadow.new(parent, radius)
+    local shadow = UI.new("Frame", parent, {
+        Name = "Shadow", Size = UDim2.fromScale(1, 1), ZIndex = 0, Active = false,
+    })
+    for _, profile in ipairs(profiles) do
+        local previous = 0
+        for index = 1, profile.Samples do
+            local pad = profile.Spread - (index - 1) * (profile.Spread + profile.Inset) / (profile.Samples - 1)
+            local opacity = profile.Opacity / (1 + math.exp(1.7 * pad / profile.Sigma))
+            -- Alpha-over correction makes the accumulated opacity follow the
+            -- curve. Inset samples prevent a flat band below an offset shadow.
+            local alpha = (opacity - previous) / (1 - previous)
+            local layer = UI.frame(shadow, profile.Name .. index, -pad, profile.Offset - pad,
+                0, 0, T.Shadow, math.max(0, radius + pad))
+            layer.Size = UDim2.new(1, 2 * pad, 1, 2 * pad)
+            layer.BackgroundTransparency = 1 - alpha
+            previous = opacity
+        end
+    end
+    return shadow
+end
+
+return Shadow
 end
 
 __factories["controls/Button"] = function(__require)
@@ -1483,7 +1520,7 @@ local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
 if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
 
-local Lumi = {Version = "0.4.4", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.4.5", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] This library was destroyed; load a fresh library")

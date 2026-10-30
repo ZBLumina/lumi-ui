@@ -1,6 +1,8 @@
 # Lumi UI
 
-A modular Luau interface library for Potassium. **v0.4.4 is a visual pilot**: warm charcoal surfaces, compact property groups, restrained motion, and a contextual inspector. Demo actions affect the interface only.
+A modular Luau interface library for Potassium. **v0.4.5 is a visual pilot**: warm charcoal surfaces, compact property groups, restrained motion, and a contextual inspector. Demo actions affect the interface only.
+
+The panel shadow now uses a smooth ambient falloff and a tighter contact shadow, with antialiased native geometry that follows resizing and animation. The bottom-right silhouette also matches the rounded shell. See the [shadow notes and validation](docs/design/studio-v045-shadow.md).
 
 The latest design pass adds native geometric navigation icons, actual control counts, a clearer page heading and an inset selection wash. The inspector now distinguishes numeric ranges, binary states, discrete options (including empty collections), and actions. Its graphics explain the selected control rather than showing the same meter everywhere. See the [context design and validation](docs/design/studio-v044-context.md).
 
