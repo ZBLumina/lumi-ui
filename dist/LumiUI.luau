@@ -923,8 +923,7 @@ function Window:SetDetails(title, description, status)
     if self._destroyed then return end
     self.Context:Clear()
     self.DetailTitle.Text, self.DetailDescription.Text = title or "Details", description or ""
-    self.DetailValue.Text = status or "Ready"
-    self.DetailValue.TextSize = #self.DetailValue.Text > 12 and 15 or 28
+    self.Context:SetValue(status or "Ready")
 end
 
 function Window:AddTab(name, options)
@@ -1001,6 +1000,7 @@ __factories["components/Inspector"] = function(__require)
 local UI = __require("UI")
 local T = __require("Theme")
 local Motion = __require("Motion")
+local Text = game:GetService("TextService")
 local Inspector = {}
 Inspector.__index = Inspector
 
@@ -1087,6 +1087,18 @@ function Inspector:Clear()
     self.Hint.Text = "Select a property to inspect it."
 end
 
+function Inspector:SetValue(text)
+    local label = self.Window.DetailValue
+    label.Text = tostring(text)
+    local size = 28
+    while size > 15 do
+        local bounds = Text:GetTextSize(label.Text, size, label.Font, Vector2.new(100000, 100000))
+        if bounds.X <= label.Size.X.Offset - 2 then break end
+        size -= 1
+    end
+    label.TextSize = size
+end
+
 function Inspector:Update(control)
     local window, rt = self.Window, self.Window.Runtime
     local same = self.Control == control
@@ -1098,7 +1110,7 @@ function Inspector:Update(control)
     if type(value) == "number" then shown = (control.Format and control:Format(value) or UI.format(value)) .. (control.Suffix or "") end
     window.DetailTitle.Text, window.DetailDescription.Text = control.Name, control.Description or ""
     window.DetailKind.Text = string.upper(control.Kind)
-    window.DetailValue.Text, window.DetailValue.TextSize = shown, #shown > 12 and 15 or 28
+    self:SetValue(shown)
     window.DetailRows[1].Text, window.DetailRows[2].Text = control.Section.Tab.Name, control.Section.Name
     window.DetailRows[3].Text, window.DetailRows[4].Text = control.Kind, control.Range or "--"
     local numeric, boolean, choice = control.Kind == "Slider", control.Kind == "Toggle", control.Kind == "Dropdown"

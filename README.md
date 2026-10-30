@@ -4,6 +4,8 @@ A modular Luau interface library for Potassium. **v0.4.6 is a visual pilot**: wa
 
 Property rows now measure and wrap their text, keep clear gaps between captions and fields, and stack fields when space is insufficient. Controls share a 32px visual height; sliders have separate drag/bounds lanes and a padded value field. Narrow popovers contain their captions and empty states. See the [layout design and validation](docs/design/studio-v046-layout.md).
 
+Inspector values also fit their measured text width, so short statuses with wide characters remain readable.
+
 The panel shadow now uses a smooth ambient falloff and a tighter contact shadow, with antialiased native geometry that follows resizing and animation. The bottom-right silhouette also matches the rounded shell. See the [shadow notes and validation](docs/design/studio-v045-shadow.md).
 
 The latest design pass adds native geometric navigation icons, actual control counts, a clearer page heading and an inset selection wash. The inspector now distinguishes numeric ranges, binary states, discrete options (including empty collections), and actions. Its graphics explain the selected control rather than showing the same meter everywhere. See the [context design and validation](docs/design/studio-v044-context.md).

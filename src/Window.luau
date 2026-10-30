@@ -286,8 +286,7 @@ function Window:SetDetails(title, description, status)
     if self._destroyed then return end
     self.Context:Clear()
     self.DetailTitle.Text, self.DetailDescription.Text = title or "Details", description or ""
-    self.DetailValue.Text = status or "Ready"
-    self.DetailValue.TextSize = #self.DetailValue.Text > 12 and 15 or 28
+    self.Context:SetValue(status or "Ready")
 end
 
 function Window:AddTab(name, options)
