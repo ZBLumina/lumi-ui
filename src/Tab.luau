@@ -17,9 +17,6 @@ function Tab.new(window, name, options)
     UI.corner(button, 6)
     self.Button = button
     self.Icon, self.IconParts = UI.icon(button, options.Icon, 14, 13, T.Secondary)
-    self.Number = UI.text(button, "Number", "00", 0, 0, 24, 42, 11, T.Muted, T.Mono)
-    self.Number.Position = UDim2.new(1, -32, 0, 0)
-    self.Number.TextXAlignment = Enum.TextXAlignment.Right
     self.Label = UI.text(button, "Label", name, 40, 0, 85, 42, 14, T.Secondary, T.Medium)
     self.Outline = UI.stroke(button, T.AccentSoft)
     self.Outline.Transparency, self.Outline.Enabled = 0.66, false
@@ -45,11 +42,6 @@ function Tab.new(window, name, options)
         label.TextWrapped, label.TextTruncate = true, Enum.TextTruncate.None
         label.TextYAlignment = Enum.TextYAlignment.Top
     end
-    self.Summary = UI.frame(header, "PageSummary", 0, 22, 72, 44)
-    self.Summary.Position = UDim2.new(1, -72, 0, 20)
-    self.Count = UI.text(self.Summary, "Count", "00", 0, 0, 72, 26, 24, T.Accent, T.Mono)
-    self.Count.TextXAlignment = Enum.TextXAlignment.Right
-    UI.text(self.Summary, "Caption", Textos.controles, 0, 29, 72, 15, 11, T.Muted, T.Mono).TextXAlignment = Enum.TextXAlignment.Right
     window.Runtime:Connect(button.Activated, function() window:SelectTab(self) end)
     window.Runtime:Connect(button.MouseEnter, function()
         if window._closing then return end
@@ -80,21 +72,16 @@ function Tab:GetContentWidth()
 end
 
 function Tab:Relayout()
-    local counts = (self.Window.SidebarWidth or 184) >= 170 and #self.Controls < 1000
-    self.Number.Visible = counts
-    self.Label.Size = UDim2.new(1, counts and -76 or -48, 1, 0)
+    self.Label.Size = UDim2.new(1, -48, 1, 0)
     local width = self:GetContentWidth()
-    local summary = width >= 360
-    self.Summary.Visible = summary
-    local titleWidth = math.max(1, width - (summary and 88 or 0))
     local function height(label, available, minimum)
         local bounds = Text:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(math.max(1, available - 1), 100000))
         return math.max(minimum, math.ceil(bounds.Y) + 2)
     end
-    local titleHeight = height(self.Title, titleWidth, 39)
+    local titleHeight = height(self.Title, width, 39)
     local subtitleY = 21 + titleHeight + 6
     local subtitleHeight = height(self.Subtitle, width, 18)
-    self.Title.Size = UDim2.new(1, summary and -88 or 0, 0, titleHeight)
+    self.Title.Size = UDim2.new(1, 0, 0, titleHeight)
     self.Subtitle.Position = UDim2.fromOffset(0, subtitleY)
     self.Subtitle.Size = UDim2.new(1, 0, 0, subtitleHeight)
     self.Header.Size = UDim2.new(1, 0, 0, math.max(88, subtitleY + subtitleHeight + 4))
@@ -102,19 +89,11 @@ function Tab:Relayout()
     for _, control in ipairs(self.Controls) do control:Relayout() end
 end
 
-function Tab:UpdateSummary()
-    local count = #self.Controls
-    self.Number.Text = string.format("%02d", count)
-    self.Count.Text = string.format("%02d", count)
-    self:Relayout()
-end
-
 function Tab:SetActive(active, duration)
     local rt = self.Window.Runtime
     self.Button.BackgroundColor3 = T.AccentWash
     rt:Tween(self.Button, {BackgroundTransparency = active and 0 or 1}, duration)
     rt:Tween(self.Label, {TextColor3 = active and T.Accent or T.Secondary}, duration)
-    rt:Tween(self.Number, {TextColor3 = active and T.Secondary or T.Muted}, duration)
     for _, part in ipairs(self.IconParts) do
         rt:Tween(part, part:IsA("UIStroke") and {Color = active and T.Accent or T.Secondary}
             or {BackgroundColor3 = active and T.Accent or T.Secondary}, duration)

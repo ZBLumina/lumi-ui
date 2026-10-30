@@ -14,10 +14,7 @@ function Inspector.new(window)
     window.Inspector = frame
     self.Shadow = Shadow.new(frame, 12)
     UI.stroke(frame, T.Line)
-    UI.text(frame, "InspectorHeading", "INSPECTOR", 18, 20, 168, 16, 11, T.Muted, T.Medium)
-    local scope = UI.frame(frame, "Scope", 196, 23, 10, 10)
-    UI.stroke(scope, T.AccentSoft)
-    UI.frame(scope, "Center", 4, 4, 2, 2, T.Accent)
+    UI.text(frame, "InspectorHeading", "INSPECTOR", 18, 20, 188, 16, 11, T.Muted, T.Medium)
     UI.line(frame, 18, 47, 188)
     window.DetailTitle = UI.text(frame, "DetailTitle", Textos.tuEspacio, 18, 67, 188, 52, 21, T.Text, T.Medium)
     window.DetailTitle.TextWrapped = true

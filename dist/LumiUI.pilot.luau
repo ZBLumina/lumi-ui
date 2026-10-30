@@ -349,7 +349,7 @@ function Section:Row(options, kind, height)
     end
     table.insert(self.Controls, control)
     table.insert(self.Tab.Controls, control)
-    self.Tab:UpdateSummary()
+    self.Tab:Relayout()
     local rt = control.Runtime
     rt:Connect(row:GetPropertyChangedSignal("AbsoluteSize"), function() control:Relayout() end)
     task.defer(function() if not rt.Destroyed then control:Relayout() end end)
@@ -392,9 +392,6 @@ function Tab.new(window, name, options)
     UI.corner(button, 6)
     self.Button = button
     self.Icon, self.IconParts = UI.icon(button, options.Icon, 14, 13, T.Secondary)
-    self.Number = UI.text(button, "Number", "00", 0, 0, 24, 42, 11, T.Muted, T.Mono)
-    self.Number.Position = UDim2.new(1, -32, 0, 0)
-    self.Number.TextXAlignment = Enum.TextXAlignment.Right
     self.Label = UI.text(button, "Label", name, 40, 0, 85, 42, 14, T.Secondary, T.Medium)
     self.Outline = UI.stroke(button, T.AccentSoft)
     self.Outline.Transparency, self.Outline.Enabled = 0.66, false
@@ -420,11 +417,6 @@ function Tab.new(window, name, options)
         label.TextWrapped, label.TextTruncate = true, Enum.TextTruncate.None
         label.TextYAlignment = Enum.TextYAlignment.Top
     end
-    self.Summary = UI.frame(header, "PageSummary", 0, 22, 72, 44)
-    self.Summary.Position = UDim2.new(1, -72, 0, 20)
-    self.Count = UI.text(self.Summary, "Count", "00", 0, 0, 72, 26, 24, T.Accent, T.Mono)
-    self.Count.TextXAlignment = Enum.TextXAlignment.Right
-    UI.text(self.Summary, "Caption", Textos.controles, 0, 29, 72, 15, 11, T.Muted, T.Mono).TextXAlignment = Enum.TextXAlignment.Right
     window.Runtime:Connect(button.Activated, function() window:SelectTab(self) end)
     window.Runtime:Connect(button.MouseEnter, function()
         if window._closing then return end
@@ -455,21 +447,16 @@ function Tab:GetContentWidth()
 end
 
 function Tab:Relayout()
-    local counts = (self.Window.SidebarWidth or 184) >= 170 and #self.Controls < 1000
-    self.Number.Visible = counts
-    self.Label.Size = UDim2.new(1, counts and -76 or -48, 1, 0)
+    self.Label.Size = UDim2.new(1, -48, 1, 0)
     local width = self:GetContentWidth()
-    local summary = width >= 360
-    self.Summary.Visible = summary
-    local titleWidth = math.max(1, width - (summary and 88 or 0))
     local function height(label, available, minimum)
         local bounds = Text:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(math.max(1, available - 1), 100000))
         return math.max(minimum, math.ceil(bounds.Y) + 2)
     end
-    local titleHeight = height(self.Title, titleWidth, 39)
+    local titleHeight = height(self.Title, width, 39)
     local subtitleY = 21 + titleHeight + 6
     local subtitleHeight = height(self.Subtitle, width, 18)
-    self.Title.Size = UDim2.new(1, summary and -88 or 0, 0, titleHeight)
+    self.Title.Size = UDim2.new(1, 0, 0, titleHeight)
     self.Subtitle.Position = UDim2.fromOffset(0, subtitleY)
     self.Subtitle.Size = UDim2.new(1, 0, 0, subtitleHeight)
     self.Header.Size = UDim2.new(1, 0, 0, math.max(88, subtitleY + subtitleHeight + 4))
@@ -477,19 +464,11 @@ function Tab:Relayout()
     for _, control in ipairs(self.Controls) do control:Relayout() end
 end
 
-function Tab:UpdateSummary()
-    local count = #self.Controls
-    self.Number.Text = string.format("%02d", count)
-    self.Count.Text = string.format("%02d", count)
-    self:Relayout()
-end
-
 function Tab:SetActive(active, duration)
     local rt = self.Window.Runtime
     self.Button.BackgroundColor3 = T.AccentWash
     rt:Tween(self.Button, {BackgroundTransparency = active and 0 or 1}, duration)
     rt:Tween(self.Label, {TextColor3 = active and T.Accent or T.Secondary}, duration)
-    rt:Tween(self.Number, {TextColor3 = active and T.Secondary or T.Muted}, duration)
     for _, part in ipairs(self.IconParts) do
         rt:Tween(part, part:IsA("UIStroke") and {Color = active and T.Accent or T.Secondary}
             or {BackgroundColor3 = active and T.Accent or T.Secondary}, duration)
@@ -764,17 +743,13 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "v0.4.8", 33, 38, 110, 16, 11, T.Muted)
+    UI.text(footer, "Version", "v0.4.9", 33, 38, 110, 16, 11, T.Muted)
     UI.frame(panel, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
     local chrome = UI.frame(panel, "Chrome", 184, 0, 680, 48)
     self.Chrome = chrome
     local drag = UI.button(chrome, "TitleDrag", "", 0, 0, 862, 48)
     self.Breadcrumb = UI.text(drag, "Breadcrumb", Textos.espacio .. " / " .. Textos.inicio, 26, 0, 400, 48, 13, T.Secondary, T.Medium)
-    local tag = UI.frame(chrome, "Status", 690, 14, 156, 22)
-    UI.frame(tag, "StatusDot", 10, 8, 6, 6, T.Green, 3)
-    UI.text(tag, "StatusLabel", options.Status or Textos.sesionLocal, 23, 0, 127, 22, 9, T.Secondary, T.Medium)
-    self.StatusTag = tag
     local close = UI.button(chrome, "Close", "", 872, 9, 30, 30)
     UI.corner(close, 5)
     local ca = UI.frame(close, "CloseA", 9, 14, 12, 1, T.Secondary)
@@ -793,9 +768,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    UI.frame(status, "Dot", 22, 11, 5, 5, T.Green, 3)
-    self.StatusText = UI.text(status, "State", Textos.listo, 35, 0, 560, 28, 10, T.Secondary)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.8", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.9", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -897,9 +870,7 @@ function Window:Fit()
     self.Chrome.Position = UDim2.fromOffset(sideWidth, 0)
     self.Chrome.Size = UDim2.fromOffset(chromeWidth, 48)
     self.CloseButton.Position = UDim2.fromOffset(chromeWidth - 44, 9)
-    self.StatusTag.Position = UDim2.fromOffset(chromeWidth - 226, 14)
-    self.StatusTag.Visible = chromeWidth >= 500
-    self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, chromeWidth - (self.StatusTag.Visible and 260 or 80)), 48)
+    self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, chromeWidth - 80), 48)
     self.Workspace.Position = UDim2.fromOffset(sideWidth, 48)
     self.Workspace.Size = UDim2.fromOffset(chromeWidth, self.Height - 76)
     self.Inspector.Position = UDim2.fromOffset(self.PanelWidth + PANEL_GAP, 0)
@@ -910,7 +881,6 @@ function Window:Fit()
     self.Statusbar.Rule.Size = UDim2.fromOffset(chromeWidth, 1)
     self.StatusVersion.Position = UDim2.fromOffset(chromeWidth - 186, 0)
     self.StatusVersion.Visible = chromeWidth >= 650
-    self.StatusText.Size = UDim2.fromOffset(chromeWidth - (self.StatusVersion.Visible and 240 or 50), 28)
     self.Chrome.TitleDrag.Size = UDim2.fromOffset(chromeWidth - 54, 48)
     self.Scale = math.min(1, math.max(0.1, (size.X - 32) / self.Width), math.max(0.1, (size.Y - 32) / self.Height))
     self.UIScale.Scale = self.Scale
@@ -997,7 +967,6 @@ function Window:Focus(control)
         end
     end
     self.Context:Update(control)
-    self.StatusText.Text = control.Section.Tab.Name .. " / " .. control.Section.Name .. " / " .. control.Name
 end
 
 function Window:SetDetails(title, description, status)
@@ -1094,10 +1063,7 @@ function Inspector.new(window)
     window.Inspector = frame
     self.Shadow = Shadow.new(frame, 12)
     UI.stroke(frame, T.Line)
-    UI.text(frame, "InspectorHeading", "INSPECTOR", 18, 20, 168, 16, 11, T.Muted, T.Medium)
-    local scope = UI.frame(frame, "Scope", 196, 23, 10, 10)
-    UI.stroke(scope, T.AccentSoft)
-    UI.frame(scope, "Center", 4, 4, 2, 2, T.Accent)
+    UI.text(frame, "InspectorHeading", "INSPECTOR", 18, 20, 188, 16, 11, T.Muted, T.Medium)
     UI.line(frame, 18, 47, 188)
     window.DetailTitle = UI.text(frame, "DetailTitle", Textos.tuEspacio, 18, 67, 188, 52, 21, T.Text, T.Medium)
     window.DetailTitle.TextWrapped = true
@@ -1734,7 +1700,7 @@ local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
 if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
 
-local Lumi = {Version = "0.4.8", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.4.9", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] La biblioteca está cerrada; vuelve a cargarla para continuar")
@@ -1772,7 +1738,7 @@ return __require("init")
 end)()
 
 -- Demostración: las acciones modifican esta interfaz y sus valores de ejemplo.
-local window = Lumi:CreateWindow({Title = "lumi", Status = "PRUEBA LOCAL"})
+local window = Lumi:CreateWindow({Title = "lumi"})
 local overview = window:AddTab("Inicio", {Icon = "Grid", Description = "Ajustes claros, con todo a mano.", Eyebrow = "ESTUDIO / INTRODUCCIÓN"})
 local player = window:AddTab("Jugador", {Icon = "Sliders", Description = "Prueba controles de estado y valores numéricos."})
 local visuals = window:AddTab("Aspecto", {Icon = "Layers", Description = "Prueba los ajustes visuales de la interfaz."})

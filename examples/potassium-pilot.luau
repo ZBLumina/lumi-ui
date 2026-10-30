@@ -1,5 +1,5 @@
 -- Demostración: las acciones modifican esta interfaz y sus valores de ejemplo.
-local window = Lumi:CreateWindow({Title = "lumi", Status = "PRUEBA LOCAL"})
+local window = Lumi:CreateWindow({Title = "lumi"})
 local overview = window:AddTab("Inicio", {Icon = "Grid", Description = "Ajustes claros, con todo a mano.", Eyebrow = "ESTUDIO / INTRODUCCIÓN"})
 local player = window:AddTab("Jugador", {Icon = "Sliders", Description = "Prueba controles de estado y valores numéricos."})
 local visuals = window:AddTab("Aspecto", {Icon = "Layers", Description = "Prueba los ajustes visuales de la interfaz."})

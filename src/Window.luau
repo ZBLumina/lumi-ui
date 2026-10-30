@@ -53,17 +53,13 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "v0.4.8", 33, 38, 110, 16, 11, T.Muted)
+    UI.text(footer, "Version", "v0.4.9", 33, 38, 110, 16, 11, T.Muted)
     UI.frame(panel, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
     local chrome = UI.frame(panel, "Chrome", 184, 0, 680, 48)
     self.Chrome = chrome
     local drag = UI.button(chrome, "TitleDrag", "", 0, 0, 862, 48)
     self.Breadcrumb = UI.text(drag, "Breadcrumb", Textos.espacio .. " / " .. Textos.inicio, 26, 0, 400, 48, 13, T.Secondary, T.Medium)
-    local tag = UI.frame(chrome, "Status", 690, 14, 156, 22)
-    UI.frame(tag, "StatusDot", 10, 8, 6, 6, T.Green, 3)
-    UI.text(tag, "StatusLabel", options.Status or Textos.sesionLocal, 23, 0, 127, 22, 9, T.Secondary, T.Medium)
-    self.StatusTag = tag
     local close = UI.button(chrome, "Close", "", 872, 9, 30, 30)
     UI.corner(close, 5)
     local ca = UI.frame(close, "CloseA", 9, 14, 12, 1, T.Secondary)
@@ -82,9 +78,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    UI.frame(status, "Dot", 22, 11, 5, 5, T.Green, 3)
-    self.StatusText = UI.text(status, "State", Textos.listo, 35, 0, 560, 28, 10, T.Secondary)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.8", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.9", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -186,9 +180,7 @@ function Window:Fit()
     self.Chrome.Position = UDim2.fromOffset(sideWidth, 0)
     self.Chrome.Size = UDim2.fromOffset(chromeWidth, 48)
     self.CloseButton.Position = UDim2.fromOffset(chromeWidth - 44, 9)
-    self.StatusTag.Position = UDim2.fromOffset(chromeWidth - 226, 14)
-    self.StatusTag.Visible = chromeWidth >= 500
-    self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, chromeWidth - (self.StatusTag.Visible and 260 or 80)), 48)
+    self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, chromeWidth - 80), 48)
     self.Workspace.Position = UDim2.fromOffset(sideWidth, 48)
     self.Workspace.Size = UDim2.fromOffset(chromeWidth, self.Height - 76)
     self.Inspector.Position = UDim2.fromOffset(self.PanelWidth + PANEL_GAP, 0)
@@ -199,7 +191,6 @@ function Window:Fit()
     self.Statusbar.Rule.Size = UDim2.fromOffset(chromeWidth, 1)
     self.StatusVersion.Position = UDim2.fromOffset(chromeWidth - 186, 0)
     self.StatusVersion.Visible = chromeWidth >= 650
-    self.StatusText.Size = UDim2.fromOffset(chromeWidth - (self.StatusVersion.Visible and 240 or 50), 28)
     self.Chrome.TitleDrag.Size = UDim2.fromOffset(chromeWidth - 54, 48)
     self.Scale = math.min(1, math.max(0.1, (size.X - 32) / self.Width), math.max(0.1, (size.Y - 32) / self.Height))
     self.UIScale.Scale = self.Scale
@@ -286,7 +277,6 @@ function Window:Focus(control)
         end
     end
     self.Context:Update(control)
-    self.StatusText.Text = control.Section.Tab.Name .. " / " .. control.Section.Name .. " / " .. control.Name
 end
 
 function Window:SetDetails(title, description, status)

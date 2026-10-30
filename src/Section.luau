@@ -81,7 +81,7 @@ function Section:Row(options, kind, height)
     end
     table.insert(self.Controls, control)
     table.insert(self.Tab.Controls, control)
-    self.Tab:UpdateSummary()
+    self.Tab:Relayout()
     local rt = control.Runtime
     rt:Connect(row:GetPropertyChangedSignal("AbsoluteSize"), function() control:Relayout() end)
     task.defer(function() if not rt.Destroyed then control:Relayout() end end)
