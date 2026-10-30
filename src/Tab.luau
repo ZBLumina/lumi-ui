@@ -30,7 +30,7 @@ function Tab.new(window, name, options)
     })
     self.Page = page
     self.Motion = Motion.new(window.Runtime, page)
-    UI.new("UIPadding", page, {PaddingLeft = UDim.new(0, 26), PaddingRight = UDim.new(0, 26), PaddingTop = UDim.new(0, 22), PaddingBottom = UDim.new(0, 22)})
+    self.Padding = UI.new("UIPadding", page, {PaddingLeft = UDim.new(0, 26), PaddingRight = UDim.new(0, 26), PaddingTop = UDim.new(0, 22), PaddingBottom = UDim.new(0, 22)})
     UI.list(page, 14)
     local header = UI.frame(page, "PageHeader", 0, 0, 644, 82)
     header.Size = UDim2.new(1, 0, 0, 82)
@@ -65,13 +65,23 @@ function Tab.new(window, name, options)
     return self
 end
 
+function Tab:GetContentWidth()
+    -- Logical dimensions stay current even when Roblox defers AbsoluteSize
+    -- updates for invisible or clipped descendants.
+    local page = self.Window.Workspace.Size.X.Offset * self.Page.Size.X.Scale + self.Page.Size.X.Offset
+    local left, right = self.Padding.PaddingLeft, self.Padding.PaddingRight
+    return math.max(1, math.floor(page * (1 - left.Scale - right.Scale) - left.Offset - right.Offset))
+end
+
 function Tab:Relayout()
     local counts = (self.Window.SidebarWidth or 184) >= 170 and #self.Controls < 1000
     self.Number.Visible = counts
     self.Label.Size = UDim2.new(1, counts and -76 or -48, 1, 0)
-    local summary = self.Header.AbsoluteSize.X / math.max(0.1, self.Window.Scale) >= 360
+    local summary = self:GetContentWidth() >= 360
     self.Summary.Visible = summary
     self.Title.Size = UDim2.new(1, summary and -88 or 0, 0, 33)
+    for _, section in ipairs(self.Sections) do section:Relayout() end
+    for _, control in ipairs(self.Controls) do control:Relayout() end
 end
 
 function Tab:UpdateSummary()

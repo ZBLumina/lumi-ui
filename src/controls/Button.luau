@@ -1,9 +1,10 @@
 local UI = require("UI")
 local T = require("Theme")
+local PropertyLayout = require("PropertyLayout")
 local Button = {}
 
 function Button.new(section, options)
-    local c = section:Row(options, "Button", 60)
+    local c = section:Row(options, "Button", 64)
     local rt = c.Runtime
     local window = section.Tab.Window
     local secondary = options.Variant == "Secondary"
@@ -15,6 +16,8 @@ function Button.new(section, options)
     action.BackgroundTransparency = 0
     action.BackgroundColor3, action.TextColor3 = normal, secondary and T.Text or T.Ink
     action.Font = T.Medium
+    action.TextTruncate = Enum.TextTruncate.AtEnd
+    c.ControlWidth = PropertyLayout.inputWidth(action.Text, action.Font, action.TextSize, 144, 240)
     action.ZIndex = 2
     UI.corner(action, 5)
     if secondary then UI.stroke(action, T.Line) end
@@ -25,7 +28,10 @@ function Button.new(section, options)
         if rt.Animations == false then scale.Scale = 1; return end
         rt:Tween(scale, {Scale = pressed and 0.975 or (hovered and 1.01 or 1)}, pressed and 0.07 or 0.12)
     end
-    c.Layout = function(narrow) action.Position = UDim2.new(1, -88, 0, narrow and 69 or 30) end
+    c.Layout = function(place)
+        action.Size = UDim2.fromOffset(place.ControlWidth, place.ControlHeight)
+        action.Position = UDim2.fromOffset(place.ControlX + place.ControlWidth / 2, place.ControlY + place.ControlHeight / 2)
+    end
     local count = 0
     c.Get = function() return count == 0 and "Ready" or (tostring(count) .. " completed") end
     function c:Press()

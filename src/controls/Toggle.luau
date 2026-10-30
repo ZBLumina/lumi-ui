@@ -3,7 +3,7 @@ local T = require("Theme")
 local Toggle = {}
 
 function Toggle.new(section, options)
-    local c = section:Row(options, "Toggle", 58)
+    local c = section:Row(options, "Toggle", 64)
     local value = options.Default == true
     local rt = c.Runtime
     local window = section.Tab.Window
@@ -18,9 +18,10 @@ function Toggle.new(section, options)
     local outline = UI.stroke(track, T.Line)
     local thumb = UI.frame(track, "Thumb", 4, 4, 12, 12, T.Secondary, 4)
     local notch = UI.frame(thumb, "Notch", 6, 4, 1, 4, T.Ink)
-    c.Layout = function(narrow)
-        track.Position = UDim2.new(1, -52, 0, narrow and 13 or 19)
-        state.Size = UDim2.fromOffset(36, narrow and 46 or 58)
+    c.Layout = function(place)
+        track.Position = UDim2.fromOffset(place.ControlX + place.ControlWidth - 36, place.ControlY + 6)
+        state.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
+        state.Size = UDim2.fromOffset(44, place.ControlHeight)
     end
     local function render(instant)
         state.Text = value and "ON" or "OFF"

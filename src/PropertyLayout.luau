@@ -1,0 +1,47 @@
+local Text = game:GetService("TextService")
+local Layout = {}
+local PAD, VERTICAL, COLUMN_GAP, STACK_GAP, INPUT_HEIGHT = 16, 12, 24, 12, 32
+local widths = {Button = 144, Dropdown = 220, Toggle = 100, Slider = 96}
+
+local function textHeight(label, width, minimum)
+    local bounds = Text:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(math.max(1, width - 1), 100000))
+    return math.max(minimum, math.ceil(bounds.Y) + 2)
+end
+
+function Layout.inputWidth(text, font, size, minimum, maximum)
+    local bounds = Text:GetTextSize(tostring(text), size, font, Vector2.new(100000, 100000))
+    return math.clamp(math.ceil(bounds.X) + 24, minimum, maximum)
+end
+
+function Layout.measure(control, width)
+    local available = math.max(1, math.floor(width - 2 * PAD))
+    local field = math.min(control.ControlWidth or widths[control.Kind], available)
+    local caption = available - field - COLUMN_GAP
+    local stacked = caption < 200
+    if stacked then caption = available end
+    local title = textHeight(control.Label, caption, 18)
+    local description = control.DescriptionLabel.Text ~= "" and textHeight(control.DescriptionLabel, caption, 16) or 0
+    local text = title + (description > 0 and 4 + description or 0)
+    local header = stacked and text + STACK_GAP + INPUT_HEIGHT or math.max(text, INPUT_HEIGHT)
+    local slider = control.Kind == "Slider"
+    local height = math.max(64, VERTICAL * 2 + header)
+    local top = slider and VERTICAL or (height - header) / 2
+    local result = {
+        Stacked = stacked, Height = height, TextWidth = caption, TitleHeight = title, DescriptionHeight = description,
+        TitleY = top + (stacked and 0 or (header - text) / 2),
+        ControlX = width - PAD - field, ControlY = top + (stacked and text + STACK_GAP or (header - INPUT_HEIGHT) / 2),
+        ControlWidth = field, ControlHeight = INPUT_HEIGHT,
+    }
+    result.DescriptionY = result.TitleY + title + 4
+    if slider then
+        result.HitY, result.HitHeight = top + header + 8, 28
+        result.TrackY = result.HitY + result.HitHeight / 2
+        result.BoundsY = result.HitY + result.HitHeight + 2
+        result.LaneX, result.LaneWidth = PAD, available
+        result.BoundsWidth = math.max(1, (available - 12) / 2)
+        result.Height = (control.ShowBounds == false and result.HitY + result.HitHeight or result.BoundsY + 14) + VERTICAL
+    end
+    return result
+end
+
+return Layout

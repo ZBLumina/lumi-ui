@@ -5,7 +5,7 @@ local Motion = require("Motion")
 local Dropdown = {}
 
 function Dropdown.new(section, options)
-    local c = section:Row(options, "Dropdown", 58)
+    local c = section:Row(options, "Dropdown", 64)
     local rt, window = c.Runtime, section.Tab.Window
     local values = {}
     for _, value in ipairs(type(options.Values) == "table" and options.Values or {}) do table.insert(values, value) end
@@ -21,12 +21,13 @@ function Dropdown.new(section, options)
     local label = UI.text(selector, "Selection", selected == nil and "No options" or selected, 12, 0, 178, 31, 13, T.Secondary)
     UI.chevron(selector, 197, 15)
     c.Input, c.Values = selector, values
-    c.Layout = function(narrow)
-        selector.Position = narrow and UDim2.fromOffset(16, 54) or UDim2.new(1, -236, 0, 14)
-        selector.Size = narrow and UDim2.new(1, -32, 0, 31) or UDim2.fromOffset(220, 31)
+    c.Layout = function(place)
+        selector.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
+        selector.Size = UDim2.fromOffset(place.ControlWidth, place.ControlHeight)
         label.Size = UDim2.new(1, -42, 1, 0)
-        selector.ChevronA.Position = UDim2.new(1, -23, 0, 15)
-        selector.ChevronB.Position = UDim2.new(1, -19, 0, 15)
+        local center = place.ControlHeight / 2
+        selector.ChevronA.Position = UDim2.new(1, -23, 0, center)
+        selector.ChevronB.Position = UDim2.new(1, -19, 0, center)
     end
     c.Get = function() return selected end
     function c:Fraction()
@@ -57,7 +58,7 @@ function Dropdown.new(section, options)
         popupRuntime.Animations = rt.Animations
         local scale = window.Scale
         local relative = (selector.AbsolutePosition - window.Main.AbsolutePosition) / scale
-        local width = selector.AbsoluteSize.X / scale
+        local width = math.min(window.Width - 16, math.max(180, selector.AbsoluteSize.X / scale))
         local wanted = math.min(234, math.max(1, #values) * 32 + 38)
         local below = window.Height - relative.Y - 37 - 12
         local above = relative.Y - 12
@@ -81,12 +82,14 @@ function Dropdown.new(section, options)
                 rt:Tween(selector.ChevronB, {Rotation = -45}, 0.12)
             end
         end
-        UI.text(menu, "Caption", "SELECT OPTION", 11, 4, 198, 25, 9, T.Muted, T.Mono)
+        UI.text(menu, "Caption", "SELECT OPTION", 11, 4, 198, 25, 9, T.Muted, T.Mono).Size = UDim2.new(1, -22, 0, 25)
         local scroller = UI.new("ScrollingFrame", menu, {Name = "Options", Position = UDim2.fromOffset(5, 31),
             Size = UDim2.new(1, -10, 1, -36), CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
             ScrollBarThickness = 2, ScrollBarImageColor3 = T.Muted, ZIndex = 102})
         UI.list(scroller, 0)
-        if #values == 0 then UI.text(scroller, "Empty", "No options available", 7, 0, 192, 32, 11, T.Muted) end
+        if #values == 0 then
+            UI.text(scroller, "Empty", "No options available", 7, 0, 192, 32, 11, T.Muted).Size = UDim2.new(1, -14, 0, 32)
+        end
         for index, value in ipairs(values) do
             local item = UI.button(scroller, "Option" .. tostring(index), "", 0, 0, 0, 32)
             item.Size = UDim2.new(1, -3, 0, 32)

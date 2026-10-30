@@ -74,6 +74,57 @@ end
 return Motion
 end
 
+__factories["PropertyLayout"] = function(__require)
+-- src/PropertyLayout.luau
+local Text = game:GetService("TextService")
+local Layout = {}
+local PAD, VERTICAL, COLUMN_GAP, STACK_GAP, INPUT_HEIGHT = 16, 12, 24, 12, 32
+local widths = {Button = 144, Dropdown = 220, Toggle = 100, Slider = 96}
+
+local function textHeight(label, width, minimum)
+    local bounds = Text:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(math.max(1, width - 1), 100000))
+    return math.max(minimum, math.ceil(bounds.Y) + 2)
+end
+
+function Layout.inputWidth(text, font, size, minimum, maximum)
+    local bounds = Text:GetTextSize(tostring(text), size, font, Vector2.new(100000, 100000))
+    return math.clamp(math.ceil(bounds.X) + 24, minimum, maximum)
+end
+
+function Layout.measure(control, width)
+    local available = math.max(1, math.floor(width - 2 * PAD))
+    local field = math.min(control.ControlWidth or widths[control.Kind], available)
+    local caption = available - field - COLUMN_GAP
+    local stacked = caption < 200
+    if stacked then caption = available end
+    local title = textHeight(control.Label, caption, 18)
+    local description = control.DescriptionLabel.Text ~= "" and textHeight(control.DescriptionLabel, caption, 16) or 0
+    local text = title + (description > 0 and 4 + description or 0)
+    local header = stacked and text + STACK_GAP + INPUT_HEIGHT or math.max(text, INPUT_HEIGHT)
+    local slider = control.Kind == "Slider"
+    local height = math.max(64, VERTICAL * 2 + header)
+    local top = slider and VERTICAL or (height - header) / 2
+    local result = {
+        Stacked = stacked, Height = height, TextWidth = caption, TitleHeight = title, DescriptionHeight = description,
+        TitleY = top + (stacked and 0 or (header - text) / 2),
+        ControlX = width - PAD - field, ControlY = top + (stacked and text + STACK_GAP or (header - INPUT_HEIGHT) / 2),
+        ControlWidth = field, ControlHeight = INPUT_HEIGHT,
+    }
+    result.DescriptionY = result.TitleY + title + 4
+    if slider then
+        result.HitY, result.HitHeight = top + header + 8, 28
+        result.TrackY = result.HitY + result.HitHeight / 2
+        result.BoundsY = result.HitY + result.HitHeight + 2
+        result.LaneX, result.LaneWidth = PAD, available
+        result.BoundsWidth = math.max(1, (available - 12) / 2)
+        result.Height = (control.ShowBounds == false and result.HitY + result.HitHeight or result.BoundsY + 14) + VERTICAL
+    end
+    return result
+end
+
+return Layout
+end
+
 __factories["Runtime"] = function(__require)
 -- src/Runtime.luau
 local TweenService = game:GetService("TweenService")
@@ -212,6 +263,7 @@ __factories["Section"] = function(__require)
 -- src/Section.luau
 local UI = __require("UI")
 local T = __require("Theme")
+local PropertyLayout = __require("PropertyLayout")
 local Button = __require("controls/Button")
 local Toggle = __require("controls/Toggle")
 local Slider = __require("controls/Slider")
@@ -231,19 +283,33 @@ function Section.new(tab, name, options)
     local header = UI.new("Frame", frame, {Name = "SectionHeader", Size = UDim2.new(1, 0, 0, 43), LayoutOrder = 0})
     local index = #tab.Sections + 1
     UI.text(header, "Index", string.format("%02d", index), 16, 0, 26, 43, 10, T.Muted, T.Mono)
-    UI.text(header, "Title", name, 45, 0, 440, 43, 13, T.Text, T.Medium).Size = UDim2.new(1, -190, 0, 43)
+    local heading = UI.text(header, "Title", name, 45, 0, 440, 43, 13, T.Text, T.Medium)
     local tag = UI.text(header, "Tag", options.Tag or "PROPERTIES", 510, 0, 116, 43, 9, T.Muted, T.Mono)
     tag.TextXAlignment = Enum.TextXAlignment.Right
     tag.Position = UDim2.new(1, -132, 0, 0)
-    local self = setmetatable({Name = tostring(name), Tab = tab, Frame = frame, Content = frame, Controls = {}, _order = 0}, Section)
+    local self = setmetatable({Name = tostring(name), Tab = tab, Frame = frame, Content = frame, Controls = {},
+        Heading = heading, Tag = tag, _order = 0}, Section)
     table.insert(tab.Sections, self)
+    local function fitHeader() self:Relayout() end
+    tab.Window.Runtime:Connect(header:GetPropertyChangedSignal("AbsoluteSize"), fitHeader)
+    fitHeader()
     return self
+end
+
+function Section:GetWidth()
+    return self.Tab:GetContentWidth() * self.Frame.Size.X.Scale + self.Frame.Size.X.Offset
+end
+
+function Section:Relayout()
+    local wide = self:GetWidth() >= 420
+    self.Tag.Visible = wide
+    self.Heading.Size = UDim2.new(1, wide and -190 or -61, 0, 43)
 end
 
 function Section:Row(options, kind, height)
     self._order += 1
     local row = UI.new("Frame", self.Content, {Name = (options.Name or kind) .. "Row",
-        Size = UDim2.new(1, 0, 0, height or 56), LayoutOrder = self._order})
+        Size = UDim2.new(1, 0, 0, height or 64), LayoutOrder = self._order, ClipsDescendants = true})
     local selection = UI.frame(row, "SelectionWash", 6, 5, 0, 0, T.AccentWash, 4)
     selection.Size = UDim2.new(1, -12, 1, -10)
     selection.BackgroundTransparency, selection.Visible = 0.4, false
@@ -251,6 +317,8 @@ function Section:Row(options, kind, height)
         Position = UDim2.fromOffset(16, 0), BackgroundTransparency = 0, BackgroundColor3 = T.SoftLine})
     local title = UI.text(row, "Name", options.Name or kind, 16, 12, 330, 18, 14, T.Text, T.Medium)
     local description = UI.text(row, "Description", options.Description or "", 16, 33, 350, 15, 12, T.Muted)
+    title.TextWrapped, description.TextWrapped = true, true
+    title.TextTruncate, description.TextTruncate = Enum.TextTruncate.None, Enum.TextTruncate.None
     local control = {Name = options.Name or kind, Description = options.Description or "", Kind = kind,
         Row = row, Section = self, Runtime = self.Tab.Window.Runtime, Label = title, DescriptionLabel = description,
         SelectionWash = selection}
@@ -261,15 +329,16 @@ function Section:Row(options, kind, height)
         if self.Section.Tab.Window.SelectedControl == self then self:Focus() end
     end
     function control:Relayout()
-        local narrow = row.AbsoluteSize.X / math.max(0.1, self.Section.Tab.Window.Scale) < 560
-        local reserve = kind == "Slider" and 128 or (kind == "Toggle" and 144 or (narrow and 32 or 280))
-        title.Size = UDim2.new(1, -reserve, 0, 18)
-        description.Size = UDim2.new(1, -(kind == "Toggle" and narrow and 32 or reserve), 0, 15)
-        description.Position = UDim2.fromOffset(16, kind == "Toggle" and narrow and 43 or 33)
-        description.TextSize = 12
-        local rowHeight = narrow and ((kind == "Dropdown" or kind == "Button") and 96 or (kind == "Toggle" and 68 or height)) or height
-        row.Size = UDim2.new(1, 0, 0, rowHeight or 56)
-        if self.Layout then self.Layout(narrow) end
+        local width = self.Section:GetWidth() * row.Size.X.Scale + row.Size.X.Offset
+        if width <= 0 then return end
+        local placement = PropertyLayout.measure(self, width)
+        title.Position = UDim2.fromOffset(16, placement.TitleY)
+        title.Size = UDim2.fromOffset(placement.TextWidth, placement.TitleHeight)
+        description.Position = UDim2.fromOffset(16, placement.DescriptionY)
+        description.Size = UDim2.fromOffset(placement.TextWidth, placement.DescriptionHeight)
+        description.Visible = placement.DescriptionHeight > 0
+        row.Size = UDim2.new(1, 0, 0, placement.Height)
+        if self.Layout then self.Layout(placement) end
     end
     table.insert(self.Controls, control)
     table.insert(self.Tab.Controls, control)
@@ -329,7 +398,7 @@ function Tab.new(window, name, options)
     })
     self.Page = page
     self.Motion = Motion.new(window.Runtime, page)
-    UI.new("UIPadding", page, {PaddingLeft = UDim.new(0, 26), PaddingRight = UDim.new(0, 26), PaddingTop = UDim.new(0, 22), PaddingBottom = UDim.new(0, 22)})
+    self.Padding = UI.new("UIPadding", page, {PaddingLeft = UDim.new(0, 26), PaddingRight = UDim.new(0, 26), PaddingTop = UDim.new(0, 22), PaddingBottom = UDim.new(0, 22)})
     UI.list(page, 14)
     local header = UI.frame(page, "PageHeader", 0, 0, 644, 82)
     header.Size = UDim2.new(1, 0, 0, 82)
@@ -364,13 +433,23 @@ function Tab.new(window, name, options)
     return self
 end
 
+function Tab:GetContentWidth()
+    -- Logical dimensions stay current even when Roblox defers AbsoluteSize
+    -- updates for invisible or clipped descendants.
+    local page = self.Window.Workspace.Size.X.Offset * self.Page.Size.X.Scale + self.Page.Size.X.Offset
+    local left, right = self.Padding.PaddingLeft, self.Padding.PaddingRight
+    return math.max(1, math.floor(page * (1 - left.Scale - right.Scale) - left.Offset - right.Offset))
+end
+
 function Tab:Relayout()
     local counts = (self.Window.SidebarWidth or 184) >= 170 and #self.Controls < 1000
     self.Number.Visible = counts
     self.Label.Size = UDim2.new(1, counts and -76 or -48, 1, 0)
-    local summary = self.Header.AbsoluteSize.X / math.max(0.1, self.Window.Scale) >= 360
+    local summary = self:GetContentWidth() >= 360
     self.Summary.Visible = summary
     self.Title.Size = UDim2.new(1, summary and -88 or 0, 0, 33)
+    for _, section in ipairs(self.Sections) do section:Relayout() end
+    for _, control in ipairs(self.Controls) do control:Relayout() end
 end
 
 function Tab:UpdateSummary()
@@ -569,14 +648,15 @@ local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
 Window.__index = Window
+local DESKTOP_HEIGHT = 688
 
 function Window.new(options)
     local rt = Runtime.new()
     rt.Animations = options.Animations ~= false
     local root = rt:Mount()
     local self = setmetatable({Runtime = rt, Root = root, Tabs = {}, _destroyed = false,
-        Width = 1100, Height = 660, Scale = 1, OpenDropdown = nil}, Window)
-    local main = UI.frame(root, "Main", 0, 0, 1100, 660, T.Shell, 12)
+        Width = 1100, Height = DESKTOP_HEIGHT, Scale = 1, OpenDropdown = nil}, Window)
+    local main = UI.frame(root, "Main", 0, 0, 1100, DESKTOP_HEIGHT, T.Shell, 12)
     main.Active = true
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.Position = UDim2.fromScale(0.5, 0.5)
@@ -607,7 +687,7 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "Studio / 0.4.5", 33, 38, 110, 16, 11, T.Muted)
+    UI.text(footer, "Version", "Studio / 0.4.6", 33, 38, 110, 16, 11, T.Muted)
     UI.frame(main, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
     local chrome = UI.frame(main, "Chrome", 184, 0, 916, 48)
@@ -638,7 +718,7 @@ function Window.new(options)
     UI.line(status, 0, 0, 916)
     UI.frame(status, "Dot", 22, 11, 5, 5, T.Green, 3)
     self.StatusText = UI.text(status, "State", "Ready", 35, 0, 560, 28, 10, T.Secondary)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.5", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.6", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -705,9 +785,9 @@ function Window:Fit()
     self._lastViewport = size
     self:FinishEntrance(resized)
     self:ClosePopup()
-    local compact = size.X < 850 or size.Y < 692
+    local compact = size.X < 1132 or size.Y < DESKTOP_HEIGHT + 32
     self.Width = compact and math.max(320, math.min(1100, size.X - 32)) or 1100
-    self.Height = math.max(280, math.min(660, size.Y - 32))
+    self.Height = math.max(280, math.min(DESKTOP_HEIGHT, size.Y - 32))
     self.SidebarWidth = size.X < 700 and 140 or 184
     local sideWidth = self.SidebarWidth
     self.Inspector.Visible = not compact
@@ -862,6 +942,7 @@ function Window:SelectTab(tab)
     if self.ActiveTab == tab then return end
     local previous = self.ActiveTab
     self.ActiveTab = tab
+    tab:Relayout()
     for _, item in ipairs(self.Tabs) do
         item.Motion:Finish()
         self.Runtime:CancelTween(item.Page, "position")
@@ -1118,10 +1199,11 @@ __factories["controls/Button"] = function(__require)
 -- src/controls/Button.luau
 local UI = __require("UI")
 local T = __require("Theme")
+local PropertyLayout = __require("PropertyLayout")
 local Button = {}
 
 function Button.new(section, options)
-    local c = section:Row(options, "Button", 60)
+    local c = section:Row(options, "Button", 64)
     local rt = c.Runtime
     local window = section.Tab.Window
     local secondary = options.Variant == "Secondary"
@@ -1133,6 +1215,8 @@ function Button.new(section, options)
     action.BackgroundTransparency = 0
     action.BackgroundColor3, action.TextColor3 = normal, secondary and T.Text or T.Ink
     action.Font = T.Medium
+    action.TextTruncate = Enum.TextTruncate.AtEnd
+    c.ControlWidth = PropertyLayout.inputWidth(action.Text, action.Font, action.TextSize, 144, 240)
     action.ZIndex = 2
     UI.corner(action, 5)
     if secondary then UI.stroke(action, T.Line) end
@@ -1143,7 +1227,10 @@ function Button.new(section, options)
         if rt.Animations == false then scale.Scale = 1; return end
         rt:Tween(scale, {Scale = pressed and 0.975 or (hovered and 1.01 or 1)}, pressed and 0.07 or 0.12)
     end
-    c.Layout = function(narrow) action.Position = UDim2.new(1, -88, 0, narrow and 69 or 30) end
+    c.Layout = function(place)
+        action.Size = UDim2.fromOffset(place.ControlWidth, place.ControlHeight)
+        action.Position = UDim2.fromOffset(place.ControlX + place.ControlWidth / 2, place.ControlY + place.ControlHeight / 2)
+    end
     local count = 0
     c.Get = function() return count == 0 and "Ready" or (tostring(count) .. " completed") end
     function c:Press()
@@ -1196,7 +1283,7 @@ local Motion = __require("Motion")
 local Dropdown = {}
 
 function Dropdown.new(section, options)
-    local c = section:Row(options, "Dropdown", 58)
+    local c = section:Row(options, "Dropdown", 64)
     local rt, window = c.Runtime, section.Tab.Window
     local values = {}
     for _, value in ipairs(type(options.Values) == "table" and options.Values or {}) do table.insert(values, value) end
@@ -1212,12 +1299,13 @@ function Dropdown.new(section, options)
     local label = UI.text(selector, "Selection", selected == nil and "No options" or selected, 12, 0, 178, 31, 13, T.Secondary)
     UI.chevron(selector, 197, 15)
     c.Input, c.Values = selector, values
-    c.Layout = function(narrow)
-        selector.Position = narrow and UDim2.fromOffset(16, 54) or UDim2.new(1, -236, 0, 14)
-        selector.Size = narrow and UDim2.new(1, -32, 0, 31) or UDim2.fromOffset(220, 31)
+    c.Layout = function(place)
+        selector.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
+        selector.Size = UDim2.fromOffset(place.ControlWidth, place.ControlHeight)
         label.Size = UDim2.new(1, -42, 1, 0)
-        selector.ChevronA.Position = UDim2.new(1, -23, 0, 15)
-        selector.ChevronB.Position = UDim2.new(1, -19, 0, 15)
+        local center = place.ControlHeight / 2
+        selector.ChevronA.Position = UDim2.new(1, -23, 0, center)
+        selector.ChevronB.Position = UDim2.new(1, -19, 0, center)
     end
     c.Get = function() return selected end
     function c:Fraction()
@@ -1248,7 +1336,7 @@ function Dropdown.new(section, options)
         popupRuntime.Animations = rt.Animations
         local scale = window.Scale
         local relative = (selector.AbsolutePosition - window.Main.AbsolutePosition) / scale
-        local width = selector.AbsoluteSize.X / scale
+        local width = math.min(window.Width - 16, math.max(180, selector.AbsoluteSize.X / scale))
         local wanted = math.min(234, math.max(1, #values) * 32 + 38)
         local below = window.Height - relative.Y - 37 - 12
         local above = relative.Y - 12
@@ -1272,12 +1360,14 @@ function Dropdown.new(section, options)
                 rt:Tween(selector.ChevronB, {Rotation = -45}, 0.12)
             end
         end
-        UI.text(menu, "Caption", "SELECT OPTION", 11, 4, 198, 25, 9, T.Muted, T.Mono)
+        UI.text(menu, "Caption", "SELECT OPTION", 11, 4, 198, 25, 9, T.Muted, T.Mono).Size = UDim2.new(1, -22, 0, 25)
         local scroller = UI.new("ScrollingFrame", menu, {Name = "Options", Position = UDim2.fromOffset(5, 31),
             Size = UDim2.new(1, -10, 1, -36), CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
             ScrollBarThickness = 2, ScrollBarImageColor3 = T.Muted, ZIndex = 102})
         UI.list(scroller, 0)
-        if #values == 0 then UI.text(scroller, "Empty", "No options available", 7, 0, 192, 32, 11, T.Muted) end
+        if #values == 0 then
+            UI.text(scroller, "Empty", "No options available", 7, 0, 192, 32, 11, T.Muted).Size = UDim2.new(1, -14, 0, 32)
+        end
         for index, value in ipairs(values) do
             local item = UI.button(scroller, "Option" .. tostring(index), "", 0, 0, 0, 32)
             item.Size = UDim2.new(1, -3, 0, 32)
@@ -1315,12 +1405,13 @@ __factories["controls/Slider"] = function(__require)
 -- src/controls/Slider.luau
 local UI = __require("UI")
 local T = __require("Theme")
+local PropertyLayout = __require("PropertyLayout")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Slider = {}
 
 function Slider.new(section, options)
-    local c = section:Row(options, "Slider", 90)
+    local c = section:Row(options, "Slider", 114)
     local rt, window = c.Runtime, section.Tab.Window
     local minimum, maximum = UI.number(options.Min, 0), UI.number(options.Max, 100)
     if minimum > maximum then minimum, maximum = maximum, minimum end
@@ -1340,17 +1431,24 @@ function Slider.new(section, options)
     end
     function c:Format(number) return UI.format(number, precision) end
     c.Suffix = options.Suffix or ""
+    -- Reserve the full formatted range once. Changing the current number must
+    -- never move the drag lane or push neighbouring controls while dragging.
+    local pattern = "%." .. tostring(precision) .. "f"
+    c.ControlWidth = math.max(
+        PropertyLayout.inputWidth(string.format(pattern, minimum) .. c.Suffix, T.Mono, 13, 96, 160),
+        PropertyLayout.inputWidth(string.format(pattern, maximum) .. c.Suffix, T.Mono, 13, 96, 160))
     c.Min, c.Max, c.Step = minimum, maximum, step
     c.Range = c:Format(minimum) .. " - " .. c:Format(maximum)
     c.Get = function() return value end
     function c:Fraction() return maximum == minimum and 0 or (value - minimum) / (maximum - minimum) end
-    local box = UI.new("TextBox", c.Row, {
-        Name = "ValueInput", Size = UDim2.fromOffset(76, 27), Position = UDim2.new(1, -92, 0, 12),
-        BackgroundTransparency = 0, BackgroundColor3 = T.Raised, TextColor3 = T.Accent,
+    local field = UI.frame(c.Row, "ValueField", 0, 0, 96, 32, T.Raised, 5)
+    field.ClipsDescendants, field.ZIndex = true, 2
+    local box = UI.new("TextBox", field, {
+        Name = "ValueInput", Size = UDim2.new(1, -20, 1, 0), Position = UDim2.fromOffset(10, 0),
+        TextColor3 = T.Accent,
         Font = T.Mono, TextSize = 13, ClearTextOnFocus = false, Text = "", ZIndex = 2,
     })
-    UI.corner(box, 5)
-    local border = UI.stroke(box, T.Line)
+    local border = UI.stroke(field, T.Line)
     c.ValueInput = box
     local track = UI.new("Frame", c.Row, {Name = "Track", Position = UDim2.fromOffset(18, 62),
         Size = UDim2.new(1, -36, 0, 2), BackgroundTransparency = 0, BackgroundColor3 = T.Line})
@@ -1366,11 +1464,23 @@ function Slider.new(section, options)
         local tick = UI.frame(track, "Tick", 0, 8, 1, 3, T.Line)
         tick.Position = UDim2.new(i / 4, 0, 0, 8)
     end
-    local low = UI.text(c.Row, "Minimum", UI.format(minimum), 18, 74, 90, 13, 9, T.Muted, T.Mono)
-    local high = UI.text(c.Row, "Maximum", UI.format(maximum), 0, 74, 90, 13, 9, T.Muted, T.Mono)
+    local low = UI.text(c.Row, "Minimum", c:Format(minimum), 18, 74, 90, 14, 11, T.Muted, T.Mono)
+    local high = UI.text(c.Row, "Maximum", c:Format(maximum), 0, 74, 90, 14, 11, T.Muted, T.Mono)
     high.Position = UDim2.new(1, -108, 0, 74)
     high.TextXAlignment = Enum.TextXAlignment.Right
-    low.Visible, high.Visible = options.ShowBounds ~= false, options.ShowBounds ~= false
+    c.ShowBounds = options.ShowBounds ~= false
+    low.Visible, high.Visible = c.ShowBounds, c.ShowBounds
+    c.Layout = function(place)
+        field.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
+        field.Size = UDim2.fromOffset(place.ControlWidth, place.ControlHeight)
+        track.Position = UDim2.fromOffset(place.LaneX, place.TrackY)
+        track.Size = UDim2.fromOffset(place.LaneWidth, 2)
+        hit.Position = UDim2.fromOffset(place.LaneX, place.HitY)
+        hit.Size = UDim2.fromOffset(place.LaneWidth, place.HitHeight)
+        low.Position, low.Size = UDim2.fromOffset(place.LaneX, place.BoundsY), UDim2.fromOffset(place.BoundsWidth, 14)
+        high.Position = UDim2.fromOffset(place.LaneX + place.LaneWidth - place.BoundsWidth, place.BoundsY)
+        high.Size = UDim2.fromOffset(place.BoundsWidth, 14)
+    end
     local dragging, hovered, focused = false, false, false
     local function emphasize()
         local active = dragging or hovered or focused
@@ -1450,7 +1560,7 @@ local T = __require("Theme")
 local Toggle = {}
 
 function Toggle.new(section, options)
-    local c = section:Row(options, "Toggle", 58)
+    local c = section:Row(options, "Toggle", 64)
     local value = options.Default == true
     local rt = c.Runtime
     local window = section.Tab.Window
@@ -1465,9 +1575,10 @@ function Toggle.new(section, options)
     local outline = UI.stroke(track, T.Line)
     local thumb = UI.frame(track, "Thumb", 4, 4, 12, 12, T.Secondary, 4)
     local notch = UI.frame(thumb, "Notch", 6, 4, 1, 4, T.Ink)
-    c.Layout = function(narrow)
-        track.Position = UDim2.new(1, -52, 0, narrow and 13 or 19)
-        state.Size = UDim2.fromOffset(36, narrow and 46 or 58)
+    c.Layout = function(place)
+        track.Position = UDim2.fromOffset(place.ControlX + place.ControlWidth - 36, place.ControlY + 6)
+        state.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
+        state.Size = UDim2.fromOffset(44, place.ControlHeight)
     end
     local function render(instant)
         state.Text = value and "ON" or "OFF"
@@ -1522,7 +1633,7 @@ local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
 if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
 
-local Lumi = {Version = "0.4.5", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.4.6", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] This library was destroyed; load a fresh library")

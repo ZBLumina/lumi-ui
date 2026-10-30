@@ -1,11 +1,12 @@
 local UI = require("UI")
 local T = require("Theme")
+local PropertyLayout = require("PropertyLayout")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Slider = {}
 
 function Slider.new(section, options)
-    local c = section:Row(options, "Slider", 90)
+    local c = section:Row(options, "Slider", 114)
     local rt, window = c.Runtime, section.Tab.Window
     local minimum, maximum = UI.number(options.Min, 0), UI.number(options.Max, 100)
     if minimum > maximum then minimum, maximum = maximum, minimum end
@@ -25,17 +26,24 @@ function Slider.new(section, options)
     end
     function c:Format(number) return UI.format(number, precision) end
     c.Suffix = options.Suffix or ""
+    -- Reserve the full formatted range once. Changing the current number must
+    -- never move the drag lane or push neighbouring controls while dragging.
+    local pattern = "%." .. tostring(precision) .. "f"
+    c.ControlWidth = math.max(
+        PropertyLayout.inputWidth(string.format(pattern, minimum) .. c.Suffix, T.Mono, 13, 96, 160),
+        PropertyLayout.inputWidth(string.format(pattern, maximum) .. c.Suffix, T.Mono, 13, 96, 160))
     c.Min, c.Max, c.Step = minimum, maximum, step
     c.Range = c:Format(minimum) .. " - " .. c:Format(maximum)
     c.Get = function() return value end
     function c:Fraction() return maximum == minimum and 0 or (value - minimum) / (maximum - minimum) end
-    local box = UI.new("TextBox", c.Row, {
-        Name = "ValueInput", Size = UDim2.fromOffset(76, 27), Position = UDim2.new(1, -92, 0, 12),
-        BackgroundTransparency = 0, BackgroundColor3 = T.Raised, TextColor3 = T.Accent,
+    local field = UI.frame(c.Row, "ValueField", 0, 0, 96, 32, T.Raised, 5)
+    field.ClipsDescendants, field.ZIndex = true, 2
+    local box = UI.new("TextBox", field, {
+        Name = "ValueInput", Size = UDim2.new(1, -20, 1, 0), Position = UDim2.fromOffset(10, 0),
+        TextColor3 = T.Accent,
         Font = T.Mono, TextSize = 13, ClearTextOnFocus = false, Text = "", ZIndex = 2,
     })
-    UI.corner(box, 5)
-    local border = UI.stroke(box, T.Line)
+    local border = UI.stroke(field, T.Line)
     c.ValueInput = box
     local track = UI.new("Frame", c.Row, {Name = "Track", Position = UDim2.fromOffset(18, 62),
         Size = UDim2.new(1, -36, 0, 2), BackgroundTransparency = 0, BackgroundColor3 = T.Line})
@@ -51,11 +59,23 @@ function Slider.new(section, options)
         local tick = UI.frame(track, "Tick", 0, 8, 1, 3, T.Line)
         tick.Position = UDim2.new(i / 4, 0, 0, 8)
     end
-    local low = UI.text(c.Row, "Minimum", UI.format(minimum), 18, 74, 90, 13, 9, T.Muted, T.Mono)
-    local high = UI.text(c.Row, "Maximum", UI.format(maximum), 0, 74, 90, 13, 9, T.Muted, T.Mono)
+    local low = UI.text(c.Row, "Minimum", c:Format(minimum), 18, 74, 90, 14, 11, T.Muted, T.Mono)
+    local high = UI.text(c.Row, "Maximum", c:Format(maximum), 0, 74, 90, 14, 11, T.Muted, T.Mono)
     high.Position = UDim2.new(1, -108, 0, 74)
     high.TextXAlignment = Enum.TextXAlignment.Right
-    low.Visible, high.Visible = options.ShowBounds ~= false, options.ShowBounds ~= false
+    c.ShowBounds = options.ShowBounds ~= false
+    low.Visible, high.Visible = c.ShowBounds, c.ShowBounds
+    c.Layout = function(place)
+        field.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
+        field.Size = UDim2.fromOffset(place.ControlWidth, place.ControlHeight)
+        track.Position = UDim2.fromOffset(place.LaneX, place.TrackY)
+        track.Size = UDim2.fromOffset(place.LaneWidth, 2)
+        hit.Position = UDim2.fromOffset(place.LaneX, place.HitY)
+        hit.Size = UDim2.fromOffset(place.LaneWidth, place.HitHeight)
+        low.Position, low.Size = UDim2.fromOffset(place.LaneX, place.BoundsY), UDim2.fromOffset(place.BoundsWidth, 14)
+        high.Position = UDim2.fromOffset(place.LaneX + place.LaneWidth - place.BoundsWidth, place.BoundsY)
+        high.Size = UDim2.fromOffset(place.BoundsWidth, 14)
+    end
     local dragging, hovered, focused = false, false, false
     local function emphasize()
         local active = dragging or hovered or focused

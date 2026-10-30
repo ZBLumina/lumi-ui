@@ -596,6 +596,114 @@ test("animation opt-out skips the programmatic button pulse", function()
     equal(scale.Scale, 1, "opt-out left a pending motion return")
 end)
 
+test("slider captions, drag input and bounds have separate safe areas", function()
+    local group, owner = section()
+    local slider = group:AddSlider({Name = "Intensity", Description = "Set the strength of the preview.", Min = 0, Max = 100, Default = 65})
+    local following = group:AddDropdown({Name = "Mode", Values = {"Balanced", "Smooth"}})
+    owner:FinishEntrance()
+    settle()
+    local scale = owner.Scale
+    local descriptionBottom = slider.DescriptionLabel.AbsolutePosition.Y + slider.DescriptionLabel.AbsoluteSize.Y
+    assert(slider.Input.AbsolutePosition.Y >= descriptionBottom + 8 * scale - 0.5, "slider drag target crowds its description")
+    local bounds = slider.Row:FindFirstChild("Maximum")
+    local boundsBottom = bounds.AbsolutePosition.Y + bounds.AbsoluteSize.Y
+    local rowBottom = slider.Row.AbsolutePosition.Y + slider.Row.AbsoluteSize.Y
+    assert(rowBottom - boundsBottom >= 10 * scale - 0.5, "slider bounds crowd the following row")
+    assert(following.Row.AbsolutePosition.Y >= boundsBottom + 10 * scale - 0.5, "next control reaches the slider bounds")
+end)
+
+test("narrow rows keep captions and controls inside their own space", function()
+    local group, owner = section()
+    local slider = group:AddSlider({Name = "Intensity", Description = "Adjust the preview.", Min = 0, Max = 100})
+    local button = group:AddButton({Name = "Preview action", Action = "Run preview"})
+    local dropdown = group:AddDropdown({Name = "Interaction mode", Values = {"Balanced", "Smooth"}})
+    local toggle = group:AddToggle({Name = "Enabled", Description = "Keep the current state."})
+    owner.Viewport.Size = UDim2.fromOffset(320, 500)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    for _, control in ipairs({slider, button, dropdown, toggle}) do
+        local field = control.ValueInput or (control.Kind == "Toggle" and control.Input.Switch or control.Input)
+        local left, right = control.Row.AbsolutePosition.X, control.Row.AbsolutePosition.X + control.Row.AbsoluteSize.X
+        assert(control.Label.AbsoluteSize.X >= 80 * owner.Scale - 0.5, control.Kind .. " caption collapsed")
+        assert(field.AbsolutePosition.X >= left + 8 * owner.Scale - 0.5, control.Kind .. " field escapes left edge")
+        assert(field.AbsolutePosition.X + field.AbsoluteSize.X <= right - 8 * owner.Scale + 0.5, control.Kind .. " field escapes right edge")
+    end
+    assert(toggle.Input.State.AbsolutePosition.X >= toggle.Row.AbsolutePosition.X + 8 * owner.Scale - 0.5, "toggle state escapes its row")
+    assert(toggle.Input.State.AbsolutePosition.X + toggle.Input.State.AbsoluteSize.X <= toggle.Input.Switch.AbsolutePosition.X - 8 * owner.Scale + 0.5,
+        "toggle state overlaps its switch")
+    local minimum, maximum = slider.Row.Minimum, slider.Row.Maximum
+    assert(minimum.AbsolutePosition.X + minimum.AbsoluteSize.X + 8 * owner.Scale <= maximum.AbsolutePosition.X + 0.5,
+        "slider endpoint labels overlap")
+end)
+
+test("slider value changes preserve its drag lane and following rows", function()
+    local group, owner = section()
+    local slider = group:AddSlider({Name = "Amount", Description = "Keep the drag lane still.", Min = 0, Max = 100000000, Default = 0, Suffix = " units"})
+    local following = group:AddButton({Name = "Next action"})
+    owner.Viewport.Size = UDim2.fromOffset(584, 600)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    local lane, height, nextRow = slider.Input.AbsolutePosition.Y, slider.Row.AbsoluteSize.Y, following.Row.AbsolutePosition.Y
+    slider:Set(100000000, true)
+    settle()
+    equal(slider.Input.AbsolutePosition.Y, lane, "value length moved the drag target")
+    equal(slider.Row.AbsoluteSize.Y, height, "value length changed the row height")
+    equal(following.Row.AbsolutePosition.Y, nextRow, "value length shifted the following control")
+end)
+
+test("narrow dropdown popovers contain captions and empty-state text", function()
+    local group, owner = section()
+    local dropdown = group:AddDropdown({Name = "Empty choices", Values = {}})
+    owner.Viewport.Size = UDim2.fromOffset(320, 500)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    dropdown:Open()
+    task.wait(0.15)
+    local menu = owner.OpenDropdown
+    for _, label in ipairs({menu.Caption, menu.Options.Empty}) do
+        assert(label.AbsolutePosition.X >= menu.AbsolutePosition.X, "popover text escapes its left edge")
+        assert(label.AbsolutePosition.X + label.AbsoluteSize.X <= menu.AbsolutePosition.X + menu.AbsoluteSize.X + 0.5,
+            "popover text escapes its right edge")
+    end
+end)
+
+test("long property descriptions fit above their stacked action", function()
+    local group, owner = section()
+    local button = group:AddButton({Name = "Restore the current workspace properties",
+        Description = "Restore every property in this local preview to its original value while keeping the current workspace open and ready for the next adjustment.", Action = "Restore"})
+    owner.Viewport.Size = UDim2.fromOffset(500, 600)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    assert(button.Label.TextFits, "long property name is clipped")
+    assert(button.DescriptionLabel.TextFits, "description is clipped instead of reflowing")
+    local bottom = button.DescriptionLabel.AbsolutePosition.Y + button.DescriptionLabel.AbsoluteSize.Y
+    assert(button.Input.AbsolutePosition.Y >= bottom + 8 * owner.Scale - 0.5, "action overlaps its description")
+    assert(button.Input.AbsolutePosition.Y + button.Input.AbsoluteSize.Y <= button.Row.AbsolutePosition.Y + button.Row.AbsoluteSize.Y - 8 * owner.Scale + 0.5,
+        "stacked action reaches the next row")
+end)
+
+test("resizing lays out hidden controls below the visible page", function()
+    local owner = window()
+    owner:AddTab("First")
+    local hidden = owner:AddTab("Hidden")
+    local group = hidden:AddSection("More controls")
+    local last
+    for i = 1, 12 do last = group:AddButton({Name = "Inspect input", Description = "Exercises a placeholder action.", Action = "Inspect"}) end
+    owner.Viewport.Size = UDim2.fromOffset(640, 360)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    owner.Viewport.Size = UDim2.fromOffset(420, 700)
+    settle(); owner:Fit(); owner:SelectTab(hidden); settle()
+    local edge = last.Row.AbsolutePosition.X + last.Row.AbsoluteSize.X
+    assert(last.Label.AbsolutePosition.X + last.Label.AbsoluteSize.X <= edge - 8 * owner.Scale + 0.5,
+        "hidden caption retained its old width after resize")
+    local bottom = last.DescriptionLabel.AbsolutePosition.Y + last.DescriptionLabel.AbsoluteSize.Y
+    assert(last.Input.AbsolutePosition.Y >= bottom + 8 * owner.Scale - 0.5, "hidden field retained its old inline placement")
+end)
+
+test("medium viewports keep property text readable instead of shrinking the desktop", function()
+    local group, owner = section()
+    local toggle = group:AddToggle({Name = "Readable state", Description = "Keep this property visible."})
+    owner.Viewport.Size = UDim2.fromOffset(850, 720)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    assert(toggle.Label.TextSize * owner.Scale >= 11, "medium viewport shrinks property text below 11px")
+end)
+
 local function cleanupCase()
     local errors = {}
     -- Release yielding callbacks before disposing their real BindableEvents.

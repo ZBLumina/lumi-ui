@@ -1,5 +1,6 @@
 local UI = require("UI")
 local T = require("Theme")
+local PropertyLayout = require("PropertyLayout")
 local Button = require("controls/Button")
 local Toggle = require("controls/Toggle")
 local Slider = require("controls/Slider")
@@ -19,19 +20,33 @@ function Section.new(tab, name, options)
     local header = UI.new("Frame", frame, {Name = "SectionHeader", Size = UDim2.new(1, 0, 0, 43), LayoutOrder = 0})
     local index = #tab.Sections + 1
     UI.text(header, "Index", string.format("%02d", index), 16, 0, 26, 43, 10, T.Muted, T.Mono)
-    UI.text(header, "Title", name, 45, 0, 440, 43, 13, T.Text, T.Medium).Size = UDim2.new(1, -190, 0, 43)
+    local heading = UI.text(header, "Title", name, 45, 0, 440, 43, 13, T.Text, T.Medium)
     local tag = UI.text(header, "Tag", options.Tag or "PROPERTIES", 510, 0, 116, 43, 9, T.Muted, T.Mono)
     tag.TextXAlignment = Enum.TextXAlignment.Right
     tag.Position = UDim2.new(1, -132, 0, 0)
-    local self = setmetatable({Name = tostring(name), Tab = tab, Frame = frame, Content = frame, Controls = {}, _order = 0}, Section)
+    local self = setmetatable({Name = tostring(name), Tab = tab, Frame = frame, Content = frame, Controls = {},
+        Heading = heading, Tag = tag, _order = 0}, Section)
     table.insert(tab.Sections, self)
+    local function fitHeader() self:Relayout() end
+    tab.Window.Runtime:Connect(header:GetPropertyChangedSignal("AbsoluteSize"), fitHeader)
+    fitHeader()
     return self
+end
+
+function Section:GetWidth()
+    return self.Tab:GetContentWidth() * self.Frame.Size.X.Scale + self.Frame.Size.X.Offset
+end
+
+function Section:Relayout()
+    local wide = self:GetWidth() >= 420
+    self.Tag.Visible = wide
+    self.Heading.Size = UDim2.new(1, wide and -190 or -61, 0, 43)
 end
 
 function Section:Row(options, kind, height)
     self._order += 1
     local row = UI.new("Frame", self.Content, {Name = (options.Name or kind) .. "Row",
-        Size = UDim2.new(1, 0, 0, height or 56), LayoutOrder = self._order})
+        Size = UDim2.new(1, 0, 0, height or 64), LayoutOrder = self._order, ClipsDescendants = true})
     local selection = UI.frame(row, "SelectionWash", 6, 5, 0, 0, T.AccentWash, 4)
     selection.Size = UDim2.new(1, -12, 1, -10)
     selection.BackgroundTransparency, selection.Visible = 0.4, false
@@ -39,6 +54,8 @@ function Section:Row(options, kind, height)
         Position = UDim2.fromOffset(16, 0), BackgroundTransparency = 0, BackgroundColor3 = T.SoftLine})
     local title = UI.text(row, "Name", options.Name or kind, 16, 12, 330, 18, 14, T.Text, T.Medium)
     local description = UI.text(row, "Description", options.Description or "", 16, 33, 350, 15, 12, T.Muted)
+    title.TextWrapped, description.TextWrapped = true, true
+    title.TextTruncate, description.TextTruncate = Enum.TextTruncate.None, Enum.TextTruncate.None
     local control = {Name = options.Name or kind, Description = options.Description or "", Kind = kind,
         Row = row, Section = self, Runtime = self.Tab.Window.Runtime, Label = title, DescriptionLabel = description,
         SelectionWash = selection}
@@ -49,15 +66,16 @@ function Section:Row(options, kind, height)
         if self.Section.Tab.Window.SelectedControl == self then self:Focus() end
     end
     function control:Relayout()
-        local narrow = row.AbsoluteSize.X / math.max(0.1, self.Section.Tab.Window.Scale) < 560
-        local reserve = kind == "Slider" and 128 or (kind == "Toggle" and 144 or (narrow and 32 or 280))
-        title.Size = UDim2.new(1, -reserve, 0, 18)
-        description.Size = UDim2.new(1, -(kind == "Toggle" and narrow and 32 or reserve), 0, 15)
-        description.Position = UDim2.fromOffset(16, kind == "Toggle" and narrow and 43 or 33)
-        description.TextSize = 12
-        local rowHeight = narrow and ((kind == "Dropdown" or kind == "Button") and 96 or (kind == "Toggle" and 68 or height)) or height
-        row.Size = UDim2.new(1, 0, 0, rowHeight or 56)
-        if self.Layout then self.Layout(narrow) end
+        local width = self.Section:GetWidth() * row.Size.X.Scale + row.Size.X.Offset
+        if width <= 0 then return end
+        local placement = PropertyLayout.measure(self, width)
+        title.Position = UDim2.fromOffset(16, placement.TitleY)
+        title.Size = UDim2.fromOffset(placement.TextWidth, placement.TitleHeight)
+        description.Position = UDim2.fromOffset(16, placement.DescriptionY)
+        description.Size = UDim2.fromOffset(placement.TextWidth, placement.DescriptionHeight)
+        description.Visible = placement.DescriptionHeight > 0
+        row.Size = UDim2.new(1, 0, 0, placement.Height)
+        if self.Layout then self.Layout(placement) end
     end
     table.insert(self.Controls, control)
     table.insert(self.Tab.Controls, control)

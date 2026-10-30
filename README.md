@@ -1,6 +1,8 @@
 # Lumi UI
 
-A modular Luau interface library for Potassium. **v0.4.5 is a visual pilot**: warm charcoal surfaces, compact property groups, restrained motion, and a contextual inspector. Demo actions affect the interface only.
+A modular Luau interface library for Potassium. **v0.4.6 is a visual pilot**: warm charcoal surfaces, compact property groups, restrained motion, and a contextual inspector. Demo actions affect the interface only.
+
+Property rows now measure and wrap their text, keep clear gaps between captions and fields, and stack fields when space is insufficient. Controls share a 32px visual height; sliders have separate drag/bounds lanes and a padded value field. Narrow popovers contain their captions and empty states. See the [layout design and validation](docs/design/studio-v046-layout.md).
 
 The panel shadow now uses a smooth ambient falloff and a tighter contact shadow, with antialiased native geometry that follows resizing and animation. The bottom-right silhouette also matches the rounded shell. See the [shadow notes and validation](docs/design/studio-v045-shadow.md).
 
@@ -56,7 +58,7 @@ Tabs optionally accept `Icon = "Grid"`, `"Sliders"`, or `"Layers"`. Missing or u
 - Dropdown defaults fall back to the first value when invalid; empty lists keep `nil`. Invalid setters leave state unchanged. Long lists scroll; menus close on outside click, Escape, tab change, content scroll, window move, or focus loss.
 - State changes precede protected asynchronous callbacks. Errors are logged without breaking the control. Destruction cancels suspended callbacks started by Lumi. Work independently spawned by user callbacks remains the caller's responsibility. A callback that destroys its own window may finish its current invocation safely.
 - Each load replaces the previous Lumi library through an executor environment registry. Windows within the same library remain independent. Mounting tries `gethui()`, `CoreGui`, then an existing `PlayerGui`. Destruction disconnects tracked input/service connections and cancels active UI tweens.
-- The desktop canvas is 1100 x 660. Narrow or short viewports hide the inspector, reduce the window's dimensions, and scroll content. Narrow property rows stack their actions below their labels, retaining 13px body text at 640 x 360. Extremely small viewports can still scale down. Mouse and touch paths are implemented; the validation record states which paths were exercised.
+- The desktop canvas is 1100 x 688. Viewports that cannot fit the desktop hide the inspector and adapt the window dimensions before scaling. Property names remain 14px and descriptions 12px; long text grows its row and fields stack when needed. Compact content scrolls. Extremely small viewports can still scale down. Mouse and touch paths are implemented; the validation record states which paths were exercised.
 
 Known pilot limitation: changing a dropdown programmatically while its menu is open updates the stored value and selector, but the menu's selection marker refreshes on reopening. Close the menu before programmatic updates when the visual marker matters.
 
@@ -80,6 +82,7 @@ src/
   Window.luau       shell, inspector, input, scaling
   Tab.luau          navigation and scrolling pages
   Section.luau      property groups and shared rows
+  PropertyLayout.luau measured caption/field placement
   components/      contextual inspector presentation
   controls/         Button, Toggle, Slider, Dropdown
 examples/potassium-pilot.luau   demo content

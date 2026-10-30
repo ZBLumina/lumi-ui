@@ -9,14 +9,15 @@ local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
 Window.__index = Window
+local DESKTOP_HEIGHT = 688
 
 function Window.new(options)
     local rt = Runtime.new()
     rt.Animations = options.Animations ~= false
     local root = rt:Mount()
     local self = setmetatable({Runtime = rt, Root = root, Tabs = {}, _destroyed = false,
-        Width = 1100, Height = 660, Scale = 1, OpenDropdown = nil}, Window)
-    local main = UI.frame(root, "Main", 0, 0, 1100, 660, T.Shell, 12)
+        Width = 1100, Height = DESKTOP_HEIGHT, Scale = 1, OpenDropdown = nil}, Window)
+    local main = UI.frame(root, "Main", 0, 0, 1100, DESKTOP_HEIGHT, T.Shell, 12)
     main.Active = true
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.Position = UDim2.fromScale(0.5, 0.5)
@@ -47,7 +48,7 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "Studio / 0.4.5", 33, 38, 110, 16, 11, T.Muted)
+    UI.text(footer, "Version", "Studio / 0.4.6", 33, 38, 110, 16, 11, T.Muted)
     UI.frame(main, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
     local chrome = UI.frame(main, "Chrome", 184, 0, 916, 48)
@@ -78,7 +79,7 @@ function Window.new(options)
     UI.line(status, 0, 0, 916)
     UI.frame(status, "Dot", 22, 11, 5, 5, T.Green, 3)
     self.StatusText = UI.text(status, "State", "Ready", 35, 0, 560, 28, 10, T.Secondary)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.5", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.6", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -145,9 +146,9 @@ function Window:Fit()
     self._lastViewport = size
     self:FinishEntrance(resized)
     self:ClosePopup()
-    local compact = size.X < 850 or size.Y < 692
+    local compact = size.X < 1132 or size.Y < DESKTOP_HEIGHT + 32
     self.Width = compact and math.max(320, math.min(1100, size.X - 32)) or 1100
-    self.Height = math.max(280, math.min(660, size.Y - 32))
+    self.Height = math.max(280, math.min(DESKTOP_HEIGHT, size.Y - 32))
     self.SidebarWidth = size.X < 700 and 140 or 184
     local sideWidth = self.SidebarWidth
     self.Inspector.Visible = not compact
@@ -302,6 +303,7 @@ function Window:SelectTab(tab)
     if self.ActiveTab == tab then return end
     local previous = self.ActiveTab
     self.ActiveTab = tab
+    tab:Relayout()
     for _, item in ipairs(self.Tabs) do
         item.Motion:Finish()
         self.Runtime:CancelTween(item.Page, "position")
