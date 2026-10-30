@@ -1,6 +1,7 @@
 local UI = require("UI")
 local T = require("Theme")
 local PropertyLayout = require("PropertyLayout")
+local Textos = require("Textos")
 local Button = {}
 
 function Button.new(section, options)
@@ -10,7 +11,7 @@ function Button.new(section, options)
     local secondary = options.Variant == "Secondary"
     local normal = secondary and T.Raised or T.Accent
     local hover = secondary and T.Hover or T.AccentHover
-    local action = UI.button(c.Row, "Action", options.Action or "Run action", 0, 15, 144, 30)
+    local action = UI.button(c.Row, "Action", options.Action or Textos.ejecutar, 0, 15, 144, 30)
     action.AnchorPoint = Vector2.new(0.5, 0.5)
     action.Position = UDim2.new(1, -88, 0, 30)
     action.BackgroundTransparency = 0
@@ -33,20 +34,20 @@ function Button.new(section, options)
         action.Position = UDim2.fromOffset(place.ControlX + place.ControlWidth / 2, place.ControlY + place.ControlHeight / 2)
     end
     local count = 0
-    c.Get = function() return count == 0 and "Ready" or (tostring(count) .. " completed") end
+    c.Get = function() return Textos.estadoAccion(count) end
     function c:Press()
         if rt.Destroyed or window._closing then return false end
         window:FinishEntrance()
         count += 1
         local generation = count
         self:Focus()
-        action.Text = "Completed"
+        action.Text = Textos.completado
         if rt.Animations ~= false then
             rt:Tween(scale, {Scale = 0.975}, 0.07)
             rt:Delay(0.07, function() if generation == count then settleScale() end end)
         end
         rt:Delay(0.7, function()
-            if generation == count then action.Text = options.Action or "Run action" end
+            if generation == count then action.Text = options.Action or Textos.ejecutar end
         end)
         rt:Callback(options.Callback)
         return true

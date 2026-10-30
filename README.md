@@ -1,97 +1,99 @@
 # Lumi UI
 
-A modular Luau interface library for Potassium. **v0.4.6 is a visual pilot**: warm charcoal surfaces, compact property groups, restrained motion, and a contextual inspector. Demo actions affect the interface only.
+Biblioteca modular de interfaces en Luau para Potassium. **La versión v0.4.7 presenta toda la interfaz y su demostración en español**, con superficies de carbón cálido, acentos crema, controles precisos, animaciones sutiles y un inspector contextual. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
 
-Property rows now measure and wrap their text, keep clear gaps between captions and fields, and stack fields when space is insufficient. Controls share a 32px visual height; sliders have separate drag/bounds lanes and a padded value field. Narrow popovers contain their captions and empty states. See the [layout design and validation](docs/design/studio-v046-layout.md).
+Los textos propios de la biblioteca se concentran en `src/Textos.luau`: navegación, etiquetas, estados, ayudas, tipos de control, listas vacías y confirmaciones. La demostración también traduce todos sus títulos, descripciones y opciones. Se conservan los nombres de producto Lumi UI, Potassium y Luau, junto con los identificadores técnicos de la API. Los textos personalizados que proporciona quien usa la biblioteca se muestran tal como se reciben.
 
-Inspector values also fit their measured text width, so short statuses with wide characters remain readable.
+## Probar la versión actual en Potassium
 
-The panel shadow now uses a smooth ambient falloff and a tighter contact shadow, with antialiased native geometry that follows resizing and animation. The bottom-right silhouette also matches the rounded shell. See the [shadow notes and validation](docs/design/studio-v045-shadow.md).
-
-The latest design pass adds native geometric navigation icons, actual control counts, a clearer page heading and an inset selection wash. The inspector now distinguishes numeric ranges, binary states, discrete options (including empty collections), and actions. Its graphics explain the selected control rather than showing the same meter everywhere. See the [context design and validation](docs/design/studio-v044-context.md).
-
-Motion uses short Quart Out transitions: a 220ms window entrance, 160ms user dismissal, 140ms page reveal, brief popovers, tactile button feedback and smooth slider presentation. Values and tab state change immediately; dragging follows the pointer directly. Use `Window:Close()` for animated dismissal; `Window:Destroy()` remains immediate for cleanup/reinjection. Set `Animations = false` in `CreateWindow` to disable interpolation and button pulses. See the [motion design and validation](docs/design/studio-v043-motion.md).
-
-The readability pass raises text contrast, sets an 11px minimum for shared text labels, uses 14px medium-weight property names and 12px descriptions, and makes navigation, dropdown and inspector text easier to read. Layout and control behavior remain unchanged.
-
-The finesse pass refines type weights, outlines and spacing; gives the inspector its own inset surface and fine value ruler; and preserves comfortable hit areas behind more delicate visible controls. Buttons accept `Variant = "Secondary"` for a quiet outlined treatment. The default remains the cream primary action. See the [finesse notes](docs/design/studio-v04-finesse.md).
-
-## Run the pilot
+Esta versión se desarrolla en la rama del PR. Para probarla:
 
 ```luau
-loadstring(game:HttpGet("https://raw.githubusercontent.com/ZBLumina/lumi-ui/main/dist/LumiUI.pilot.luau"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/ZBLumina/lumi-ui/feat/lumi-studio-v04/dist/LumiUI.pilot.luau"))()
 ```
 
-The loader follows `main`. To preview an unmerged branch, replace `main` with that branch or a commit SHA. `examples/potassium-loader.luau` retains the stable loader.
+La dirección que usa `main`, conservada en `examples/potassium-loader.luau`, sigue la versión publicada de esa rama. También puedes ejecutar el archivo completo `dist/LumiUI.pilot.luau` mediante Potassium.
 
-## Use the library
+## Usar la biblioteca
 
-`dist/LumiUI.luau` returns the library without creating demo content. `dist/LumiUI.pilot.luau` includes the three-page playground.
+`dist/LumiUI.luau` devuelve la biblioteca sin crear la demostración. `dist/LumiUI.pilot.luau` incluye las páginas Inicio, Jugador y Aspecto.
 
 ```luau
-local Lumi = loadstring(game:HttpGet("https://raw.githubusercontent.com/ZBLumina/lumi-ui/main/dist/LumiUI.luau"))()
-local Window = Lumi:CreateWindow({Title = "Lumi"})
-local Home = Window:AddTab("Home", {Description = "Your local workspace."})
-local General = Home:AddSection("General")
+local Lumi = loadstring(game:HttpGet("https://raw.githubusercontent.com/ZBLumina/lumi-ui/feat/lumi-studio-v04/dist/LumiUI.luau"))()
+local ventana = Lumi:CreateWindow({Title = "Lumi"})
+local inicio = ventana:AddTab("Inicio", {Description = "Tu espacio de trabajo."})
+local general = inicio:AddSection("General")
 
-local enabled = General:AddToggle({Name = "Enabled", Default = false,
-    Callback = function(value) print(value) end})
-local intensity = General:AddSlider({Name = "Intensity", Min = 0, Max = 100,
-    Default = 65, Step = 1, Suffix = "%", Callback = function(value) print(value) end})
-General:AddDropdown({Name = "Mode", Values = {"Default", "Smooth", "Precise"},
-    Default = "Default", Callback = function(value) print(value) end})
-General:AddButton({Name = "Execute", Action = "Run preview",
-    Callback = function() print("Executed") end})
+local activo = general:AddToggle({Name = "Activar espacio", Default = false,
+    Callback = function(valor) print(valor and "Activado" or "Desactivado") end})
+local intensidad = general:AddSlider({Name = "Intensidad", Min = 0, Max = 100,
+    Default = 65, Step = 1, Suffix = "%", Callback = function(valor) print(valor) end})
+general:AddDropdown({Name = "Modo", Values = {"Equilibrado", "Suave", "Preciso"},
+    Default = "Equilibrado", Callback = function(valor) print(valor) end})
+general:AddButton({Name = "Acción de prueba", Action = "Probar",
+    Callback = function() print("Acción completada") end})
 
-enabled:Set(true)           -- state first, callback asynchronously
-intensity:Set(40, true)     -- silent update
-intensity:Focus()           -- select in inspector
-print(intensity:Get())
--- Window:Close()           -- short animated dismissal, safe to repeat
--- Window:Destroy()         -- immediate cleanup, safe to repeat
--- Lumi:Destroy()           -- destroys all owned windows
+activo:Set(true)          -- Actualiza el estado y después llama a la función.
+intensidad:Set(40, true)  -- El segundo argumento omite la función asociada.
+intensidad:Focus()        -- Selecciona el control en el inspector.
+print(intensidad:Get())
+-- ventana:Close()        -- Cierre animado; se puede repetir de forma segura.
+-- ventana:Destroy()      -- Limpieza inmediata; se puede repetir.
+-- Lumi:Destroy()         -- Cierra todas las ventanas de esta biblioteca.
 ```
 
-All controls accept `Name`, `Description`, and `Callback`. Value controls expose `Get()`, `Set(value, silent?)`, and `Focus()`. Buttons expose `Press()` and a display status through `Get()`. Dropdowns also expose `Open()` / `Close()`.
+Todos los controles aceptan `Name`, `Description` y `Callback`. Los controles con valor ofrecen `Get()`, `Set(valor, omitirFuncion?)` y `Focus()`. Los botones ofrecen `Press()` y un estado legible mediante `Get()`: «Listo», «1 ejecución», «2 ejecuciones»… Los selectores también ofrecen `Open()` y `Close()`.
 
-Tabs optionally accept `Icon = "Grid"`, `"Sliders"`, or `"Layers"`. Missing or unknown icon names use Grid. Icons use native GUI geometry; no external images or special font glyphs are required. Navigation counts hide on narrow sidebars to preserve tab labels.
+Las páginas aceptan opcionalmente `Icon = "Grid"`, `"Sliders"` o `"Layers"`: cuadrícula, ajustes o capas. Son identificadores técnicos de iconos geométricos nativos. Si falta el valor o no se reconoce, se usa la cuadrícula. Los contadores se ocultan en barras laterales estrechas para conservar el espacio de los nombres.
 
-- Slider bounds normalize if reversed. Equal bounds stay fixed. Defaults and setters clamp; invalid/nonfinite numbers use safe finite fallbacks. `Step` defaults to 1. Both endpoints remain reachable. Click the numeric value to type a value; focused sliders support left/right arrows.
-- Dropdown defaults fall back to the first value when invalid; empty lists keep `nil`. Invalid setters leave state unchanged. Long lists scroll; menus close on outside click, Escape, tab change, content scroll, window move, or focus loss.
-- State changes precede protected asynchronous callbacks. Errors are logged without breaking the control. Destruction cancels suspended callbacks started by Lumi. Work independently spawned by user callbacks remains the caller's responsibility. A callback that destroys its own window may finish its current invocation safely.
-- Each load replaces the previous Lumi library through an executor environment registry. Windows within the same library remain independent. Mounting tries `gethui()`, `CoreGui`, then an existing `PlayerGui`. Destruction disconnects tracked input/service connections and cancels active UI tweens.
-- The desktop canvas is 1100 x 688. Viewports that cannot fit the desktop hide the inspector and adapt the window dimensions before scaling. Property names remain 14px and descriptions 12px; long text grows its row and fields stack when needed. Compact content scrolls. Extremely small viewports can still scale down. Mouse and touch paths are implemented; the validation record states which paths were exercised.
+## Distribución e interacción
 
-Known pilot limitation: changing a dropdown programmatically while its menu is open updates the stored value and selector, but the menu's selection marker refreshes on reopening. Close the menu before programmatic updates when the visual marker matters.
+- Los campos y botones comparten una altura visual de 32 px y se alinean por el extremo derecho. Los nombres usan 14 px y las descripciones 12 px. El texto largo hace crecer la fila; cuando falta espacio, el campo pasa debajo del texto.
+- Los deslizadores separan la cabecera, la zona de arrastre y los límites. El campo numérico reserva espacio según su rango y sufijo para mantener estable el carril durante el arrastre. Los límites invertidos se normalizan, los valores se ajustan al rango y ambos extremos siguen siendo alcanzables. Si mínimo y máximo coinciden, el valor permanece fijo. `Step` vale 1 si no se especifica.
+- Pulsa el valor numérico para escribirlo. Los deslizadores seleccionados también admiten las flechas izquierda y derecha. Las listas largas permiten desplazamiento; las listas vacías conservan `nil`. Los valores no válidos no cambian la selección.
+- Los menús se cierran al pulsar fuera, usar Escape, cambiar de página, desplazar el contenido, mover la ventana o perder el foco.
+- El lienzo de escritorio mide 1100 × 688. Las ventanas que no pueden alojarlo adaptan sus dimensiones y ocultan el inspector antes de reducir la escala. El contenido compacto se desplaza. Los tamaños extremadamente pequeños todavía pueden reducir la escala.
 
-## Develop and build
+El inspector distingue rangos numéricos, estados, opciones discretas y acciones. Ajusta el tamaño de sus valores según el ancho real del texto. La sombra combina una caída ambiental suave con una sombra de contacto y acompaña las esquinas, el tamaño y las animaciones del panel.
 
-Requires Node.js 18+; no npm dependencies.
+Las transiciones usan una desaceleración breve: apertura de 220 ms, cierre de 160 ms, cambio de página de 140 ms y menús de aparición rápida. Los valores cambian inmediatamente y el arrastre sigue al cursor. `Window:Close()` anima el cierre; `Window:Destroy()` limpia inmediatamente. `CreateWindow({Animations = false})` desactiva la interpolación y los pequeños pulsos de los botones.
+
+## Ejecución y limpieza
+
+El estado se actualiza antes de ejecutar la función asociada, que se protege para que sus errores no rompan el control. La destrucción cancela las funciones suspendidas que inició Lumi. El trabajo que una función del usuario inicie por su cuenta sigue siendo responsabilidad de quien lo creó.
+
+Cada carga reemplaza la biblioteca anterior mediante un registro del entorno de ejecución. Las ventanas de una misma biblioteca son independientes. El montaje intenta usar `gethui()`, después `CoreGui` y, por último, un `PlayerGui` existente. La limpieza desconecta las conexiones y cancela las animaciones activas. No se descargan módulos durante la ejecución.
+
+Limitación conocida: si cambias un selector por código mientras su menú está abierto, el valor y el campo se actualizan, pero la marca de selección del menú se renueva al volver a abrirlo.
+
+## Desarrollo
+
+Se requiere Node.js 18 o posterior. No hay dependencias de npm.
 
 ```sh
 npm run build
 npm run check
 ```
 
-Edit `src/`, then build. Do not edit generated `dist/` files. Modules use literal source-root-relative imports such as `require("controls/Slider")`; the bundler resolves them locally and rejects missing/circular imports. No module is downloaded at runtime.
+Edita `src/` y genera los archivos; `dist/` contiene resultados generados. Las importaciones usan identificadores literales relativos a `src/`, como `require("controls/Slider")`. El generador resuelve los módulos de forma local y rechaza las dependencias inexistentes o circulares.
 
 ```text
 src/
-  init.luau         API and reinjection registry
-  Runtime.luau      mounting, connections, tweens, cleanup
-  Theme.luau        warm Lumi tokens
-  UI.luau           native GUI primitives
-  Window.luau       shell, inspector, input, scaling
-  Tab.luau          navigation and scrolling pages
-  Section.luau      property groups and shared rows
-  PropertyLayout.luau measured caption/field placement
-  components/      contextual inspector presentation
-  controls/         Button, Toggle, Slider, Dropdown
-examples/potassium-pilot.luau   demo content
-scripts/build.mjs              standalone bundler
-tests/runtime.spec.luau        real Roblox assertions
+  init.luau           API y registro de recarga
+  Runtime.luau        montaje, conexiones, animaciones y limpieza
+  Theme.luau          colores y tipografías
+  Textos.luau         textos de la interfaz en español
+  UI.luau             elementos gráficos nativos
+  Window.luau         ventana, entrada y escalado
+  Tab.luau            navegación y páginas
+  Section.luau        grupos y filas
+  PropertyLayout.luau distribución medida de textos y campos
+  components/         inspector y sombra
+  controls/           botón, interruptor, deslizador y selector
 ```
 
-The build also generates `tests/runtime.bundle.luau` (Git-ignored). Execute the whole file through Potassium in a Roblox client. It uses real Instances/service connections, creates temporary windows, prints a `[LUMI TEST] summary`, and cleans up. Two warnings from intentionally throwing callbacks are expected; failures end with an error.
+La generación también produce `tests/runtime.bundle.luau`, excluido de Git. Ejecútalo completo en un cliente de Roblox mediante Potassium. Usa instancias y conexiones reales, crea ventanas temporales y las limpia. Las dos advertencias de las funciones que fallan intencionalmente forman parte de la prueba de aislamiento de errores.
 
-Visual quality is assessed in Roblox separately from the assertion suite. See the [design](docs/superpowers/specs/2026-10-29-studio-design.md), [plan](docs/superpowers/plans/2026-10-29-studio-v04.md), and [validation](docs/design/studio-v04-validation.md).
+La verificación de esta traducción se registra en [las notas de español](docs/design/studio-v047-espanol.md). Los registros históricos de [distribución](docs/design/studio-v046-layout.md), [sombra](docs/design/studio-v045-shadow.md) y [movimiento](docs/design/studio-v043-motion.md) documentan las mejoras previas.
+
+Cuando Potassium esté disponible, puedes ejecutar `examples/verificar-espanol.luau` después de la demostración para revisar los textos de las páginas, los estados, los menús y los valores predeterminados. La comprobación de esta versión dentro de Roblox sigue pendiente; los resultados previos de ejecución no equivalen a verificar esta traducción.

@@ -3,10 +3,10 @@ local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
 if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
 
-local Lumi = {Version = "0.4.6", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.4.7", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
-    assert(not self._destroyed, "[Lumi UI] This library was destroyed; load a fresh library")
+    assert(not self._destroyed, "[Lumi UI] La biblioteca está cerrada; vuelve a cargarla para continuar")
     local window = Window.new(options or {})
     table.insert(self._windows, window)
     return window

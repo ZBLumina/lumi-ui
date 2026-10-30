@@ -1,6 +1,7 @@
 local UI = require("UI")
 local T = require("Theme")
 local PropertyLayout = require("PropertyLayout")
+local Textos = require("Textos")
 local Button = require("controls/Button")
 local Toggle = require("controls/Toggle")
 local Slider = require("controls/Slider")
@@ -21,7 +22,7 @@ function Section.new(tab, name, options)
     local index = #tab.Sections + 1
     UI.text(header, "Index", string.format("%02d", index), 16, 0, 26, 43, 10, T.Muted, T.Mono)
     local heading = UI.text(header, "Title", name, 45, 0, 440, 43, 13, T.Text, T.Medium)
-    local tag = UI.text(header, "Tag", options.Tag or "PROPERTIES", 510, 0, 116, 43, 9, T.Muted, T.Mono)
+    local tag = UI.text(header, "Tag", options.Tag or Textos.ajustes, 510, 0, 116, 43, 9, T.Muted, T.Mono)
     tag.TextXAlignment = Enum.TextXAlignment.Right
     tag.Position = UDim2.new(1, -132, 0, 0)
     local self = setmetatable({Name = tostring(name), Tab = tab, Frame = frame, Content = frame, Controls = {},
@@ -52,11 +53,12 @@ function Section:Row(options, kind, height)
     selection.BackgroundTransparency, selection.Visible = 0.4, false
     local rule = UI.new("Frame", row, {Name = "Divider", Size = UDim2.new(1, -32, 0, 1),
         Position = UDim2.fromOffset(16, 0), BackgroundTransparency = 0, BackgroundColor3 = T.SoftLine})
-    local title = UI.text(row, "Name", options.Name or kind, 16, 12, 330, 18, 14, T.Text, T.Medium)
+    local nombre = options.Name or Textos.nombreTipo(kind)
+    local title = UI.text(row, "Name", nombre, 16, 12, 330, 18, 14, T.Text, T.Medium)
     local description = UI.text(row, "Description", options.Description or "", 16, 33, 350, 15, 12, T.Muted)
     title.TextWrapped, description.TextWrapped = true, true
     title.TextTruncate, description.TextTruncate = Enum.TextTruncate.None, Enum.TextTruncate.None
-    local control = {Name = options.Name or kind, Description = options.Description or "", Kind = kind,
+    local control = {Name = nombre, Description = options.Description or "", Kind = kind,
         Row = row, Section = self, Runtime = self.Tab.Window.Runtime, Label = title, DescriptionLabel = description,
         SelectionWash = selection}
     control.FocusIndicator = UI.new("Frame", row, {Name = "FocusIndicator", Position = UDim2.fromOffset(0, 14),

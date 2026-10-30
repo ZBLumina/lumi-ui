@@ -47,7 +47,7 @@ function Runtime:Delay(duration, callback)
         if self.Destroyed then self.Threads[thread] = nil; return end
         local ok, problem = pcall(callback)
         self.Threads[thread] = nil
-        if not ok then warn("[Lumi UI] delayed work error: " .. tostring(problem)) end
+        if not ok then warn("[Lumi UI] error en la tarea programada: " .. tostring(problem)) end
     end)
     self.Threads[thread] = true
     task.delay(duration, thread)
@@ -69,7 +69,7 @@ function Runtime:Callback(callback, ...)
         if self.Destroyed then self.Threads[thread] = nil; return end
         local ok, problem = pcall(callback, table.unpack(args, 1, args.n))
         self.Threads[thread] = nil
-        if not ok then warn("[Lumi UI] callback error: " .. tostring(problem)) end
+        if not ok then warn("[Lumi UI] error en la función: " .. tostring(problem)) end
     end)
     self.Threads[thread] = true
     task.spawn(thread)
@@ -118,7 +118,7 @@ function Runtime:Mount()
         local ok = pcall(function() root.Parent = parent end)
         if ok then break end
     end
-    assert(root.Parent, "[Lumi UI] No writable GUI parent")
+    assert(root.Parent, "[Lumi UI] No se encontró un contenedor disponible para la interfaz")
     -- Remove the pre-modular pilot root when upgrading from v0.3.
     local legacy = root.Parent:FindFirstChild("LumiUIPilot_v01")
     if legacy then legacy:Destroy() end

@@ -2,12 +2,13 @@ local UI = require("UI")
 local T = require("Theme")
 local Section = require("Section")
 local Motion = require("Motion")
+local Textos = require("Textos")
 local Tab = {}
 Tab.__index = Tab
 
 function Tab.new(window, name, options)
     local index = #window.Tabs + 1
-    local self = setmetatable({Name = tostring(name), Description = options.Description or "A considered space for precise adjustments.",
+    local self = setmetatable({Name = tostring(name), Description = options.Description or Textos.descripcionPagina,
         Window = window, Sections = {}, Controls = {}}, Tab)
     local button = UI.button(window.Navigation, tostring(name) .. "TabButton", "", 0, 0, 160, 42)
     button.Size = UDim2.new(1, 0, 0, 42)
@@ -36,14 +37,14 @@ function Tab.new(window, name, options)
     header.Size = UDim2.new(1, 0, 0, 82)
     header.LayoutOrder = 0
     self.Header = header
-    UI.text(header, "Eyebrow", options.Eyebrow or string.format("WORKSPACE / %02d", index), 0, 0, 540, 13, 11, T.Muted, T.Medium).Size = UDim2.new(1, 0, 0, 13)
+    UI.text(header, "Eyebrow", options.Eyebrow or string.format(Textos.espacioMayus .. " / %02d", index), 0, 0, 540, 13, 11, T.Muted, T.Medium).Size = UDim2.new(1, 0, 0, 13)
     self.Title = UI.text(header, "Title", name, 0, 22, 570, 33, 27, T.Text, T.Medium)
     UI.text(header, "Subtitle", self.Description, 0, 60, 620, 17, 12, T.Secondary).Size = UDim2.new(1, 0, 0, 17)
     self.Summary = UI.frame(header, "PageSummary", 0, 22, 72, 44)
     self.Summary.Position = UDim2.new(1, -72, 0, 20)
     self.Count = UI.text(self.Summary, "Count", "00", 0, 0, 72, 26, 24, T.Accent, T.Mono)
     self.Count.TextXAlignment = Enum.TextXAlignment.Right
-    UI.text(self.Summary, "Caption", "CONTROLS", 0, 29, 72, 15, 11, T.Muted, T.Mono).TextXAlignment = Enum.TextXAlignment.Right
+    UI.text(self.Summary, "Caption", Textos.controles, 0, 29, 72, 15, 11, T.Muted, T.Mono).TextXAlignment = Enum.TextXAlignment.Right
     window.Runtime:Connect(button.Activated, function() window:SelectTab(self) end)
     window.Runtime:Connect(button.MouseEnter, function()
         if window._closing then return end

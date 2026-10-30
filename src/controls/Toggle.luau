@@ -1,5 +1,6 @@
 local UI = require("UI")
 local T = require("Theme")
+local Textos = require("Textos")
 local Toggle = {}
 
 function Toggle.new(section, options)
@@ -24,7 +25,7 @@ function Toggle.new(section, options)
         state.Size = UDim2.fromOffset(44, place.ControlHeight)
     end
     local function render(instant)
-        state.Text = value and "ON" or "OFF"
+        state.Text = value and Textos.si or Textos.no
         local stateColor = value and T.Accent or T.Muted
         local outlineColor = value and T.AccentSoft or T.Line
         local props = {BackgroundColor3 = value and T.AccentWash or T.Raised}

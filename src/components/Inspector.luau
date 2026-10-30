@@ -2,6 +2,7 @@ local UI = require("UI")
 local T = require("Theme")
 local Motion = require("Motion")
 local Text = game:GetService("TextService")
+local Textos = require("Textos")
 local Inspector = {}
 Inspector.__index = Inspector
 
@@ -14,20 +15,20 @@ function Inspector.new(window)
     local scope = UI.frame(frame, "Scope", 176, 22, 10, 10)
     UI.stroke(scope, T.AccentSoft)
     UI.frame(scope, "Center", 4, 4, 2, 2, T.Accent)
-    window.DetailTitle = UI.text(frame, "DetailTitle", "Your workspace", 16, 52, 172, 42, 18, T.Text, T.Medium)
+    window.DetailTitle = UI.text(frame, "DetailTitle", Textos.tuEspacio, 16, 52, 172, 42, 18, T.Text, T.Medium)
     window.DetailTitle.TextWrapped = true
     window.DetailTitle.TextYAlignment = Enum.TextYAlignment.Top
     window.DetailTitle.TextTruncate = Enum.TextTruncate.None
-    window.DetailDescription = UI.text(frame, "Description", "Select a control to see its details.", 16, 103, 172, 46, 12, T.Secondary)
+    window.DetailDescription = UI.text(frame, "Description", Textos.descripcionInspector, 16, 103, 172, 46, 12, T.Secondary)
     window.DetailDescription.TextWrapped = true
     window.DetailDescription.TextTruncate = Enum.TextTruncate.None
     window.DetailDescription.TextYAlignment = Enum.TextYAlignment.Top
 
     local preview = UI.frame(frame, "ValuePreview", 16, 164, 172, 148, T.Surface, 6)
     UI.stroke(preview, T.SoftLine)
-    window.DetailKind = UI.text(preview, "Kind", "SELECTION", 14, 12, 144, 16, 11, T.Muted, T.Medium)
-    window.DetailValue = UI.text(preview, "Value", "Ready", 14, 38, 144, 35, 28, T.Accent, T.Font)
-    self.Meta = UI.text(preview, "ValueContext", "WORKSPACE", 14, 125, 144, 15, 11, T.Muted, T.Mono)
+    window.DetailKind = UI.text(preview, "Kind", Textos.seleccion, 14, 12, 144, 16, 11, T.Muted, T.Medium)
+    window.DetailValue = UI.text(preview, "Value", Textos.listo, 14, 38, 144, 35, 28, T.Accent, T.Font)
+    self.Meta = UI.text(preview, "ValueContext", Textos.espacioMayus, 14, 125, 144, 15, 11, T.Muted, T.Mono)
 
     self.Numeric = UI.frame(preview, "NumericRange", 14, 83, 144, 37)
     for i = 1, 29 do
@@ -45,7 +46,7 @@ function Inspector.new(window)
     for index, name in ipairs({"OFF", "ON"}) do
         local tile = UI.frame(self.Boolean, name, (index - 1) * 76, 0, 68, 26, T.Surface, 4)
         local border = UI.stroke(tile, T.SoftLine)
-        local label = UI.text(tile, "Label", name, 0, 0, 68, 26, 11, T.Muted, T.Mono)
+        local label = UI.text(tile, "Label", index == 2 and Textos.si or Textos.no, 0, 0, 68, 26, 11, T.Muted, T.Mono)
         label.TextXAlignment = Enum.TextXAlignment.Center
         self.States[index] = {Tile = tile, Border = border, Label = label}
     end
@@ -55,21 +56,21 @@ function Inspector.new(window)
     for i = 1, 12 do self.OptionMarks[i] = UI.frame(self.Options, "Option" .. i, 0, 0, 1, 4, T.Line, 1) end
     self.ChoiceHint = UI.text(preview, "ChoiceHint", "", 14, 89, 144, 26, 11, T.Secondary, T.Mono)
     self.Action = UI.frame(preview, "ActionGlyph", 14, 90, 144, 26)
-    UI.text(self.Action, "Label", "SESSION ACTION", 0, 0, 116, 26, 11, T.Secondary, T.Mono)
+    UI.text(self.Action, "Label", Textos.ejecucion, 0, 0, 116, 26, 11, T.Secondary, T.Mono)
     UI.frame(self.Action, "Stem", 124, 13, 18, 1, T.AccentSoft)
     UI.frame(self.Action, "Upper", 136, 10, 7, 1, T.AccentSoft).Rotation = 45
     UI.frame(self.Action, "Lower", 136, 16, 7, 1, T.AccentSoft).Rotation = -45
 
-    UI.text(frame, "Properties", "PROPERTIES", 16, 334, 172, 16, 11, T.Muted, T.Medium)
+    UI.text(frame, "Properties", Textos.propiedades, 16, 334, 172, 16, 11, T.Muted, T.Medium)
     window.DetailRows = {}
     for i, name in ipairs({"Page", "Section", "Type", "Range"}) do
         local y = 361 + (i - 1) * 34
-        UI.text(frame, name .. "Key", name, 16, y, 50, 24, 12, T.Muted)
+        UI.text(frame, name .. "Key", Textos.claves[i], 16, y, 50, 24, 12, T.Muted)
         window.DetailRows[i] = UI.text(frame, name .. "Value", "--", 72, y, 116, 24, 12, T.Secondary)
         window.DetailRows[i].TextXAlignment = Enum.TextXAlignment.Right
         UI.line(frame, 16, y + 29, 172)
     end
-    self.Hint = UI.text(frame, "Hint", "Select a property to inspect it.", 16, 519, 172, 28, 11, T.Muted)
+    self.Hint = UI.text(frame, "Hint", Textos.pistaInicial, 16, 519, 172, 28, 11, T.Muted)
     self.Hint.TextWrapped = true
     self.Hint.TextTruncate = Enum.TextTruncate.None
     window.Bars = self.Bars
@@ -82,10 +83,10 @@ function Inspector:Clear()
     self.Numeric.Visible, self.Boolean.Visible, self.Options.Visible = false, false, false
     self.ChoiceHint.Visible, self.Action.Visible = false, false
     self.Low.Visible, self.High.Visible, self.Meta.Visible = false, false, true
-    self.Meta.Text = "WORKSPACE"
-    self.Window.DetailKind.Text = "SELECTION"
+    self.Meta.Text = Textos.espacioMayus
+    self.Window.DetailKind.Text = Textos.seleccion
     for _, label in ipairs(self.Window.DetailRows) do label.Text = "--" end
-    self.Hint.Text = "Select a property to inspect it."
+    self.Hint.Text = Textos.pistaInicial
 end
 
 function Inspector:SetValue(text)
@@ -106,14 +107,14 @@ function Inspector:Update(control)
     self.Control = control
     local value
     if control.Get then value = control:Get() end
-    local shown = value == nil and "No selection" or tostring(value)
-    if type(value) == "boolean" then shown = value and "Enabled" or "Disabled" end
+    local shown = value == nil and Textos.sinSeleccion or tostring(value)
+    if type(value) == "boolean" then shown = value and Textos.activado or Textos.desactivado end
     if type(value) == "number" then shown = (control.Format and control:Format(value) or UI.format(value)) .. (control.Suffix or "") end
     window.DetailTitle.Text, window.DetailDescription.Text = control.Name, control.Description or ""
-    window.DetailKind.Text = string.upper(control.Kind)
+    window.DetailKind.Text = Textos.etiquetaTipo(control.Kind)
     self:SetValue(shown)
     window.DetailRows[1].Text, window.DetailRows[2].Text = control.Section.Tab.Name, control.Section.Name
-    window.DetailRows[3].Text, window.DetailRows[4].Text = control.Kind, control.Range or "--"
+    window.DetailRows[3].Text, window.DetailRows[4].Text = Textos.nombreTipo(control.Kind), control.Range or "--"
     local numeric, boolean, choice = control.Kind == "Slider", control.Kind == "Toggle", control.Kind == "Dropdown"
     self.Numeric.Visible, self.Boolean.Visible = numeric, boolean
     self.Low.Visible, self.High.Visible, self.Meta.Visible = numeric, numeric, not numeric
@@ -123,7 +124,7 @@ function Inspector:Update(control)
     if numeric then
         local fraction = control:Fraction()
         self.Low.Text = control:Format(control.Min)
-        self.High.Text = control.Min == control.Max and "FIXED" or control:Format(control.Max)
+        self.High.Text = control.Min == control.Max and Textos.fijo or control:Format(control.Max)
         rt:Tween(self.Marker, {Position = UDim2.fromScale(fraction, 0)}, duration, "position")
         for i, bar in ipairs(self.Bars) do
             local on = (i - 1) / (#self.Bars - 1) <= fraction
@@ -132,23 +133,23 @@ function Inspector:Update(control)
                 rt:Tween(bar, {BackgroundColor3 = on and T.AccentSoft or T.Line}, duration)
             end
         end
-        self.Hint.Text = control.Min == control.Max and "This range has a fixed value." or "Drag the slider or type a value."
+        self.Hint.Text = control.Min == control.Max and Textos.pistaFijo or Textos.pistaDeslizador
     elseif boolean then
-        self.Meta.Text = "BINARY STATE"
+        self.Meta.Text = Textos.estado
         for i, state in ipairs(self.States) do
             local active = value == (i == 2)
             rt:Tween(state.Tile, {BackgroundColor3 = active and T.AccentWash or T.Surface}, duration)
             rt:Tween(state.Border, {Color = active and T.AccentSoft or T.SoftLine}, duration)
             rt:Tween(state.Label, {TextColor3 = active and T.Accent or T.Muted}, duration)
         end
-        self.Hint.Text = "Click to change this state."
+        self.Hint.Text = Textos.pistaEstado
     elseif choice then
         local count = #control.Values
         local index = table.find(control.Values, value)
-        self.Meta.Text = index and string.format("OPTION %02d / %02d", index, count) or "NO OPTIONS"
+        self.Meta.Text = index and string.format(Textos.opcionActual, index, count) or Textos.sinOpciones
         self.Options.Visible = count > 0 and count <= #self.OptionMarks
         self.ChoiceHint.Visible = not self.Options.Visible
-        self.ChoiceHint.Text = count == 0 and "EMPTY COLLECTION" or "SINGLE SELECTION"
+        self.ChoiceHint.Text = count == 0 and Textos.listaVacia or Textos.unaOpcion
         for i, mark in ipairs(self.OptionMarks) do
             mark.Visible = i <= count
             if self.Options.Visible then
@@ -158,10 +159,10 @@ function Inspector:Update(control)
                 rt:Tween(mark, {BackgroundColor3 = i == index and T.Accent or T.Line}, duration)
             end
         end
-        self.Hint.Text = count == 0 and "No options in this collection." or "Choose an option from the menu."
+        self.Hint.Text = count == 0 and Textos.pistaVacia or Textos.pistaOpcion
     else
-        self.Meta.Text = "ON DEMAND"
-        self.Hint.Text = "Activate to run this action."
+        self.Meta.Text = Textos.alPulsar
+        self.Hint.Text = Textos.pistaAccion
     end
 end
 

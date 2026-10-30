@@ -5,6 +5,7 @@ local Tab = require("Tab")
 local Motion = require("Motion")
 local Inspector = require("components/Inspector")
 local Shadow = require("components/Shadow")
+local Textos = require("Textos")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
@@ -35,9 +36,9 @@ function Window.new(options)
     UI.stroke(brandTile, T.AccentSoft).Transparency = 0.65
     UI.mark(brandTile, 5, 5, 20)
     UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 30, 25, T.Text, T.Medium)
-    UI.text(sidebar, "BrandSub", "INTERFACE LIBRARY", 21, 65, 145, 14, 11, T.Muted, T.Medium)
+    UI.text(sidebar, "BrandSub", Textos.interfaz, 21, 65, 145, 14, 11, T.Muted, T.Medium)
     UI.line(sidebar, 20, 100, 144)
-    UI.text(sidebar, "Group", "WORKSPACE", 22, 122, 140, 16, 10, T.Muted, T.Medium)
+    UI.text(sidebar, "Group", Textos.secciones, 22, 122, 140, 16, 10, T.Muted, T.Medium)
     self.Navigation = UI.new("ScrollingFrame", sidebar, {
         Name = "Navigation", Position = UDim2.fromOffset(12, 153), Size = UDim2.new(1, -24, 1, -258),
         ScrollBarThickness = 2, ScrollBarImageColor3 = T.Muted, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -48,16 +49,16 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "Studio / 0.4.6", 33, 38, 110, 16, 11, T.Muted)
+    UI.text(footer, "Version", "v0.4.7", 33, 38, 110, 16, 11, T.Muted)
     UI.frame(main, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
     local chrome = UI.frame(main, "Chrome", 184, 0, 916, 48)
     self.Chrome = chrome
     local drag = UI.button(chrome, "TitleDrag", "", 0, 0, 862, 48)
-    self.Breadcrumb = UI.text(drag, "Breadcrumb", "Workspace  /  Overview", 24, 0, 400, 48, 11, T.Secondary)
+    self.Breadcrumb = UI.text(drag, "Breadcrumb", Textos.espacio .. " / " .. Textos.inicio, 24, 0, 400, 48, 11, T.Secondary)
     local tag = UI.frame(chrome, "Status", 690, 14, 156, 22)
     UI.frame(tag, "StatusDot", 10, 8, 6, 6, T.Green, 3)
-    UI.text(tag, "StatusLabel", options.Status or "LOCAL WORKSPACE", 23, 0, 127, 22, 9, T.Secondary, T.Medium)
+    UI.text(tag, "StatusLabel", options.Status or Textos.sesionLocal, 23, 0, 127, 22, 9, T.Secondary, T.Medium)
     self.StatusTag = tag
     local close = UI.button(chrome, "Close", "", 872, 9, 30, 30)
     UI.corner(close, 5)
@@ -78,8 +79,8 @@ function Window.new(options)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
     UI.frame(status, "Dot", 22, 11, 5, 5, T.Green, 3)
-    self.StatusText = UI.text(status, "State", "Ready", 35, 0, 560, 28, 10, T.Secondary)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.6", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    self.StatusText = UI.text(status, "State", Textos.listo, 35, 0, 560, 28, 10, T.Secondary)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.7", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -159,7 +160,7 @@ function Window:Fit()
     self.Sidebar.InnerEdge.Size = UDim2.fromOffset(10, self.Height)
     self.Sidebar.Brand.Size = UDim2.fromOffset(sideWidth - 70, 30)
     self.Sidebar.BrandSub.Size = UDim2.fromOffset(sideWidth - 40, 14)
-    self.Sidebar.BrandSub.Text = sideWidth < 170 and "UI LIBRARY" or "INTERFACE LIBRARY"
+    self.Sidebar.BrandSub.Text = sideWidth < 170 and Textos.biblioteca or Textos.interfaz
     local short = self.Height < 480
     local navTop = short and 112 or 153
     self.Sidebar.BrandSub.Position = UDim2.fromOffset(21, short and 60 or 65)
@@ -285,12 +286,12 @@ end
 function Window:SetDetails(title, description, status)
     if self._destroyed then return end
     self.Context:Clear()
-    self.DetailTitle.Text, self.DetailDescription.Text = title or "Details", description or ""
-    self.Context:SetValue(status or "Ready")
+    self.DetailTitle.Text, self.DetailDescription.Text = title or Textos.detalles, description or ""
+    self.Context:SetValue(status or Textos.listo)
 end
 
 function Window:AddTab(name, options)
-    assert(not self._destroyed, "Window is destroyed")
+    assert(not self._destroyed, "[Lumi UI] La ventana está cerrada")
     return Tab.new(self, name, options or {})
 end
 
@@ -317,13 +318,13 @@ function Window:SelectTab(tab)
         self.Runtime:Tween(tab.Page, {Position = UDim2.fromOffset(0, 0)}, Motion.Time.Page, "position")
         tab.Motion:Fade(0.35, 0, Motion.Time.Page)
     end
-    self.Breadcrumb.Text = "Workspace  /  " .. tab.Name
+    self.Breadcrumb.Text = Textos.espacio .. " / " .. tab.Name
     if self.SelectedControl and self.SelectedControl.FocusIndicator then
         self.SelectedControl.FocusIndicator.Visible = false
         self.SelectedControl.SelectionWash.Visible = false
     end
     self.SelectedControl = nil
-    if tab.Controls[1] then self:Focus(tab.Controls[1]) else self:SetDetails(tab.Name, tab.Description, "Ready") end
+    if tab.Controls[1] then self:Focus(tab.Controls[1]) else self:SetDetails(tab.Name, tab.Description, Textos.listo) end
 end
 
 function Window:Close()

@@ -2,6 +2,7 @@ local UI = require("UI")
 local T = require("Theme")
 local Runtime = require("Runtime")
 local Motion = require("Motion")
+local Textos = require("Textos")
 local Dropdown = {}
 
 function Dropdown.new(section, options)
@@ -10,7 +11,7 @@ function Dropdown.new(section, options)
     local values = {}
     for _, value in ipairs(type(options.Values) == "table" and options.Values or {}) do table.insert(values, value) end
     local selected = table.find(values, options.Default) and options.Default or values[1]
-    c.Range = tostring(#values) .. (#values == 1 and " option" or " options")
+    c.Range = Textos.cantidadOpciones(#values)
     local selector = UI.button(c.Row, "DropdownInput", "", 0, 14, 220, 31)
     selector.Position = UDim2.new(1, -236, 0, 14)
     selector.BackgroundTransparency = 0
@@ -18,7 +19,7 @@ function Dropdown.new(section, options)
     selector.ZIndex = 2
     UI.corner(selector, 5)
     local border = UI.stroke(selector, T.Line)
-    local label = UI.text(selector, "Selection", selected == nil and "No options" or selected, 12, 0, 178, 31, 13, T.Secondary)
+    local label = UI.text(selector, "Selection", selected == nil and Textos.vacio or selected, 12, 0, 178, 31, 13, T.Secondary)
     UI.chevron(selector, 197, 15)
     c.Input, c.Values = selector, values
     c.Layout = function(place)
@@ -82,13 +83,13 @@ function Dropdown.new(section, options)
                 rt:Tween(selector.ChevronB, {Rotation = -45}, 0.12)
             end
         end
-        UI.text(menu, "Caption", "SELECT OPTION", 11, 4, 198, 25, 9, T.Muted, T.Mono).Size = UDim2.new(1, -22, 0, 25)
+        UI.text(menu, "Caption", Textos.elegirOpcion, 11, 4, 198, 25, 9, T.Muted, T.Mono).Size = UDim2.new(1, -22, 0, 25)
         local scroller = UI.new("ScrollingFrame", menu, {Name = "Options", Position = UDim2.fromOffset(5, 31),
             Size = UDim2.new(1, -10, 1, -36), CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
             ScrollBarThickness = 2, ScrollBarImageColor3 = T.Muted, ZIndex = 102})
         UI.list(scroller, 0)
         if #values == 0 then
-            UI.text(scroller, "Empty", "No options available", 7, 0, 192, 32, 11, T.Muted).Size = UDim2.new(1, -14, 0, 32)
+            UI.text(scroller, "Empty", Textos.noHayOpciones, 7, 0, 192, 32, 11, T.Muted).Size = UDim2.new(1, -14, 0, 32)
         end
         for index, value in ipairs(values) do
             local item = UI.button(scroller, "Option" .. tostring(index), "", 0, 0, 0, 32)
