@@ -11,6 +11,7 @@ local GuiService = game:GetService("GuiService")
 local Window = {}
 Window.__index = Window
 local DESKTOP_HEIGHT = 688
+local INSPECTOR_WIDTH, PANEL_GAP = 224, 12
 
 function Window.new(options)
     local rt = Runtime.new()
@@ -18,18 +19,21 @@ function Window.new(options)
     local root = rt:Mount()
     local self = setmetatable({Runtime = rt, Root = root, Tabs = {}, _destroyed = false,
         Width = 1100, Height = DESKTOP_HEIGHT, Scale = 1, OpenDropdown = nil}, Window)
-    local main = UI.frame(root, "Main", 0, 0, 1100, DESKTOP_HEIGHT, T.Shell, 12)
-    main.Active = true
+    -- A transparent assembly moves both independently painted surfaces together.
+    local main = UI.frame(root, "Main", 0, 0, 1100, DESKTOP_HEIGHT)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.Position = UDim2.fromScale(0.5, 0.5)
     self.Main = main
     self.UIScale = UI.new("UIScale", main, {Scale = 1})
-    self.Shadow = Shadow.new(main, 12)
-    UI.stroke(main, T.Line)
-    self.TopEdge = UI.frame(main, "TopEdge", 12, 0, 1076, 1, T.Secondary)
+    local panel = UI.frame(main, "Panel", 0, 0, 864, DESKTOP_HEIGHT, T.Shell, 12)
+    panel.Active = true
+    self.Panel = panel
+    self.Shadow = Shadow.new(panel, 12)
+    UI.stroke(panel, T.Line)
+    self.TopEdge = UI.frame(panel, "TopEdge", 12, 0, 840, 1, T.Secondary)
     self.TopEdge.BackgroundTransparency = 0.88
 
-    local sidebar = UI.frame(main, "Sidebar", 0, 0, 184, 660, T.Sidebar, 12)
+    local sidebar = UI.frame(panel, "Sidebar", 0, 0, 184, 660, T.Sidebar, 12)
     self.Sidebar = sidebar
     UI.frame(sidebar, "InnerEdge", 174, 0, 10, 660, T.Sidebar)
     local brandTile = UI.frame(sidebar, "BrandTile", 21, 24, 30, 30, T.AccentWash, 7)
@@ -49,13 +53,13 @@ function Window.new(options)
     UI.line(footer, 0, 0, 144)
     UI.mark(footer, 0, 20, 22, T.Secondary)
     UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "v0.4.7", 33, 38, 110, 16, 11, T.Muted)
-    UI.frame(main, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
+    UI.text(footer, "Version", "v0.4.8", 33, 38, 110, 16, 11, T.Muted)
+    UI.frame(panel, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
 
-    local chrome = UI.frame(main, "Chrome", 184, 0, 916, 48)
+    local chrome = UI.frame(panel, "Chrome", 184, 0, 680, 48)
     self.Chrome = chrome
     local drag = UI.button(chrome, "TitleDrag", "", 0, 0, 862, 48)
-    self.Breadcrumb = UI.text(drag, "Breadcrumb", Textos.espacio .. " / " .. Textos.inicio, 24, 0, 400, 48, 11, T.Secondary)
+    self.Breadcrumb = UI.text(drag, "Breadcrumb", Textos.espacio .. " / " .. Textos.inicio, 26, 0, 400, 48, 13, T.Secondary, T.Medium)
     local tag = UI.frame(chrome, "Status", 690, 14, 156, 22)
     UI.frame(tag, "StatusDot", 10, 8, 6, 6, T.Green, 3)
     UI.text(tag, "StatusLabel", options.Status or Textos.sesionLocal, 23, 0, 127, 22, 9, T.Secondary, T.Medium)
@@ -70,17 +74,17 @@ function Window.new(options)
     self.CloseButton = close
     UI.line(chrome, 0, 47, 916)
 
-    self.Workspace = UI.frame(main, "Workspace", 184, 48, 696, 584, T.Workspace)
+    self.Workspace = UI.frame(panel, "Workspace", 184, 48, 680, 584, T.Workspace)
     self.Workspace.ClipsDescendants = true
     self.Context = Inspector.new(self)
 
-    local status = UI.frame(main, "Statusbar", 184, 632, 916, 28, T.Shell)
+    local status = UI.frame(panel, "Statusbar", 184, 632, 680, 28, T.Shell)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
     UI.frame(status, "Dot", 22, 11, 5, 5, T.Green, 3)
     self.StatusText = UI.text(status, "State", Textos.listo, 35, 0, 560, 28, 10, T.Secondary)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.7", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.8", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -153,8 +157,10 @@ function Window:Fit()
     self.SidebarWidth = size.X < 700 and 140 or 184
     local sideWidth = self.SidebarWidth
     self.Inspector.Visible = not compact
+    self.PanelWidth = self.Width - (compact and 0 or INSPECTOR_WIDTH + PANEL_GAP)
     self.Main.Size = UDim2.fromOffset(self.Width, self.Height)
-    self.TopEdge.Size = UDim2.fromOffset(self.Width - 24, 1)
+    self.Panel.Size = UDim2.fromOffset(self.PanelWidth, self.Height)
+    self.TopEdge.Size = UDim2.fromOffset(self.PanelWidth - 24, 1)
     self.Sidebar.Size = UDim2.fromOffset(sideWidth, self.Height)
     self.Sidebar.InnerEdge.Position = UDim2.fromOffset(sideWidth - 10, 0)
     self.Sidebar.InnerEdge.Size = UDim2.fromOffset(10, self.Height)
@@ -174,19 +180,19 @@ function Window:Fit()
     self.SidebarFooter.Rule.Size = UDim2.fromOffset(sideWidth - 40, 1)
     self.SidebarFooter.Build.Size = UDim2.fromOffset(sideWidth - 73, 18)
     self.SidebarFooter.Version.Size = UDim2.fromOffset(sideWidth - 73, 16)
-    self.Main.SidebarRule.Position = UDim2.fromOffset(sideWidth - 1, 0)
-    self.Main.SidebarRule.Size = UDim2.fromOffset(1, self.Height)
-    local chromeWidth = self.Width - sideWidth
+    self.Panel.SidebarRule.Position = UDim2.fromOffset(sideWidth - 1, 0)
+    self.Panel.SidebarRule.Size = UDim2.fromOffset(1, self.Height)
+    local chromeWidth = self.PanelWidth - sideWidth
     self.Chrome.Position = UDim2.fromOffset(sideWidth, 0)
     self.Chrome.Size = UDim2.fromOffset(chromeWidth, 48)
     self.CloseButton.Position = UDim2.fromOffset(chromeWidth - 44, 9)
     self.StatusTag.Position = UDim2.fromOffset(chromeWidth - 226, 14)
-    self.StatusTag.Visible = chromeWidth >= 650
+    self.StatusTag.Visible = chromeWidth >= 500
     self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, chromeWidth - (self.StatusTag.Visible and 260 or 80)), 48)
     self.Workspace.Position = UDim2.fromOffset(sideWidth, 48)
-    self.Workspace.Size = UDim2.fromOffset(chromeWidth - (compact and 0 or 220), self.Height - 76)
-    self.Inspector.Position = UDim2.fromOffset(self.Width - 212, 60)
-    self.Inspector.Size = UDim2.fromOffset(204, self.Height - 100)
+    self.Workspace.Size = UDim2.fromOffset(chromeWidth, self.Height - 76)
+    self.Inspector.Position = UDim2.fromOffset(self.PanelWidth + PANEL_GAP, 0)
+    self.Inspector.Size = UDim2.fromOffset(INSPECTOR_WIDTH, self.Height)
     self.Statusbar.Position = UDim2.fromOffset(sideWidth, self.Height - 28)
     self.Statusbar.Size = UDim2.fromOffset(chromeWidth, 28)
     self.Chrome.Rule.Size = UDim2.fromOffset(chromeWidth, 1)

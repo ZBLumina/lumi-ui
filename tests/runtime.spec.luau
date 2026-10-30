@@ -489,7 +489,8 @@ test("animated Close is idempotent and eventually releases its scope", function(
     owner:Close()
     assert(owner.Root.Parent ~= nil, "enabled Close skipped its visual exit")
     task.wait(0.04)
-    assert(owner.Main.BackgroundTransparency > 0 and owner.Main.BackgroundTransparency < 1,
+    local surface = owner.Panel or owner.Main
+    assert(surface.BackgroundTransparency > 0 and surface.BackgroundTransparency < 1,
         "close has no intermediate fade")
     eventually(function() return owner.Root.Parent == nil end, "animated close never destroyed its root")
     disconnected(owner, snapshot)
@@ -715,6 +716,62 @@ test("medium viewports keep property text readable instead of shrinking the desk
     owner.Viewport.Size = UDim2.fromOffset(850, 720)
     settle(); owner:Fit(); owner:FinishEntrance(); settle()
     assert(toggle.Label.TextSize * owner.Scale >= 11, "medium viewport shrinks property text below 11px")
+end)
+
+test("detached inspector leaves a real transparent gap and follows window bounds", function()
+    local owner = window()
+    owner:FinishEntrance(); settle()
+    assert(owner.Panel, "main painted surface is missing")
+    equal(owner.Main.BackgroundTransparency, 1, "gap has an opaque backdrop")
+    local function check()
+        local gap = owner.Inspector.AbsolutePosition.X - owner.Panel.AbsolutePosition.X - owner.Panel.AbsoluteSize.X
+        assert(gap >= 10 * owner.Scale, "surfaces touch or overlap")
+        local left = owner.Main.AbsolutePosition - owner.Viewport.AbsolutePosition
+        assert(left.X >= 7 and left.Y >= 7, "assembly escaped top/left viewport")
+        assert(left.X + owner.Main.AbsoluteSize.X <= owner.Viewport.AbsoluteSize.X - 7, "inspector escaped right viewport")
+    end
+    owner:SetCenter(Vector2.new(-10000, -10000)); settle(); check()
+    owner:SetCenter(Vector2.new(10000, 10000)); settle(); check()
+    equal(owner.Panel.Size.Y.Offset, owner.Inspector.Size.Y.Offset, "surfaces lost shared alignment")
+end)
+
+test("detached surfaces fade together and leave no inspector after close", function()
+    local owner = window()
+    owner:FinishEntrance(); settle()
+    assert(owner.Panel, "main painted surface is missing")
+    local inspector = owner.Inspector
+    owner:Close(); task.wait(0.04)
+    assert(owner.Panel.BackgroundTransparency > 0 and owner.Panel.BackgroundTransparency < 1, "panel skipped fade")
+    assert(inspector.BackgroundTransparency > 0 and inspector.BackgroundTransparency < 1, "inspector skipped fade")
+    assert(math.abs(owner.Panel.BackgroundTransparency - inspector.BackgroundTransparency) < 0.01, "surfaces fade out of sync")
+    eventually(function() return inspector.Parent == nil end, "orphan inspector after close")
+end)
+
+test("narrow page headings wrap and leave room for the following section", function()
+    local owner = window()
+    local tab = owner:AddTab("Configuración del espacio", {Description = "Todos los ajustes de tu sesión reunidos en un solo lugar."})
+    local group = tab:AddSection("Ajustes")
+    group:AddToggle({Name = "Activar"})
+    owner.Viewport.Size = UDim2.fromOffset(320, 500)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    assert(tab.Title.TextFits, "page title is truncated")
+    assert(tab.Header.Subtitle.TextFits, "page description is truncated")
+    assert(tab.Header.Subtitle.AbsolutePosition.Y >= tab.Title.AbsolutePosition.Y + tab.Title.AbsoluteSize.Y,
+        "title overlaps page description")
+    assert(group.Frame.AbsolutePosition.Y >= tab.Header.Subtitle.AbsolutePosition.Y + tab.Header.Subtitle.AbsoluteSize.Y,
+        "page description overlaps first section")
+end)
+
+test("detached inspector retains input capture independently of the transparent gap", function()
+    local owner = window()
+    local captured = false
+    local ancestor = owner.Inspector
+    while ancestor and ancestor:IsA("GuiObject") do
+        captured = captured or ancestor.Active
+        ancestor = ancestor.Parent
+    end
+    assert(captured, "inspector surface lets world input pass through")
+    equal(owner.Main.Active, false, "transparent gap consumes world input")
 end)
 
 local function cleanupCase()

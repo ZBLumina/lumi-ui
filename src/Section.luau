@@ -21,7 +21,7 @@ function Section.new(tab, name, options)
     local header = UI.new("Frame", frame, {Name = "SectionHeader", Size = UDim2.new(1, 0, 0, 43), LayoutOrder = 0})
     local index = #tab.Sections + 1
     UI.text(header, "Index", string.format("%02d", index), 16, 0, 26, 43, 10, T.Muted, T.Mono)
-    local heading = UI.text(header, "Title", name, 45, 0, 440, 43, 13, T.Text, T.Medium)
+    local heading = UI.text(header, "Title", name, 45, 0, 440, 43, 15, T.Text, T.Medium)
     local tag = UI.text(header, "Tag", options.Tag or Textos.ajustes, 510, 0, 116, 43, 9, T.Muted, T.Mono)
     tag.TextXAlignment = Enum.TextXAlignment.Right
     tag.Position = UDim2.new(1, -132, 0, 0)
@@ -54,7 +54,7 @@ function Section:Row(options, kind, height)
     local rule = UI.new("Frame", row, {Name = "Divider", Size = UDim2.new(1, -32, 0, 1),
         Position = UDim2.fromOffset(16, 0), BackgroundTransparency = 0, BackgroundColor3 = T.SoftLine})
     local nombre = options.Name or Textos.nombreTipo(kind)
-    local title = UI.text(row, "Name", nombre, 16, 12, 330, 18, 14, T.Text, T.Medium)
+    local title = UI.text(row, "Name", nombre, 16, 12, 330, 18, 15, T.Text, T.Medium)
     local description = UI.text(row, "Description", options.Description or "", 16, 33, 350, 15, 12, T.Muted)
     title.TextWrapped, description.TextWrapped = true, true
     title.TextTruncate, description.TextTruncate = Enum.TextTruncate.None, Enum.TextTruncate.None

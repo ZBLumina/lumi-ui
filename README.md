@@ -1,6 +1,6 @@
 # Lumi UI
 
-Biblioteca modular de interfaces en Luau para Potassium. **La versión v0.4.7 presenta toda la interfaz y su demostración en español**, con superficies de carbón cálido, acentos crema, controles precisos, animaciones sutiles y un inspector contextual. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
+Biblioteca modular de interfaces en Luau para Potassium. **v0.4.8 separa el inspector del panel principal y refuerza los títulos y valores**, con superficies de carbón cálido, acentos crema, controles precisos y animaciones sutiles. Toda la interfaz y la demostración están en español. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
 
 Los textos propios de la biblioteca se concentran en `src/Textos.luau`: navegación, etiquetas, estados, ayudas, tipos de control, listas vacías y confirmaciones. La demostración también traduce todos sus títulos, descripciones y opciones. Se conservan los nombres de producto Lumi UI, Potassium y Luau, junto con los identificadores técnicos de la API. Los textos personalizados que proporciona quien usa la biblioteca se muestran tal como se reciben.
 
@@ -48,7 +48,7 @@ Las páginas aceptan opcionalmente `Icon = "Grid"`, `"Sliders"` o `"Layers"`: cu
 
 ## Distribución e interacción
 
-- Los campos y botones comparten una altura visual de 32 px y se alinean por el extremo derecho. Los nombres usan 14 px y las descripciones 12 px. El texto largo hace crecer la fila; cuando falta espacio, el campo pasa debajo del texto.
+- Los campos y botones comparten una altura visual de 32 px y se alinean por el extremo derecho. Los nombres usan 15 px y las descripciones 12 px. El texto largo hace crecer la fila; cuando falta espacio, el campo pasa debajo del texto. Los títulos de página usan 32 px y sus encabezados crecen para mostrar títulos y subtítulos completos.
 - Los deslizadores separan la cabecera, la zona de arrastre y los límites. El campo numérico reserva espacio según su rango y sufijo para mantener estable el carril durante el arrastre. Los límites invertidos se normalizan, los valores se ajustan al rango y ambos extremos siguen siendo alcanzables. Si mínimo y máximo coinciden, el valor permanece fijo. `Step` vale 1 si no se especifica.
 - Pulsa el valor numérico para escribirlo. Los deslizadores seleccionados también admiten las flechas izquierda y derecha. Las listas largas permiten desplazamiento; las listas vacías conservan `nil`. Los valores no válidos no cambian la selección.
 - Los menús se cierran al pulsar fuera, usar Escape, cambiar de página, desplazar el contenido, mover la ventana o perder el foco.
@@ -94,6 +94,8 @@ src/
 
 La generación también produce `tests/runtime.bundle.luau`, excluido de Git. Ejecútalo completo en un cliente de Roblox mediante Potassium. Usa instancias y conexiones reales, crea ventanas temporales y las limpia. Las dos advertencias de las funciones que fallan intencionalmente forman parte de la prueba de aislamiento de errores.
 
-La verificación de esta traducción se registra en [las notas de español](docs/design/studio-v047-espanol.md). Los registros históricos de [distribución](docs/design/studio-v046-layout.md), [sombra](docs/design/studio-v045-shadow.md) y [movimiento](docs/design/studio-v043-motion.md) documentan las mejoras previas.
+La composición y su verificación se registran en [las notas de v0.4.8](docs/design/studio-v048-composicion.md). Los registros históricos de [español](docs/design/studio-v047-espanol.md), [distribución](docs/design/studio-v046-layout.md), [sombra](docs/design/studio-v045-shadow.md) y [movimiento](docs/design/studio-v043-motion.md) documentan las mejoras previas.
 
-Cuando Potassium esté disponible, puedes ejecutar `examples/verificar-espanol.luau` después de la demostración para revisar los textos de las páginas, los estados, los menús y los valores predeterminados. La comprobación de esta versión dentro de Roblox sigue pendiente; los resultados previos de ejecución no equivalen a verificar esta traducción.
+Puedes ejecutar `examples/verificar-espanol.luau` después de la demostración para revisar los textos de las páginas, los estados, los menús y los valores predeterminados. La traducción se comprobó en un cliente real mediante Potassium, junto con los controles, el arrastre, el cierre y la reinyección.
+
+`Window.Main` conserva la envolvente que centra y mueve todo el conjunto; ahora es transparente. `Window.Panel` expone la superficie principal y `Window.Inspector`, la superficie contextual. En modo compacto el panel principal recupera todo el ancho y el inspector se oculta.

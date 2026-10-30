@@ -123,7 +123,12 @@ function Runtime:Mount()
     local legacy = root.Parent:FindFirstChild("LumiUIPilot_v01")
     if legacy then legacy:Destroy() end
     self.Root = root
-    self:Connect(root.Destroying, function() self:Destroy() end)
+    self:Connect(root.Destroying, function()
+        -- The engine already owns this destruction. Avoid re-entering Destroy
+        -- while the executor's container has locked the root's Parent.
+        self.Root = nil
+        self:Destroy()
+    end)
     return root
 end
 

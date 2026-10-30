@@ -1,6 +1,7 @@
 local UI = require("UI")
 local T = require("Theme")
 local Motion = require("Motion")
+local Shadow = require("components/Shadow")
 local Text = game:GetService("TextService")
 local Textos = require("Textos")
 local Inspector = {}
@@ -8,69 +9,73 @@ Inspector.__index = Inspector
 
 function Inspector.new(window)
     local self = setmetatable({Window = window, Bars = {}, BarState = {}}, Inspector)
-    local frame = UI.frame(window.Main, "Inspector", 888, 60, 204, 560, T.Sidebar, 8)
+    local frame = UI.frame(window.Main, "Inspector", 876, 0, 224, 688, T.Sidebar, 12)
+    frame.Active = true
     window.Inspector = frame
-    UI.stroke(frame, T.SoftLine)
-    UI.text(frame, "InspectorHeading", "INSPECTOR", 16, 19, 172, 16, 11, T.Muted, T.Medium)
-    local scope = UI.frame(frame, "Scope", 176, 22, 10, 10)
+    self.Shadow = Shadow.new(frame, 12)
+    UI.stroke(frame, T.Line)
+    UI.text(frame, "InspectorHeading", "INSPECTOR", 18, 20, 168, 16, 11, T.Muted, T.Medium)
+    local scope = UI.frame(frame, "Scope", 196, 23, 10, 10)
     UI.stroke(scope, T.AccentSoft)
     UI.frame(scope, "Center", 4, 4, 2, 2, T.Accent)
-    window.DetailTitle = UI.text(frame, "DetailTitle", Textos.tuEspacio, 16, 52, 172, 42, 18, T.Text, T.Medium)
+    UI.line(frame, 18, 47, 188)
+    window.DetailTitle = UI.text(frame, "DetailTitle", Textos.tuEspacio, 18, 67, 188, 52, 21, T.Text, T.Medium)
     window.DetailTitle.TextWrapped = true
     window.DetailTitle.TextYAlignment = Enum.TextYAlignment.Top
     window.DetailTitle.TextTruncate = Enum.TextTruncate.None
-    window.DetailDescription = UI.text(frame, "Description", Textos.descripcionInspector, 16, 103, 172, 46, 12, T.Secondary)
+    window.DetailDescription = UI.text(frame, "Description", Textos.descripcionInspector, 18, 126, 188, 44, 12, T.Secondary)
     window.DetailDescription.TextWrapped = true
     window.DetailDescription.TextTruncate = Enum.TextTruncate.None
     window.DetailDescription.TextYAlignment = Enum.TextYAlignment.Top
 
-    local preview = UI.frame(frame, "ValuePreview", 16, 164, 172, 148, T.Surface, 6)
+    local preview = UI.frame(frame, "ValuePreview", 18, 190, 188, 164, T.Surface, 7)
     UI.stroke(preview, T.SoftLine)
-    window.DetailKind = UI.text(preview, "Kind", Textos.seleccion, 14, 12, 144, 16, 11, T.Muted, T.Medium)
-    window.DetailValue = UI.text(preview, "Value", Textos.listo, 14, 38, 144, 35, 28, T.Accent, T.Font)
-    self.Meta = UI.text(preview, "ValueContext", Textos.espacioMayus, 14, 125, 144, 15, 11, T.Muted, T.Mono)
+    window.DetailKind = UI.text(preview, "Kind", Textos.seleccion, 14, 14, 160, 16, 11, T.Muted, T.Medium)
+    window.DetailValue = UI.text(preview, "Value", Textos.listo, 14, 40, 160, 40, 32, T.Accent, T.Font)
+    self.Meta = UI.text(preview, "ValueContext", Textos.espacioMayus, 14, 140, 160, 15, 11, T.Muted, T.Mono)
 
-    self.Numeric = UI.frame(preview, "NumericRange", 14, 83, 144, 37)
+    self.Numeric = UI.frame(preview, "NumericRange", 14, 96, 160, 37)
     for i = 1, 29 do
         local height = (i - 1) % 7 == 0 and 23 or 14
-        self.Bars[i] = UI.frame(self.Numeric, "Tick", (i - 1) * 144 / 28, 29 - height, 1, height, T.Line)
+        self.Bars[i] = UI.frame(self.Numeric, "Tick", (i - 1) * 159 / 28, 29 - height, 1, height, T.Line)
     end
     self.Marker = UI.frame(self.Numeric, "Position", 0, 1, 2, 32, T.Accent, 1)
     self.Marker.AnchorPoint = Vector2.new(0.5, 0)
-    self.Low = UI.text(preview, "LowerBound", "", 14, 125, 72, 15, 11, T.Muted, T.Mono)
-    self.High = UI.text(preview, "UpperBound", "", 86, 125, 72, 15, 11, T.Muted, T.Mono)
+    self.Low = UI.text(preview, "LowerBound", "", 14, 140, 80, 15, 11, T.Muted, T.Mono)
+    self.High = UI.text(preview, "UpperBound", "", 94, 140, 80, 15, 11, T.Muted, T.Mono)
     self.High.TextXAlignment = Enum.TextXAlignment.Right
 
-    self.Boolean = UI.frame(preview, "BooleanState", 14, 90, 144, 26)
+    self.Boolean = UI.frame(preview, "BooleanState", 14, 104, 160, 26)
     self.States = {}
     for index, name in ipairs({"OFF", "ON"}) do
-        local tile = UI.frame(self.Boolean, name, (index - 1) * 76, 0, 68, 26, T.Surface, 4)
+        local tile = UI.frame(self.Boolean, name, (index - 1) * 84, 0, 76, 26, T.Surface, 4)
         local border = UI.stroke(tile, T.SoftLine)
-        local label = UI.text(tile, "Label", index == 2 and Textos.si or Textos.no, 0, 0, 68, 26, 11, T.Muted, T.Mono)
+        local label = UI.text(tile, "Label", index == 2 and Textos.si or Textos.no, 0, 0, 76, 26, 11, T.Muted, T.Mono)
         label.TextXAlignment = Enum.TextXAlignment.Center
         self.States[index] = {Tile = tile, Border = border, Label = label}
     end
 
-    self.Options = UI.frame(preview, "DiscreteOptions", 14, 98, 144, 8)
+    self.Options = UI.frame(preview, "DiscreteOptions", 14, 112, 160, 8)
     self.OptionMarks = {}
     for i = 1, 12 do self.OptionMarks[i] = UI.frame(self.Options, "Option" .. i, 0, 0, 1, 4, T.Line, 1) end
-    self.ChoiceHint = UI.text(preview, "ChoiceHint", "", 14, 89, 144, 26, 11, T.Secondary, T.Mono)
-    self.Action = UI.frame(preview, "ActionGlyph", 14, 90, 144, 26)
+    self.ChoiceHint = UI.text(preview, "ChoiceHint", "", 14, 103, 160, 26, 11, T.Secondary, T.Mono)
+    self.Action = UI.frame(preview, "ActionGlyph", 14, 104, 160, 26)
     UI.text(self.Action, "Label", Textos.ejecucion, 0, 0, 116, 26, 11, T.Secondary, T.Mono)
     UI.frame(self.Action, "Stem", 124, 13, 18, 1, T.AccentSoft)
     UI.frame(self.Action, "Upper", 136, 10, 7, 1, T.AccentSoft).Rotation = 45
     UI.frame(self.Action, "Lower", 136, 16, 7, 1, T.AccentSoft).Rotation = -45
 
-    UI.text(frame, "Properties", Textos.propiedades, 16, 334, 172, 16, 11, T.Muted, T.Medium)
+    UI.text(frame, "Properties", Textos.propiedades, 18, 378, 188, 16, 11, T.Muted, T.Medium)
     window.DetailRows = {}
     for i, name in ipairs({"Page", "Section", "Type", "Range"}) do
-        local y = 361 + (i - 1) * 34
-        UI.text(frame, name .. "Key", Textos.claves[i], 16, y, 50, 24, 12, T.Muted)
-        window.DetailRows[i] = UI.text(frame, name .. "Value", "--", 72, y, 116, 24, 12, T.Secondary)
+        local y = 405 + (i - 1) * 34
+        UI.text(frame, name .. "Key", Textos.claves[i], 18, y, 50, 24, 12, T.Muted)
+        window.DetailRows[i] = UI.text(frame, name .. "Value", "--", 74, y, 132, 24, 12, T.Secondary)
         window.DetailRows[i].TextXAlignment = Enum.TextXAlignment.Right
-        UI.line(frame, 16, y + 29, 172)
+        UI.line(frame, 18, y + 29, 188)
     end
-    self.Hint = UI.text(frame, "Hint", Textos.pistaInicial, 16, 519, 172, 28, 11, T.Muted)
+    self.Hint = UI.text(frame, "Hint", Textos.pistaInicial, 18, 0, 188, 32, 12, T.Muted)
+    self.Hint.Position = UDim2.new(0, 18, 1, -56)
     self.Hint.TextWrapped = true
     self.Hint.TextTruncate = Enum.TextTruncate.None
     window.Bars = self.Bars
@@ -92,7 +97,7 @@ end
 function Inspector:SetValue(text)
     local label = self.Window.DetailValue
     label.Text = tostring(text)
-    local size = 28
+    local size = 32
     while size > 15 do
         local bounds = Text:GetTextSize(label.Text, size, label.Font, Vector2.new(100000, 100000))
         if bounds.X <= label.Size.X.Offset - 2 then break end
@@ -153,7 +158,7 @@ function Inspector:Update(control)
         for i, mark in ipairs(self.OptionMarks) do
             mark.Visible = i <= count
             if self.Options.Visible then
-                local width = (144 - (count - 1) * 4) / count
+                local width = (160 - (count - 1) * 4) / count
                 mark.Position = UDim2.fromOffset((i - 1) * (width + 4), 0)
                 mark.Size = UDim2.fromOffset(width, 4)
                 rt:Tween(mark, {BackgroundColor3 = i == index and T.Accent or T.Line}, duration)

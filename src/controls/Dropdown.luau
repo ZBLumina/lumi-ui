@@ -59,13 +59,14 @@ function Dropdown.new(section, options)
         popupRuntime.Animations = rt.Animations
         local scale = window.Scale
         local relative = (selector.AbsolutePosition - window.Main.AbsolutePosition) / scale
-        local width = math.min(window.Width - 16, math.max(180, selector.AbsoluteSize.X / scale))
+        local panelWidth = window.PanelWidth
+        local width = math.min(panelWidth - 16, math.max(180, selector.AbsoluteSize.X / scale))
         local wanted = math.min(234, math.max(1, #values) * 32 + 38)
         local below = window.Height - relative.Y - 37 - 12
         local above = relative.Y - 12
         local upward = below < wanted and above > below
         local height = math.min(wanted, math.max(60, upward and above or below))
-        local x = math.clamp(relative.X, 8, window.Width - width - 8)
+        local x = math.clamp(relative.X, 8, panelWidth - width - 8)
         local y = upward and relative.Y - height - 5 or relative.Y + 36
         y = math.clamp(y, 8, window.Height - height - 8)
         local menu = UI.frame(window.Main, "DropdownPopover", x, y, width, height, T.Raised, 7)
