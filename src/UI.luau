@@ -73,7 +73,7 @@ function UI.mark(parent, x, y, size, color)
     local mark = UI.frame(parent, "LumiMark", x, y, size, size)
     UI.frame(mark, "Stem", size * 0.18, size * 0.16, size * 0.18, size * 0.68, color or T.Accent, 2)
     UI.frame(mark, "Base", size * 0.18, size * 0.66, size * 0.58, size * 0.18, color or T.Accent, 2)
-    UI.sparkle(mark, size * 0.57, size * 0.10, size * 0.34, color or T.Accent)
+    UI.frame(mark, "Dot", size * 0.65, size * 0.20, size * 0.18, size * 0.18, color or T.Accent, 999)
     return mark
 end
 

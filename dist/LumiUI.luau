@@ -5,9 +5,10 @@ __factories["Artwork"] = function(__require)
 -- Original raster artwork. These URLs are centralized so image changes never
 -- require editing the layout, fonts, controls or their callbacks.
 local BOTANICAL = "https://raw.githubusercontent.com/ZBLumina/lumi-ui/76a9281b484b3e69f1e2627e132166f370acc240/assets/decor/"
+local MINIMAL = "https://raw.githubusercontent.com/ZBLumina/lumi-ui/cbe23ab55954557e397e4ad19dd57968fee4ec7a/assets/decor/"
 
 return {
-    Header = {Url = BOTANICAL .. "lumi-flor-cabecera-v1.png"},
+    Header = {Url = MINIMAL .. "lumi-flor-minimal-v1.png"},
     Sidebar = {Url = BOTANICAL .. "lumi-sidebar-botanico-v1.png"},
     Panel = {Url = BOTANICAL .. "lumi-panel-botanico-v1.png"},
     Inspector = {Url = BOTANICAL .. "lumi-inspector-botanico-v1.png"},
@@ -934,23 +935,23 @@ __factories["Theme"] = function(__require)
 local Fonts = __require("Fonts")
 
 return {
-    Shell = Color3.fromRGB(39, 29, 23),
+    Shell = Color3.fromRGB(67, 51, 40),
     Shadow = Color3.fromRGB(8, 6, 5),
-    Sidebar = Color3.fromRGB(43, 32, 25),
-    Workspace = Color3.fromRGB(45, 33, 26),
-    Surface = Color3.fromRGB(56, 42, 33),
-    Raised = Color3.fromRGB(65, 49, 38),
-    Hover = Color3.fromRGB(85, 65, 49),
-    Line = Color3.fromRGB(132, 102, 78),
-    SoftLine = Color3.fromRGB(91, 69, 53),
-    Text = Color3.fromRGB(255, 241, 223),
-    Secondary = Color3.fromRGB(228, 207, 184),
-    Muted = Color3.fromRGB(196, 173, 148),
-    Accent = Color3.fromRGB(239, 199, 155),
-    AccentHover = Color3.fromRGB(247, 218, 184),
-    AccentSoft = Color3.fromRGB(178, 138, 97),
+    Sidebar = Color3.fromRGB(64, 49, 38),
+    Workspace = Color3.fromRGB(70, 54, 42),
+    Surface = Color3.fromRGB(78, 60, 47),
+    Raised = Color3.fromRGB(87, 67, 52),
+    Hover = Color3.fromRGB(101, 79, 61),
+    Line = Color3.fromRGB(162, 128, 96),
+    SoftLine = Color3.fromRGB(113, 88, 67),
+    Text = Color3.fromRGB(255, 247, 233),
+    Secondary = Color3.fromRGB(241, 224, 204),
+    Muted = Color3.fromRGB(221, 201, 178),
+    Accent = Color3.fromRGB(247, 211, 170),
+    AccentHover = Color3.fromRGB(255, 229, 195),
+    AccentSoft = Color3.fromRGB(198, 159, 119),
     AccentWash = Color3.fromRGB(102, 77, 56),
-    Ornament = Color3.fromRGB(169, 128, 92),
+    Ornament = Color3.fromRGB(188, 151, 113),
     Ink = Color3.fromRGB(51, 37, 27),
     Green = Color3.fromRGB(190, 198, 163),
     Danger = Color3.fromRGB(226, 162, 134),
@@ -1041,7 +1042,7 @@ function UI.mark(parent, x, y, size, color)
     local mark = UI.frame(parent, "LumiMark", x, y, size, size)
     UI.frame(mark, "Stem", size * 0.18, size * 0.16, size * 0.18, size * 0.68, color or T.Accent, 2)
     UI.frame(mark, "Base", size * 0.18, size * 0.66, size * 0.58, size * 0.18, color or T.Accent, 2)
-    UI.sparkle(mark, size * 0.57, size * 0.10, size * 0.34, color or T.Accent)
+    UI.frame(mark, "Dot", size * 0.65, size * 0.20, size * 0.18, size * 0.18, color or T.Accent, 999)
     return mark
 end
 
@@ -1217,7 +1218,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.13", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.14", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -1586,7 +1587,7 @@ function Art.sidebar(runtime, parent)
 end
 
 function Art.panel(runtime, parent)
-    return surface(runtime, parent, "PanelArtwork", Artwork.Panel, 0.08)
+    return surface(runtime, parent, "PanelArtwork", Artwork.Panel, 0.40)
 end
 
 function Art.footer(runtime, parent)
@@ -2615,7 +2616,7 @@ local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
 if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
 
-local Lumi = {Version = "0.4.13", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.4.14", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] La biblioteca está cerrada; vuelve a cargarla para continuar")

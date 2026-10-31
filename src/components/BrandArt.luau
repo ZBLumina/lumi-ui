@@ -39,7 +39,7 @@ function Art.sidebar(runtime, parent)
 end
 
 function Art.panel(runtime, parent)
-    return surface(runtime, parent, "PanelArtwork", Artwork.Panel, 0.08)
+    return surface(runtime, parent, "PanelArtwork", Artwork.Panel, 0.40)
 end
 
 function Art.footer(runtime, parent)
