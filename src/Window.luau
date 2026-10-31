@@ -15,7 +15,7 @@ local GuiService = game:GetService("GuiService")
 local Window = {}
 Window.__index = Window
 local DESKTOP_HEIGHT = 688
-local PREFERRED_HEIGHT = 768
+local PREFERRED_HEIGHT = 808
 local INSPECTOR_WIDTH, PANEL_GAP = 224, 12
 
 function Window.new(options)
@@ -97,7 +97,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.14", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.15", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -172,7 +172,7 @@ function Window:Fit()
     local inset = GuiService:GetGuiInset()
     self.SafeTop = self.Mobile and math.max(8, inset.Y + 8) or 8
     local verticalMargin = self.Mobile and self.SafeTop + 8 or 32
-    self.Height = math.max(280, math.min(PREFERRED_HEIGHT, size.Y - verticalMargin))
+    self.Height = math.max(280, math.min(self.Mobile and 768 or PREFERRED_HEIGHT, size.Y - verticalMargin))
     if not self.Mobile then self.NavigationOpen = false end
     self.SidebarWidth = self.Mobile and self.Width or 184
     local sideWidth = self.SidebarWidth

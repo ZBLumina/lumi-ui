@@ -36,8 +36,8 @@ function Tab.new(window, name, options)
     header.Size = UDim2.new(1, 0, 0, 88)
     header.LayoutOrder = 0
     self.Header = header
-    UI.micro(header, "Eyebrow", options.Eyebrow or string.format(Textos.espacioMayus .. " / %02d", index), 0, 0, 540, 14).Size = UDim2.new(1, 0, 0, 14)
     self.Art = BrandArt.header(window.Runtime, header)
+    UI.micro(header, "Eyebrow", options.Eyebrow or string.format(Textos.espacioMayus .. " / %02d", index), 0, 0, 540, 14).Size = UDim2.new(1, 0, 0, 14)
     self.Title = UI.text(header, "Title", name, 0, 21, 570, 39, 32, T.Text, T.Title)
     self.Subtitle = UI.text(header, "Subtitle", self.Description, 0, 66, 620, 18, 13, T.Secondary)
     for _, label in ipairs({self.Title, self.Subtitle}) do
@@ -82,22 +82,27 @@ function Tab:Relayout()
     self.Padding.PaddingLeft, self.Padding.PaddingRight = UDim.new(0, padding), UDim.new(0, padding)
     self.Label.Size = UDim2.new(1, -48, 1, 0)
     local width = self:GetContentWidth()
+    local hero = not self.Window.Mobile and width >= 500
+    local textWidth = hero and math.floor(width * 0.56) or width
     self.Title.TextSize = self.Window.Mobile and 32 or 40
     self.Subtitle.TextSize = self.Window.Mobile and 15 or 16
     local function height(label, available, minimum)
         local bounds = Fonts.bounds(label.Text, label.TextSize, label.FontFace, available - 1)
         return math.max(minimum, math.ceil(bounds.Y) + 2)
     end
-    local titleHeight = height(self.Title, width, self.Window.Mobile and 39 or 48)
+    local titleHeight = height(self.Title, textWidth, self.Window.Mobile and 39 or 48)
     local subtitleY = 21 + titleHeight + 8
-    local subtitleHeight = height(self.Subtitle, width, 18)
-    self.Title.Size = UDim2.new(1, 0, 0, titleHeight)
+    local subtitleHeight = height(self.Subtitle, textWidth, 18)
+    self.Header.Eyebrow.Size = UDim2.fromOffset(textWidth, 14)
+    self.Title.Size = UDim2.fromOffset(textWidth, titleHeight)
     self.Subtitle.Position = UDim2.fromOffset(0, subtitleY)
-    self.Subtitle.Size = UDim2.new(1, 0, 0, subtitleHeight)
-    self.Header.Size = UDim2.new(1, 0, 0, math.max(self.Window.Mobile and 104 or 124, subtitleY + subtitleHeight + 4))
-    self.Art.Visible = not self.Window.Mobile and width >= 500 and Fonts.bounds(self.Title.Text, self.Title.TextSize, self.Title.FontFace).X < width - 212
-        and Fonts.bounds(self.Subtitle.Text, self.Subtitle.TextSize, self.Subtitle.FontFace).X < width - 212
-        and Fonts.bounds(self.Header.Eyebrow.Text, self.Header.Eyebrow.TextSize, self.Header.Eyebrow.FontFace).X < width - 212
+    self.Subtitle.Size = UDim2.fromOffset(textWidth, subtitleHeight)
+    -- The PNG leaves its upper-left 56% x 55% clear. Grow long captions inside
+    -- that area instead of hiding the full-width composition on desktop.
+    local headerHeight = hero and math.max(180, math.ceil((subtitleY + subtitleHeight + 6) / 0.55))
+        or math.max(self.Window.Mobile and 104 or 124, subtitleY + subtitleHeight + 4)
+    self.Header.Size = UDim2.new(1, 0, 0, headerHeight)
+    self.Art.Visible = hero
     for _, section in ipairs(self.Sections) do section:Relayout() end
     for _, control in ipairs(self.Controls) do control:Relayout() end
 end

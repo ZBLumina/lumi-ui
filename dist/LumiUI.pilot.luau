@@ -7,10 +7,10 @@ __factories["Artwork"] = function(__require)
 -- Original raster artwork. These URLs are centralized so image changes never
 -- require editing the layout, fonts, controls or their callbacks.
 local BOTANICAL = "https://raw.githubusercontent.com/ZBLumina/lumi-ui/76a9281b484b3e69f1e2627e132166f370acc240/assets/decor/"
-local MINIMAL = "https://raw.githubusercontent.com/ZBLumina/lumi-ui/cbe23ab55954557e397e4ad19dd57968fee4ec7a/assets/decor/"
+local HEADER = "https://raw.githubusercontent.com/ZBLumina/lumi-ui/920a879879d51c4318a97e6550c7428be754df65/assets/decor/"
 
 return {
-    Header = {Url = MINIMAL .. "lumi-flor-minimal-v1.png"},
+    Header = {Url = HEADER .. "lumi-cabecera-viva-v2.png"},
     Sidebar = {Url = BOTANICAL .. "lumi-sidebar-botanico-v1.png"},
     Panel = {Url = BOTANICAL .. "lumi-panel-botanico-v1.png"},
     Inspector = {Url = BOTANICAL .. "lumi-inspector-botanico-v1.png"},
@@ -800,8 +800,8 @@ function Tab.new(window, name, options)
     header.Size = UDim2.new(1, 0, 0, 88)
     header.LayoutOrder = 0
     self.Header = header
-    UI.micro(header, "Eyebrow", options.Eyebrow or string.format(Textos.espacioMayus .. " / %02d", index), 0, 0, 540, 14).Size = UDim2.new(1, 0, 0, 14)
     self.Art = BrandArt.header(window.Runtime, header)
+    UI.micro(header, "Eyebrow", options.Eyebrow or string.format(Textos.espacioMayus .. " / %02d", index), 0, 0, 540, 14).Size = UDim2.new(1, 0, 0, 14)
     self.Title = UI.text(header, "Title", name, 0, 21, 570, 39, 32, T.Text, T.Title)
     self.Subtitle = UI.text(header, "Subtitle", self.Description, 0, 66, 620, 18, 13, T.Secondary)
     for _, label in ipairs({self.Title, self.Subtitle}) do
@@ -846,22 +846,27 @@ function Tab:Relayout()
     self.Padding.PaddingLeft, self.Padding.PaddingRight = UDim.new(0, padding), UDim.new(0, padding)
     self.Label.Size = UDim2.new(1, -48, 1, 0)
     local width = self:GetContentWidth()
+    local hero = not self.Window.Mobile and width >= 500
+    local textWidth = hero and math.floor(width * 0.56) or width
     self.Title.TextSize = self.Window.Mobile and 32 or 40
     self.Subtitle.TextSize = self.Window.Mobile and 15 or 16
     local function height(label, available, minimum)
         local bounds = Fonts.bounds(label.Text, label.TextSize, label.FontFace, available - 1)
         return math.max(minimum, math.ceil(bounds.Y) + 2)
     end
-    local titleHeight = height(self.Title, width, self.Window.Mobile and 39 or 48)
+    local titleHeight = height(self.Title, textWidth, self.Window.Mobile and 39 or 48)
     local subtitleY = 21 + titleHeight + 8
-    local subtitleHeight = height(self.Subtitle, width, 18)
-    self.Title.Size = UDim2.new(1, 0, 0, titleHeight)
+    local subtitleHeight = height(self.Subtitle, textWidth, 18)
+    self.Header.Eyebrow.Size = UDim2.fromOffset(textWidth, 14)
+    self.Title.Size = UDim2.fromOffset(textWidth, titleHeight)
     self.Subtitle.Position = UDim2.fromOffset(0, subtitleY)
-    self.Subtitle.Size = UDim2.new(1, 0, 0, subtitleHeight)
-    self.Header.Size = UDim2.new(1, 0, 0, math.max(self.Window.Mobile and 104 or 124, subtitleY + subtitleHeight + 4))
-    self.Art.Visible = not self.Window.Mobile and width >= 500 and Fonts.bounds(self.Title.Text, self.Title.TextSize, self.Title.FontFace).X < width - 212
-        and Fonts.bounds(self.Subtitle.Text, self.Subtitle.TextSize, self.Subtitle.FontFace).X < width - 212
-        and Fonts.bounds(self.Header.Eyebrow.Text, self.Header.Eyebrow.TextSize, self.Header.Eyebrow.FontFace).X < width - 212
+    self.Subtitle.Size = UDim2.fromOffset(textWidth, subtitleHeight)
+    -- The PNG leaves its upper-left 56% x 55% clear. Grow long captions inside
+    -- that area instead of hiding the full-width composition on desktop.
+    local headerHeight = hero and math.max(180, math.ceil((subtitleY + subtitleHeight + 6) / 0.55))
+        or math.max(self.Window.Mobile and 104 or 124, subtitleY + subtitleHeight + 4)
+    self.Header.Size = UDim2.new(1, 0, 0, headerHeight)
+    self.Art.Visible = hero
     for _, section in ipairs(self.Sections) do section:Relayout() end
     for _, control in ipairs(self.Controls) do control:Relayout() end
 end
@@ -1138,7 +1143,7 @@ local GuiService = game:GetService("GuiService")
 local Window = {}
 Window.__index = Window
 local DESKTOP_HEIGHT = 688
-local PREFERRED_HEIGHT = 768
+local PREFERRED_HEIGHT = 808
 local INSPECTOR_WIDTH, PANEL_GAP = 224, 12
 
 function Window.new(options)
@@ -1220,7 +1225,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.14", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.15", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -1295,7 +1300,7 @@ function Window:Fit()
     local inset = GuiService:GetGuiInset()
     self.SafeTop = self.Mobile and math.max(8, inset.Y + 8) or 8
     local verticalMargin = self.Mobile and self.SafeTop + 8 or 32
-    self.Height = math.max(280, math.min(PREFERRED_HEIGHT, size.Y - verticalMargin))
+    self.Height = math.max(280, math.min(self.Mobile and 768 or PREFERRED_HEIGHT, size.Y - verticalMargin))
     if not self.Mobile then self.NavigationOpen = false end
     self.SidebarWidth = self.Mobile and self.Width or 184
     local sideWidth = self.SidebarWidth
@@ -1567,10 +1572,13 @@ local function picture(runtime, parent, source, transparency)
 end
 
 function Art.header(runtime, parent)
-    local art = UI.frame(parent, "LumiArcs", 0, 0, 200, 118)
-    art.AnchorPoint, art.Position = Vector2.new(1, 0), UDim2.new(1, 0, 0, 0)
+    local art = UI.frame(parent, "LumiArcs", 0, 0, 0, 0)
+    art.Size = UDim2.fromScale(1, 1)
     art.ClipsDescendants = true
-    picture(runtime, art, Artwork.Header, 0.10)
+    local image = picture(runtime, art, Artwork.Header, 0.10)
+    image.Position = UDim2.fromOffset(8, 6)
+    image.Size = UDim2.new(1, -16, 1, -12)
+    image.ScaleType = Enum.ScaleType.Stretch
     return art
 end
 
@@ -2618,7 +2626,7 @@ local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
 if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
 
-local Lumi = {Version = "0.4.14", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.4.15", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] La biblioteca está cerrada; vuelve a cargarla para continuar")
