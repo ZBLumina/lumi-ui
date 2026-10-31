@@ -16,9 +16,9 @@ function Button.new(section, options)
     action.Position = UDim2.new(1, -88, 0, 30)
     action.BackgroundTransparency = 0
     action.BackgroundColor3, action.TextColor3 = normal, secondary and T.Text or T.Ink
-    action.Font = T.Medium
+    action.FontFace = T.Medium
     action.TextTruncate = Enum.TextTruncate.AtEnd
-    c.ControlWidth = PropertyLayout.inputWidth(action.Text, action.Font, action.TextSize, 144, 240)
+    c.ControlWidth = PropertyLayout.inputWidth(action.Text, action.FontFace, action.TextSize, 144, 240)
     action.ZIndex = 2
     UI.corner(action, 5)
     if secondary then UI.stroke(action, T.Line) end

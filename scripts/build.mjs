@@ -3,6 +3,7 @@
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -160,6 +161,29 @@ async function main() {
     if (!/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(id)) throw new Error(`Identificador de módulo de origen no válido: ${file}`);
     modules.set(id, imports(normalize(await readFile(path.join(root, 'src', file), 'utf8')), `src/${file}`));
   }
+  // Virtual module: keep licensed TTF originals in assets, embed their bytes in
+  // both executable bundles so the user's script needs no font hosting service.
+  const fontFiles = [
+    ['Title', 'Fredoka-SemiBold.ttf', 'Fredoka', 'SemiBold', 600],
+    ['Body', 'NunitoSans-Regular.ttf', 'Nunito Sans', 'Regular', 400],
+    ['BodyMedium', 'NunitoSans-Medium.ttf', 'Nunito Sans', 'Medium', 500],
+    ['Micro', 'Montserrat-Medium.ttf', 'Montserrat', 'Medium', 500],
+    ['Brand', 'Comfortaa-SemiBold.ttf', 'Comfortaa', 'SemiBold', 600],
+  ];
+  const fonts = [];
+  for (const [role, file, name, face, weight] of fontFiles) {
+    const bytes = await readFile(path.join(root, 'assets', 'fonts', file));
+    if (bytes.readUInt32BE(0) !== 0x00010000) throw new Error(`Fuente TTF no válida: ${file}`);
+    const hash = createHash('sha256').update(bytes).digest('hex').slice(0, 16);
+    fonts.push(`    ${role} = {File = ${quote(file.slice(0, -4))}, Name = ${quote(name)}, Face = ${quote(face)}, Weight = ${weight}, Hash = ${quote(hash)}, Data = ${quote(bytes.toString('base64'))}},`);
+  }
+  const notices = [];
+  for (const family of ['Fredoka', 'NunitoSans', 'Montserrat', 'Comfortaa']) {
+    notices.push(normalize(await readFile(path.join(root, 'assets', 'fonts', 'licenses', `${family}-OFL.txt`), 'utf8')).replace(/[ \t]+$/gm, ''));
+  }
+  const license = notices.join('\n');
+  if (license.includes(']=]')) throw new Error('Delimitador inesperado en licencia tipográfica');
+  modules.set('FontsData', imports(`--[=[\nGoogle Fonts · font notices and SIL OFL 1.1 licenses\n${license}]=]\nreturn {\n${fonts.join('\n')}\n}\n`, 'assets/fonts'));
   validate(modules);
   const built = library(modules);
   const demo = normalize(await readFile(path.join(root, 'examples', 'potassium-pilot.luau'), 'utf8'));

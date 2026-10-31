@@ -688,7 +688,10 @@ test("inspector action status fits its value field", function()
     owner:FinishEntrance(); settle()
     equal(owner.DetailValue.Text, button:Get(), "inspector lost the action status")
     local label = owner.DetailValue
-    local measured = game:GetService("TextService"):GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(100000, 100000))
+    local params = Instance.new("GetTextBoundsParams")
+    params.Text, params.Size, params.Font, params.Width = label.Text, label.TextSize, label.FontFace, 100000
+    local measured = game:GetService("TextService"):GetTextBoundsAsync(params)
+    params:Destroy()
     assert(measured.X * owner.Scale <= label.AbsoluteSize.X + 0.5, "inspector clips the completed action status")
 end)
 

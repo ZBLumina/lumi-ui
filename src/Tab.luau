@@ -3,7 +3,8 @@ local T = require("Theme")
 local Section = require("Section")
 local Motion = require("Motion")
 local Textos = require("Textos")
-local Text = game:GetService("TextService")
+local Fonts = require("Fonts")
+local BrandArt = require("components/BrandArt")
 local Tab = {}
 Tab.__index = Tab
 
@@ -35,8 +36,9 @@ function Tab.new(window, name, options)
     header.Size = UDim2.new(1, 0, 0, 88)
     header.LayoutOrder = 0
     self.Header = header
-    UI.text(header, "Eyebrow", options.Eyebrow or string.format(Textos.espacioMayus .. " / %02d", index), 0, 0, 540, 13, 11, T.Muted, T.Medium).Size = UDim2.new(1, 0, 0, 13)
-    self.Title = UI.text(header, "Title", name, 0, 21, 570, 39, 32, T.Text, T.Medium)
+    UI.micro(header, "Eyebrow", options.Eyebrow or string.format(Textos.espacioMayus .. " / %02d", index), 0, 0, 540, 14).Size = UDim2.new(1, 0, 0, 14)
+    self.Art = BrandArt.header(header)
+    self.Title = UI.text(header, "Title", name, 0, 21, 570, 39, 32, T.Text, T.Title)
     self.Subtitle = UI.text(header, "Subtitle", self.Description, 0, 66, 620, 18, 13, T.Secondary)
     for _, label in ipairs({self.Title, self.Subtitle}) do
         label.TextWrapped, label.TextTruncate = true, Enum.TextTruncate.None
@@ -81,7 +83,7 @@ function Tab:Relayout()
     self.Label.Size = UDim2.new(1, -48, 1, 0)
     local width = self:GetContentWidth()
     local function height(label, available, minimum)
-        local bounds = Text:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(math.max(1, available - 1), 100000))
+        local bounds = Fonts.bounds(label.Text, label.TextSize, label.FontFace, available - 1)
         return math.max(minimum, math.ceil(bounds.Y) + 2)
     end
     local titleHeight = height(self.Title, width, 39)
@@ -91,6 +93,9 @@ function Tab:Relayout()
     self.Subtitle.Position = UDim2.fromOffset(0, subtitleY)
     self.Subtitle.Size = UDim2.new(1, 0, 0, subtitleHeight)
     self.Header.Size = UDim2.new(1, 0, 0, math.max(88, subtitleY + subtitleHeight + 4))
+    self.Art.Visible = not self.Window.Mobile and width >= 480 and Fonts.bounds(self.Title.Text, self.Title.TextSize, self.Title.FontFace).X < width - 164
+        and Fonts.bounds(self.Subtitle.Text, self.Subtitle.TextSize, self.Subtitle.FontFace).X < width - 164
+        and Fonts.bounds(self.Header.Eyebrow.Text, self.Header.Eyebrow.TextSize, self.Header.Eyebrow.FontFace).X < width - 164
     for _, section in ipairs(self.Sections) do section:Relayout() end
     for _, control in ipairs(self.Controls) do control:Relayout() end
 end

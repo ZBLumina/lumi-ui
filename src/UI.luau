@@ -1,4 +1,5 @@
 local T = require("Theme")
+local Fonts = require("Fonts")
 local UI = {}
 
 function UI.new(class, parent, properties)
@@ -9,7 +10,15 @@ function UI.new(class, parent, properties)
         object.ZIndex = parent and parent:IsA("GuiObject") and parent.ZIndex or 1
     end
     if object:IsA("GuiButton") then object.AutoButtonColor = false end
-    for key, value in pairs(properties or {}) do object[key] = value end
+    for key, value in pairs(properties or {}) do
+        if key == "Font" and typeof(value) == "Font" then object.FontFace = value
+        else object[key] = value end
+    end
+    -- Nunito's smaller cap height needs a little more size at the same viewing
+    -- distance. Layout reads the resulting TextSize, never the old metrics.
+    if properties and properties.TextSize and (properties.Font == T.Font or properties.Font == T.Medium or properties.Font == T.Mono) then
+        object.TextSize += 2
+    end
     object.Parent = parent
     return object
 end
@@ -40,6 +49,10 @@ function UI.text(parent, name, text, x, y, width, height, size, color, font)
     })
 end
 
+function UI.micro(parent, name, text, x, y, width, height, size, color)
+    return UI.text(parent, name, Fonts.tracked(text), x, y, width, height, size or 11, color or T.Muted, T.Micro)
+end
+
 function UI.button(parent, name, text, x, y, width, height)
     return UI.new("TextButton", parent, {
         Name = name, Text = text or "", Position = UDim2.fromOffset(x, y),
@@ -60,9 +73,21 @@ function UI.mark(parent, x, y, size, color)
     local mark = UI.frame(parent, "LumiMark", x, y, size, size)
     UI.frame(mark, "Stem", size * 0.18, size * 0.16, size * 0.18, size * 0.68, color or T.Accent, 2)
     UI.frame(mark, "Base", size * 0.18, size * 0.66, size * 0.58, size * 0.18, color or T.Accent, 2)
-    local spark = UI.frame(mark, "Spark", size * 0.61, size * 0.17, size * 0.22, size * 0.22, color or T.Accent, 2)
-    spark.Rotation = 45
+    UI.sparkle(mark, size * 0.57, size * 0.10, size * 0.34, color or T.Accent)
     return mark
+end
+
+function UI.sparkle(parent, x, y, size, color, transparency)
+    local spark = UI.frame(parent, "Spark", x, y, size, size)
+    -- The concave outline is an astroid, drawn as small native strips.
+    local strips = math.max(8, math.ceil(size))
+    for i = 1, strips do
+        local offset = math.abs((i - 0.5) / strips * 2 - 1)
+        local height = math.max(0.8, (1 - offset ^ (2 / 3)) ^ (3 / 2) * size)
+        local part = UI.frame(spark, "Ray", (i - 1) * size / strips, (size - height) / 2, size / strips + 0.1, height, color or T.Accent)
+        part.BackgroundTransparency = transparency or 0
+    end
+    return spark
 end
 
 -- Native geometric icons; no font glyphs or external asset dependency.

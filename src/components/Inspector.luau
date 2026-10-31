@@ -2,7 +2,8 @@ local UI = require("UI")
 local T = require("Theme")
 local Motion = require("Motion")
 local Shadow = require("components/Shadow")
-local Text = game:GetService("TextService")
+local Fonts = require("Fonts")
+local BrandArt = require("components/BrandArt")
 local Textos = require("Textos")
 local Inspector = {}
 Inspector.__index = Inspector
@@ -14,9 +15,9 @@ function Inspector.new(window)
     window.Inspector = frame
     self.Shadow = Shadow.new(frame, 12)
     UI.stroke(frame, T.Line)
-    UI.text(frame, "InspectorHeading", "INSPECTOR", 18, 20, 188, 16, 11, T.Muted, T.Medium)
+    UI.micro(frame, "InspectorHeading", "INSPECTOR", 18, 20, 188, 16)
     UI.line(frame, 18, 47, 188)
-    window.DetailTitle = UI.text(frame, "DetailTitle", Textos.tuEspacio, 18, 67, 188, 52, 21, T.Text, T.Medium)
+    window.DetailTitle = UI.text(frame, "DetailTitle", Textos.tuEspacio, 18, 67, 188, 52, 21, T.Text, T.Title)
     window.DetailTitle.TextWrapped = true
     window.DetailTitle.TextYAlignment = Enum.TextYAlignment.Top
     window.DetailTitle.TextTruncate = Enum.TextTruncate.None
@@ -28,7 +29,7 @@ function Inspector.new(window)
     local preview = UI.frame(frame, "ValuePreview", 18, 190, 188, 164, T.Surface, 7)
     UI.stroke(preview, T.SoftLine)
     window.DetailKind = UI.text(preview, "Kind", Textos.seleccion, 14, 14, 160, 16, 11, T.Muted, T.Medium)
-    window.DetailValue = UI.text(preview, "Value", Textos.listo, 14, 40, 160, 40, 32, T.Accent, T.Font)
+    window.DetailValue = UI.text(preview, "Value", Textos.listo, 14, 40, 160, 40, 32, T.Accent, T.Title)
     self.Meta = UI.text(preview, "ValueContext", Textos.espacioMayus, 14, 140, 160, 15, 11, T.Muted, T.Mono)
 
     self.Numeric = UI.frame(preview, "NumericRange", 14, 96, 160, 37)
@@ -62,7 +63,7 @@ function Inspector.new(window)
     UI.frame(self.Action, "Upper", 136, 10, 7, 1, T.AccentSoft).Rotation = 45
     UI.frame(self.Action, "Lower", 136, 16, 7, 1, T.AccentSoft).Rotation = -45
 
-    UI.text(frame, "Properties", Textos.propiedades, 18, 378, 188, 16, 11, T.Muted, T.Medium)
+    UI.micro(frame, "Properties", Textos.propiedades, 18, 378, 188, 16)
     window.DetailRows = {}
     for i, name in ipairs({"Page", "Section", "Type", "Range"}) do
         local y = 405 + (i - 1) * 34
@@ -75,6 +76,7 @@ function Inspector.new(window)
     self.Hint.Position = UDim2.new(0, 18, 1, -56)
     self.Hint.TextWrapped = true
     self.Hint.TextTruncate = Enum.TextTruncate.None
+    BrandArt.footer(frame)
     window.Bars = self.Bars
     self:Clear()
     return self
@@ -96,7 +98,7 @@ function Inspector:SetValue(text)
     label.Text = tostring(text)
     local size = 32
     while size > 15 do
-        local bounds = Text:GetTextSize(label.Text, size, label.Font, Vector2.new(100000, 100000))
+        local bounds = Fonts.bounds(label.Text, size, label.FontFace)
         if bounds.X <= label.Size.X.Offset - 2 then break end
         size -= 1
     end

@@ -1,6 +1,8 @@
 # Lumi UI
 
-Biblioteca modular de interfaces en Luau para Potassium. **v0.4.11 separa la navegación, incorpora el perfil, añade selectores con miniaturas y adapta el uso a teléfono.** El grafito es más profundo y conserva texto claro, acento crema, seguimiento suave del inspector y minimización en una cápsula superior. Toda la interfaz y la demostración están en español. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
+Biblioteca modular de interfaces en Luau para Potassium. **v0.4.12 renueva la identidad visual con café oscuro, marfil, miel y curvas originales.** Los títulos usan Fredoka SemiBold; el texto, Nunito Sans Regular/Medium; los rótulos pequeños espaciados, Montserrat Medium; la marca, Comfortaa SemiBold. Conserva la composición de tres paneles, el perfil, los selectores con miniaturas, el seguimiento del inspector, la cápsula superior y la adaptación táctil. Toda la interfaz y la demostración están en español. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
+
+Las cinco variantes TTF y sus licencias OFL están en `assets/fonts`. El generador incorpora sus bytes en el script: no se descargan fuentes al abrirlo. Potassium las registra en su carpeta local `lumi-ui/fonts`; otros entornos sin registro de archivos usan fuentes nativas de respaldo. El ajuste de textos utiliza la FontFace real. Los ornamentos son geometría original de la interfaz; las imágenes de referencia del usuario no forman parte del paquete.
 
 Los textos propios de la biblioteca se concentran en `src/Textos.luau`: navegación, etiquetas, estados, ayudas, tipos de control, listas vacías y confirmaciones. La demostración también traduce todos sus títulos, descripciones y opciones. Se conservan los nombres de producto Lumi UI, Potassium y Luau, junto con los identificadores técnicos de la API. Los textos personalizados que proporciona quien usa la biblioteca se muestran tal como se reciben.
 
@@ -121,7 +123,7 @@ src/
 
 La generación también produce `tests/runtime.bundle.luau`, excluido de Git. Ejecútalo completo en un cliente de Roblox mediante Potassium. Usa instancias y conexiones reales, crea ventanas temporales y las limpia. Las dos advertencias de las funciones que fallan intencionalmente forman parte de la prueba de aislamiento de errores.
 
-La composición, el perfil, las imágenes y la verificación móvil se registran en [las notas de v0.4.11](docs/design/studio-v0411-perfil-imagenes.md). Los registros históricos de [composición](docs/design/studio-v048-composicion.md), [español](docs/design/studio-v047-espanol.md), [distribución](docs/design/studio-v046-layout.md), [sombra](docs/design/studio-v045-shadow.md) y [movimiento](docs/design/studio-v0410-movimiento.md) documentan las mejoras previas.
+La identidad visual y su comprobación se registran en [las notas de v0.4.12](docs/design/studio-v0412-identidad.md). La composición, el perfil, las imágenes y la verificación móvil se registran en [las notas de v0.4.11](docs/design/studio-v0411-perfil-imagenes.md). Los registros históricos de [composición](docs/design/studio-v048-composicion.md), [español](docs/design/studio-v047-espanol.md), [distribución](docs/design/studio-v046-layout.md), [sombra](docs/design/studio-v045-shadow.md) y [movimiento](docs/design/studio-v0410-movimiento.md) documentan las mejoras previas.
 
 Puedes ejecutar `examples/verificar-espanol.luau` después de la demostración para revisar los textos de las páginas, los estados, los menús y los valores predeterminados. La traducción se comprobó en un cliente real mediante Potassium, junto con los controles, el arrastre, el cierre y la reinyección.
 

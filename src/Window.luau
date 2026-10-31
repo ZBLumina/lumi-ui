@@ -8,6 +8,8 @@ local Shadow = require("components/Shadow")
 local Presentation = require("components/WindowPresentation")
 local Profile = require("components/Profile")
 local Textos = require("Textos")
+local BrandArt = require("components/BrandArt")
+local Fonts = require("Fonts")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
@@ -43,10 +45,10 @@ function Window.new(options)
     local brandTile = UI.frame(sidebar, "BrandTile", 21, 24, 30, 30, T.AccentWash, 7)
     UI.stroke(brandTile, T.AccentSoft).Transparency = 0.65
     UI.mark(brandTile, 5, 5, 20)
-    UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 30, 25, T.Text, T.Medium)
-    UI.text(sidebar, "BrandSub", Textos.interfaz, 21, 65, 145, 14, 11, T.Muted, T.Medium)
-    UI.line(sidebar, 20, 100, 144)
-    UI.text(sidebar, "Group", Textos.secciones, 22, 122, 140, 16, 10, T.Muted, T.Medium)
+    UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 32, 25, T.Text, T.Brand)
+    UI.micro(sidebar, "BrandSub", Textos.interfaz, 21, 65, 145, 14)
+    BrandArt.sidebar(sidebar)
+    UI.micro(sidebar, "Group", Textos.secciones, 22, 122, 140, 16)
     self.Navigation = UI.new("ScrollingFrame", sidebar, {
         Name = "Navigation", Position = UDim2.fromOffset(12, 153), Size = UDim2.new(1, -24, 1, -258),
         ScrollBarThickness = 2, ScrollBarImageColor3 = T.Muted, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -92,7 +94,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.11", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.12", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -183,13 +185,13 @@ function Window:Fit()
     self.Sidebar.Size = UDim2.fromOffset(sideWidth, self.Height)
     self.Sidebar.Brand.Size = UDim2.fromOffset(sideWidth - (self.Mobile and 124 or 70), 30)
     self.Sidebar.BrandSub.Size = UDim2.fromOffset(sideWidth - 40, 14)
-    self.Sidebar.BrandSub.Text = sideWidth < 170 and Textos.biblioteca or Textos.interfaz
+    self.Sidebar.BrandSub.Text = Fonts.tracked(sideWidth < 170 and Textos.biblioteca or Textos.interfaz)
     local short = self.Height < 480
     local navTop = short and 112 or 153
     self.Sidebar.BrandSub.Position = UDim2.fromOffset(21, short and 60 or 65)
-    self.Sidebar.Rule.Position = UDim2.fromOffset(20, short and 80 or 100)
+    self.Sidebar.BrandWaves.Position = UDim2.fromOffset(20, short and 75 or 87)
     self.Sidebar.Group.Position = UDim2.fromOffset(22, short and 89 or 122)
-    self.Sidebar.Rule.Size = UDim2.fromOffset(sideWidth - 40, 1)
+    self.Sidebar.BrandWaves.Size = UDim2.fromOffset(sideWidth - 40, short and 10 or 26)
     self.Navigation.Position = UDim2.fromOffset(12, navTop)
     self.Navigation.Size = UDim2.new(1, -24, 1, -(navTop + (short and 80 or 105)))
     self.Profile:Fit(sideWidth - 40, short)

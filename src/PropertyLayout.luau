@@ -1,15 +1,15 @@
-local Text = game:GetService("TextService")
+local Fonts = require("Fonts")
 local Layout = {}
 local PAD, VERTICAL, COLUMN_GAP, STACK_GAP, INPUT_HEIGHT = 16, 12, 24, 12, 32
 local widths = {Button = 144, Dropdown = 220, Toggle = 100, Slider = 96}
 
 local function textHeight(label, width, minimum)
-    local bounds = Text:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(math.max(1, width - 1), 100000))
+    local bounds = Fonts.bounds(label.Text, label.TextSize, label.FontFace, width - 1)
     return math.max(minimum, math.ceil(bounds.Y) + 2)
 end
 
 function Layout.inputWidth(text, font, size, minimum, maximum)
-    local bounds = Text:GetTextSize(tostring(text), size, font, Vector2.new(100000, 100000))
+    local bounds = Fonts.bounds(text, size, font)
     return math.clamp(math.ceil(bounds.X) + 24, minimum, maximum)
 end
 

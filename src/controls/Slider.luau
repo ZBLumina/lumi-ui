@@ -30,8 +30,8 @@ function Slider.new(section, options)
     -- never move the drag lane or push neighbouring controls while dragging.
     local pattern = "%." .. tostring(precision) .. "f"
     c.ControlWidth = math.max(
-        PropertyLayout.inputWidth(string.format(pattern, minimum) .. c.Suffix, T.Mono, 13, 96, 160),
-        PropertyLayout.inputWidth(string.format(pattern, maximum) .. c.Suffix, T.Mono, 13, 96, 160))
+        PropertyLayout.inputWidth(string.format(pattern, minimum) .. c.Suffix, T.Mono, 15, 96, 160),
+        PropertyLayout.inputWidth(string.format(pattern, maximum) .. c.Suffix, T.Mono, 15, 96, 160))
     c.Min, c.Max, c.Step = minimum, maximum, step
     c.Range = c:Format(minimum) .. " - " .. c:Format(maximum)
     c.Get = function() return value end
