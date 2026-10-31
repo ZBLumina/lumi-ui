@@ -20,7 +20,7 @@ function Art.header(runtime, parent)
     local art = UI.frame(parent, "LumiArcs", 0, 0, 0, 0)
     art.Size = UDim2.fromScale(1, 1)
     art.ClipsDescendants = true
-    local image = picture(runtime, art, Artwork.Header, 0.10)
+    local image = picture(runtime, art, Artwork.Header, 0.64)
     image.Position = UDim2.fromOffset(8, 6)
     image.Size = UDim2.new(1, -16, 1, -12)
     image.ScaleType = Enum.ScaleType.Stretch
@@ -38,15 +38,15 @@ local function surface(runtime, parent, name, source, transparency)
 end
 
 function Art.sidebar(runtime, parent)
-    return surface(runtime, parent, "BrandWaves", Artwork.Sidebar, 0.48)
+    return surface(runtime, parent, "BrandWaves", Artwork.Sidebar, 0.78)
 end
 
 function Art.panel(runtime, parent)
-    return surface(runtime, parent, "PanelArtwork", Artwork.Panel, 0.40)
+    return surface(runtime, parent, "PanelArtwork", Artwork.Panel, 0.82)
 end
 
 function Art.footer(runtime, parent)
-    return surface(runtime, parent, "FooterWaves", Artwork.Inspector, 0.38)
+    return surface(runtime, parent, "FooterWaves", Artwork.Inspector, 0.78)
 end
 
 return Art

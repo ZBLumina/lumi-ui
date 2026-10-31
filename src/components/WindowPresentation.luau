@@ -39,34 +39,42 @@ end
 
 function Presentation:StopFollow()
     local w = self.Window
+    w.Runtime:CancelTween(w.Sidebar, "follow")
     w.Runtime:CancelTween(w.Inspector, "follow")
+    w.Sidebar.Position = UDim2.fromOffset(0, 0)
     w.Inspector.Position = self:Home()
 end
 
 function Presentation:SettleFollow()
     local w = self.Window
     if w.Runtime.Destroyed then return end
+    w.Runtime:Tween(w.Sidebar, {Position = UDim2.fromOffset(0, 0)}, FOLLOW, "follow")
     w.Runtime:Tween(w.Inspector, {Position = self:Home()}, FOLLOW, "follow")
 end
 
 function Presentation:Follow(delta)
     local w = self.Window
-    if not w.Inspector.Visible or w.Runtime.Animations == false or w.Minimized then self:StopFollow(); return end
-    local home = self:Home()
-    local position = w.Inspector.Position
-    local x = math.clamp(position.X.Offset - delta.X / w.Scale, home.X.Offset - 6, home.X.Offset + 16)
-    local y = math.clamp(position.Y.Offset - delta.Y / w.Scale, -14, 14)
-    -- Constrain the trailing surface against the actual fitted viewport. Keep
-    -- at least 6px of open space between it and the principal panel.
+    if w.Mobile or w.Runtime.Animations == false or w.Minimized then self:StopFollow(); return end
+    -- Mirror the horizontal limits so each surface keeps at least 6px of
+    -- open space next to the principal panel, including rapid reversals.
     local left = w.Center.X - w.Width * w.Scale / 2
     local top = w.Center.Y - w.Height * w.Scale / 2
-    local maximumX = (w.Viewport.AbsoluteSize.X - 8 - left) / w.Scale - w.Inspector.Size.X.Offset
+    local minimumX = (8 - left) / w.Scale
     local minimumY = (8 - top) / w.Scale
     local maximumY = (w.Viewport.AbsoluteSize.Y - 8 - top) / w.Scale - w.Height
-    x = math.clamp(x, home.X.Offset - 6, math.max(home.X.Offset - 6, maximumX))
-    y = math.clamp(y, minimumY, math.max(minimumY, maximumY))
-    w.Runtime:CancelTween(w.Inspector, "follow")
-    w.Inspector.Position = UDim2.fromOffset(x, y)
+    local function follow(surface, home, low, high)
+        w.Runtime:CancelTween(surface, "follow")
+        if not surface.Visible then surface.Position = home; return end
+        local maximumX = (w.Viewport.AbsoluteSize.X - 8 - left) / w.Scale - surface.Size.X.Offset
+        low, high = math.max(low, minimumX), math.min(high, maximumX)
+        local x = math.clamp(surface.Position.X.Offset - delta.X / w.Scale, low, math.max(low, high))
+        local y = math.clamp(surface.Position.Y.Offset - delta.Y / w.Scale, -14, 14)
+        y = math.clamp(y, minimumY, math.max(minimumY, maximumY))
+        surface.Position = UDim2.fromOffset(x, y)
+    end
+    follow(w.Sidebar, UDim2.fromOffset(0, 0), -16, 6)
+    local home = self:Home()
+    follow(w.Inspector, home, home.X.Offset - 6, home.X.Offset + 16)
     self:SettleFollow()
 end
 

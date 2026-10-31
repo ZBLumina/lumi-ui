@@ -793,6 +793,76 @@ test("inspector follows dragging with a bounded delay and returns to its gap", f
     assert(edge.X <= 1913 and edge.Y <= 1073, "following inspector escaped viewport")
 end)
 
+test("sidebar trails a desktop drag and returns without closing the panel gap", function()
+    local owner = window()
+    owner.Viewport.Size = UDim2.fromOffset(1920, 1080)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    owner:SetCenter(Vector2.new(960, 540))
+    owner:SetCenter(owner.Center + Vector2.new(80, 24), true)
+    assert(owner.Sidebar.Position.X.Offset < 0, "sidebar has no following delay")
+    assert(owner.Sidebar.Position.X.Offset >= -16, "sidebar delay is excessive")
+    assert(owner.Sidebar.Position.Y.Offset < 0, "sidebar does not follow vertical dragging")
+    for _, delta in ipairs({Vector2.new(-80, -24), Vector2.new(80, 24)}) do
+        owner:SetCenter(owner.Center + delta, true)
+        local gap = owner.Panel.Position.X.Offset - owner.Sidebar.Position.X.Offset - owner.Sidebar.Size.X.Offset
+        assert(gap >= 6, "following sidebar reaches the main panel")
+    end
+    task.wait(.25)
+    equal(owner.Sidebar.Position, UDim2.fromOffset(0, 0), "sidebar did not settle into its gap")
+    equal(owner.Inspector.Position, UDim2.fromOffset(owner.PanelWidth + 12, 0), "inspector did not settle with sidebar")
+end)
+
+test("sidebar stays inside the fitted viewport during rapid edge drags", function()
+    local owner = window()
+    owner.Viewport.Size = UDim2.fromOffset(1920, 1080)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    owner:SetCenter(Vector2.new(960, 540))
+    owner:SetCenter(owner.Center + Vector2.new(40, 20), true)
+    assert(owner.Sidebar.Position.X.Offset < 0, "sidebar must actually trail before checking its limits")
+    for _, target in ipairs({Vector2.new(-10000, -10000), Vector2.new(10000, 10000), Vector2.new(-10000, 10000), Vector2.new(10000, -10000)}) do
+        owner:SetCenter(target, true); settle()
+        local first = owner.Sidebar.AbsolutePosition - owner.Viewport.AbsolutePosition
+        local last = first + owner.Sidebar.AbsoluteSize
+        assert(first.X >= 7.5 and first.Y >= 7.5, "following sidebar escaped top or left")
+        assert(last.X <= 1912.5 and last.Y <= 1072.5, "following sidebar escaped bottom or right")
+        local gap = owner.Panel.AbsolutePosition.X - owner.Sidebar.AbsolutePosition.X - owner.Sidebar.AbsoluteSize.X
+        assert(gap >= 6 * owner.Scale - .5, "following sidebar overlaps main panel")
+    end
+end)
+
+test("sidebar follows in compact desktop and remains stable in touch navigation", function()
+    local owner = window()
+    owner.Viewport.Size = UDim2.fromOffset(900, 720)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    assert(not owner.Mobile and not owner.Inspector.Visible, "fixture is not compact desktop")
+    owner:SetCenter(Vector2.new(450, 360))
+    owner:SetCenter(owner.Center + Vector2.new(0, 8), true)
+    assert(owner.Sidebar.Position.Y.Offset < 0, "compact desktop lost sidebar following")
+    owner.Viewport.Size = UDim2.fromOffset(390, 844)
+    settle(); owner:Fit(); settle(); owner:ToggleNavigation(true)
+    owner:SetCenter(owner.Center + Vector2.new(0, 8), true)
+    equal(owner.Sidebar.Position, UDim2.fromOffset(0, 0), "touch navigation retained a floating offset")
+end)
+
+test("sidebar following is cleared by minimize, resize and animation opt-out", function()
+    local owner = window()
+    owner.Viewport.Size = UDim2.fromOffset(1920, 1080)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    owner:SetCenter(Vector2.new(960, 540))
+    owner:SetCenter(owner.Center + Vector2.new(40, 20), true)
+    assert(owner.Sidebar.Position.X.Offset < 0, "sidebar must actually trail before minimizing")
+    owner:Minimize()
+    equal(owner.Sidebar.Position, UDim2.fromOffset(0, 0), "minimize retained sidebar lag")
+    owner:Restore(); owner.Presentation:FinishTransition()
+    owner:SetCenter(owner.Center + Vector2.new(-40, -20), true)
+    owner.Viewport.Size = UDim2.fromOffset(900, 720)
+    settle(); owner:Fit()
+    equal(owner.Sidebar.Position, UDim2.fromOffset(0, 0), "resize retained sidebar lag")
+    owner.Runtime.Animations = false
+    owner:SetCenter(owner.Center + Vector2.new(0, 8), true)
+    equal(owner.Sidebar.Position, UDim2.fromOffset(0, 0), "animation opt-out retained sidebar lag")
+end)
+
 test("minimize closes input scopes and restore preserves the same workspace", function()
     local group, owner, tab = section()
     local slider = group:AddSlider({Min = 0, Max = 100, Default = 37})

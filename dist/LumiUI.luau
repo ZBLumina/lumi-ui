@@ -1150,7 +1150,7 @@ function Window.new(options)
     local root = rt:Mount()
     local self = setmetatable({Runtime = rt, Root = root, Tabs = {}, _destroyed = false,
         Width = 1100, Height = DESKTOP_HEIGHT, Scale = 1, OpenDropdown = nil, Minimized = false}, Window)
-    -- A transparent assembly moves both independently painted surfaces together.
+    -- A transparent assembly anchors the three independently painted surfaces.
     local main = UI.frame(root, "Main", 0, 0, 1100, DESKTOP_HEIGHT)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.Position = UDim2.fromScale(0.5, 0.5)
@@ -1223,7 +1223,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.15", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.16", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -1573,7 +1573,7 @@ function Art.header(runtime, parent)
     local art = UI.frame(parent, "LumiArcs", 0, 0, 0, 0)
     art.Size = UDim2.fromScale(1, 1)
     art.ClipsDescendants = true
-    local image = picture(runtime, art, Artwork.Header, 0.10)
+    local image = picture(runtime, art, Artwork.Header, 0.64)
     image.Position = UDim2.fromOffset(8, 6)
     image.Size = UDim2.new(1, -16, 1, -12)
     image.ScaleType = Enum.ScaleType.Stretch
@@ -1591,15 +1591,15 @@ local function surface(runtime, parent, name, source, transparency)
 end
 
 function Art.sidebar(runtime, parent)
-    return surface(runtime, parent, "BrandWaves", Artwork.Sidebar, 0.48)
+    return surface(runtime, parent, "BrandWaves", Artwork.Sidebar, 0.78)
 end
 
 function Art.panel(runtime, parent)
-    return surface(runtime, parent, "PanelArtwork", Artwork.Panel, 0.40)
+    return surface(runtime, parent, "PanelArtwork", Artwork.Panel, 0.82)
 end
 
 function Art.footer(runtime, parent)
-    return surface(runtime, parent, "FooterWaves", Artwork.Inspector, 0.38)
+    return surface(runtime, parent, "FooterWaves", Artwork.Inspector, 0.78)
 end
 
 return Art
@@ -2018,34 +2018,42 @@ end
 
 function Presentation:StopFollow()
     local w = self.Window
+    w.Runtime:CancelTween(w.Sidebar, "follow")
     w.Runtime:CancelTween(w.Inspector, "follow")
+    w.Sidebar.Position = UDim2.fromOffset(0, 0)
     w.Inspector.Position = self:Home()
 end
 
 function Presentation:SettleFollow()
     local w = self.Window
     if w.Runtime.Destroyed then return end
+    w.Runtime:Tween(w.Sidebar, {Position = UDim2.fromOffset(0, 0)}, FOLLOW, "follow")
     w.Runtime:Tween(w.Inspector, {Position = self:Home()}, FOLLOW, "follow")
 end
 
 function Presentation:Follow(delta)
     local w = self.Window
-    if not w.Inspector.Visible or w.Runtime.Animations == false or w.Minimized then self:StopFollow(); return end
-    local home = self:Home()
-    local position = w.Inspector.Position
-    local x = math.clamp(position.X.Offset - delta.X / w.Scale, home.X.Offset - 6, home.X.Offset + 16)
-    local y = math.clamp(position.Y.Offset - delta.Y / w.Scale, -14, 14)
-    -- Constrain the trailing surface against the actual fitted viewport. Keep
-    -- at least 6px of open space between it and the principal panel.
+    if w.Mobile or w.Runtime.Animations == false or w.Minimized then self:StopFollow(); return end
+    -- Mirror the horizontal limits so each surface keeps at least 6px of
+    -- open space next to the principal panel, including rapid reversals.
     local left = w.Center.X - w.Width * w.Scale / 2
     local top = w.Center.Y - w.Height * w.Scale / 2
-    local maximumX = (w.Viewport.AbsoluteSize.X - 8 - left) / w.Scale - w.Inspector.Size.X.Offset
+    local minimumX = (8 - left) / w.Scale
     local minimumY = (8 - top) / w.Scale
     local maximumY = (w.Viewport.AbsoluteSize.Y - 8 - top) / w.Scale - w.Height
-    x = math.clamp(x, home.X.Offset - 6, math.max(home.X.Offset - 6, maximumX))
-    y = math.clamp(y, minimumY, math.max(minimumY, maximumY))
-    w.Runtime:CancelTween(w.Inspector, "follow")
-    w.Inspector.Position = UDim2.fromOffset(x, y)
+    local function follow(surface, home, low, high)
+        w.Runtime:CancelTween(surface, "follow")
+        if not surface.Visible then surface.Position = home; return end
+        local maximumX = (w.Viewport.AbsoluteSize.X - 8 - left) / w.Scale - surface.Size.X.Offset
+        low, high = math.max(low, minimumX), math.min(high, maximumX)
+        local x = math.clamp(surface.Position.X.Offset - delta.X / w.Scale, low, math.max(low, high))
+        local y = math.clamp(surface.Position.Y.Offset - delta.Y / w.Scale, -14, 14)
+        y = math.clamp(y, minimumY, math.max(minimumY, maximumY))
+        surface.Position = UDim2.fromOffset(x, y)
+    end
+    follow(w.Sidebar, UDim2.fromOffset(0, 0), -16, 6)
+    local home = self:Home()
+    follow(w.Inspector, home, home.X.Offset - 6, home.X.Offset + 16)
     self:SettleFollow()
 end
 
@@ -2624,7 +2632,7 @@ local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
 if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
 
-local Lumi = {Version = "0.4.15", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.4.16", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] La biblioteca está cerrada; vuelve a cargarla para continuar")
