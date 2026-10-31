@@ -1,5 +1,253 @@
 -- Generado por scripts/build.mjs; edita src/*.luau.
 local __factories = {}
+__factories["ImageSource"] = function(__require)
+-- src/ImageSource.luau
+-- Resolve may yield; Bind owns asynchronous delivery, never image visibility.
+local ImageSource = {}
+local Binding = {}
+Binding.__index = Binding
+local CACHE = "lumi-ui/assets"
+local alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+local sextets = {}
+for index = 1, #alphabet do sextets[alphabet:byte(index)] = index - 1 end
+
+local function hash(value)
+    local first, second = 2166136261, 5381
+    for index = 1, #value do
+        local byte = value:byte(index)
+        first = bit32.bxor(first, byte)
+        -- Split FNV multiplication to keep every intermediate exactly representable.
+        first = (first * 403 + bit32.lshift(first, 24)) % 4294967296
+        second = (second * 33 + byte) % 4294967296
+    end
+    return string.format("%08x%08x", first, second)
+end
+
+local function decode(data)
+    data = data:gsub("%s", "")
+    if data == "" or #data % 4 ~= 0 then return nil, "Base64 no válido" end
+    local output = {}
+    for index = 1, #data, 4 do
+        local a, b = sextets[data:byte(index)], sextets[data:byte(index + 1)]
+        local third, fourth = data:byte(index + 2), data:byte(index + 3)
+        local c, d = sextets[third], sextets[fourth]
+        local last = index + 3 == #data
+        if not a or not b or (not c and third ~= 61) or (not d and fourth ~= 61)
+            or (third == 61 and (fourth ~= 61 or b % 16 ~= 0))
+            or (fourth == 61 and c and c % 4 ~= 0)
+            or (not last and (third == 61 or fourth == 61)) then
+            return nil, "Base64 no válido"
+        end
+        local value = a * 262144 + b * 4096 + (c or 0) * 64 + (d or 0)
+        local bytes = string.char(math.floor(value / 65536))
+        if c then bytes ..= string.char(math.floor(value / 256) % 256) end
+        if d then bytes ..= string.char(value % 256) end
+        table.insert(output, bytes)
+    end
+    return table.concat(output)
+end
+
+local function extension(data)
+    if data:sub(1, 8) == "\137PNG\r\n\26\n" then return "png" end
+    if data:sub(1, 3) == "\255\216\255" then return "jpg" end
+    return nil
+end
+
+local function exists(path)
+    if type(isfile) ~= "function" then return nil, "El ejecutor no permite comprobar archivos" end
+    local ok, found = pcall(isfile, path)
+    if not ok or type(found) ~= "boolean" then return nil, "No se pudo comprobar el archivo" end
+    return found
+end
+
+local function canRegister()
+    return type(getcustomasset) == "function" or type(getsynasset) == "function"
+end
+
+local function register(path)
+    for _, loader in ipairs({getcustomasset or false, getsynasset or false}) do
+        if type(loader) == "function" then
+            local ok, uri = pcall(loader, path)
+            if ok and type(uri) == "string" and uri ~= "" then return uri end
+        end
+    end
+    return nil, "No se pudo registrar la imagen local con el ejecutor"
+end
+
+local function prepareCache()
+    for _, folder in ipairs({"lumi-ui", CACHE}) do
+        local found = false
+        if type(isfolder) == "function" then
+            local ok
+            ok, found = pcall(isfolder, folder)
+            if not ok or type(found) ~= "boolean" then return nil, "No se pudo comprobar la carpeta de imágenes" end
+        end
+        if not found then
+            local occupied, problem = exists(folder)
+            if occupied == nil then return nil, problem end
+            if occupied then return nil, "La carpeta de imágenes está ocupada por un archivo" end
+            if type(makefolder) == "function" then
+                local ok = pcall(makefolder, folder)
+                if not ok and type(isfolder) == "function" then
+                    local checked, created = pcall(isfolder, folder)
+                    if not checked or not created then return nil, "No se pudo crear la carpeta de imágenes" end
+                end
+            elseif type(isfolder) == "function" then
+                return nil, "El ejecutor no permite crear la carpeta de imágenes"
+            end
+            -- Without folder helpers, writefile may still support an existing directory.
+        end
+    end
+    return true
+end
+
+local function save(data, key)
+    if not canRegister() then return nil, "El ejecutor no permite imágenes locales" end
+    local suffix = extension(data)
+    if not suffix then return nil, "La imagen debe contener datos PNG o JPEG" end
+    local path = CACHE .. "/" .. key .. "." .. suffix
+    local found, problem = exists(path)
+    if found == nil then return nil, problem end
+    if not found then
+        if type(writefile) ~= "function" then return nil, "El ejecutor no permite guardar imágenes" end
+        local ready
+        ready, problem = prepareCache()
+        if not ready then return nil, problem end
+        -- Recheck after folder creation: another resolution may have populated the cache.
+        found, problem = exists(path)
+        if found == nil then return nil, problem end
+        if not found then
+            local ok = pcall(writefile, path, data)
+            if not ok then return nil, "No se pudo guardar la imagen" end
+            found, problem = exists(path)
+            if found == nil then return nil, problem end
+            if not found then return nil, "El ejecutor no guardó la imagen" end
+        end
+    end
+    return register(path)
+end
+
+local function download(url)
+    if type(url) ~= "string" or not url:lower():match("^https://[^%s]+$") then
+        return nil, "La URL de imagen debe usar HTTPS"
+    end
+    if not canRegister() then return nil, "El ejecutor no permite imágenes locales" end
+    -- Only hashes reach filenames; URL credentials and query strings stay out of errors.
+    local key = "url-" .. hash(url)
+    for _, suffix in ipairs({"png", "jpg"}) do
+        local path = CACHE .. "/" .. key .. "." .. suffix
+        local found, problem = exists(path)
+        if found == nil then return nil, problem end
+        if found then return register(path) end
+    end
+    if type(writefile) ~= "function" then return nil, "El ejecutor no permite guardar imágenes" end
+    local ok, data = pcall(function() return game:HttpGet(url) end)
+    if not ok or type(data) ~= "string" or data == "" then return nil, "No se pudo descargar la imagen" end
+    return save(data, key)
+end
+
+local function resolve(source)
+    if source == nil or source == "" then return nil, nil end
+    if type(source) == "number" then
+        if source <= 0 or source > 9007199254740991 or source % 1 ~= 0 then
+            return nil, "El identificador de imagen debe ser un entero positivo"
+        end
+        return "rbxassetid://" .. string.format("%.0f", source), nil
+    end
+    if type(source) == "string" then
+        if source:match("^rbx%a+://.+") then return source, nil end
+        return download(source)
+    end
+    if type(source) ~= "table" then return nil, "Fuente de imagen no válida" end
+    local fields = (source.Path ~= nil and 1 or 0) + (source.Url ~= nil and 1 or 0) + (source.Data ~= nil and 1 or 0)
+    if fields ~= 1 then return nil, "Usa una sola fuente de imagen: Path, Url o Data" end
+    if source.Path ~= nil then
+        if type(source.Path) ~= "string" or source.Path == "" then return nil, "La ruta de imagen no es válida" end
+        if not canRegister() then return nil, "El ejecutor no permite imágenes locales" end
+        if type(isfile) == "function" then
+            local found, problem = exists(source.Path)
+            if found == nil then return nil, problem end
+            if not found then return nil, "No se encontró la imagen local" end
+        end
+        return register(source.Path)
+    end
+    if source.Url ~= nil then return download(source.Url) end
+    if type(source.Data) ~= "string" then return nil, "Los datos de imagen deben ser Base64" end
+    local data, problem = decode(source.Data)
+    if not data then return nil, problem end
+    -- Name is descriptive only. Bytes determine identity and extension, never a user path.
+    return save(data, "data-" .. hash(data))
+end
+
+function ImageSource.Resolve(source): (string?, string?)
+    local ok, uri, problem = pcall(resolve, source)
+    if not ok then return nil, "No se pudo resolver la imagen" end
+    return uri, problem
+end
+
+function Binding:_Current(generation)
+    return not self.Destroyed and self.Runtime and not self.Runtime.Destroyed
+        and self.Label ~= nil and self.Generation == generation
+end
+
+function Binding:_Apply(generation, uri, problem)
+    if not self:_Current(generation) then return end
+    self.Error = problem
+    local ok = pcall(function() self.Label.Image = uri or "" end)
+    if not ok and self:_Current(generation) then self.Error = "No se pudo actualizar la imagen" end
+end
+
+function Binding:Set(source)
+    if not self:_Current(self.Generation) then return self end
+    if self.Task then self.Runtime:CancelDelay(self.Task); self.Task = nil end
+    self.Generation += 1
+    local generation = self.Generation
+    self:_Apply(generation, nil, nil)
+    local ok, task = pcall(self.Runtime.Callback, self.Runtime, function()
+        if not self:_Current(generation) then return end
+        local uri, problem = ImageSource.Resolve(source)
+        self:_Apply(generation, uri, problem)
+    end)
+    if ok then self.Task = task end
+    if not ok and self:_Current(generation) then self.Error = "No se pudo programar la carga de imagen" end
+    return self
+end
+
+function Binding:Destroy()
+    if self.Destroyed then return end
+    self.Destroyed = true
+    self.Generation += 1
+    if self.Task and self.Runtime then self.Runtime:CancelDelay(self.Task) end
+    self.Task = nil
+    if self.Connection then pcall(function() self.Connection:Disconnect() end) end
+    self.Connection, self.Label, self.Runtime = nil, nil, nil
+end
+
+function ImageSource.Bind(runtime, imageLabel, source)
+    local binding = setmetatable({Runtime = runtime, Label = imageLabel, Generation = 0, Destroyed = false}, Binding)
+    if type(runtime) ~= "table" or type(runtime.Callback) ~= "function" or runtime.Destroyed or imageLabel == nil then
+        binding.Error = "No hay un runtime o una etiqueta disponibles para la imagen"
+        binding:Destroy()
+        return binding
+    end
+    local ok, connection = pcall(function()
+        return imageLabel.Destroying:Connect(function() binding:Destroy() end)
+    end)
+    if ok then binding.Connection = connection end
+    if type(runtime.OnCleanup) == "function" then
+        local registered = pcall(runtime.OnCleanup, runtime, function() binding:Destroy() end)
+        if not registered then
+            binding.Error = "No se pudo registrar la limpieza de la imagen"
+            binding:Destroy()
+            return binding
+        end
+    end
+    return binding:Set(source)
+end
+
+return ImageSource
+end
+
 __factories["Motion"] = function(__require)
 -- src/Motion.luau
 -- Short, interruptible transitions. Original opacity is restored on interruption.
@@ -90,27 +338,29 @@ function Layout.inputWidth(text, font, size, minimum, maximum)
 end
 
 function Layout.measure(control, width)
+    local phone = control.Section.Tab.Window.Mobile
+    local inputHeight = phone and 44 or INPUT_HEIGHT
     local available = math.max(1, math.floor(width - 2 * PAD))
     local field = math.min(control.ControlWidth or widths[control.Kind], available)
     local caption = available - field - COLUMN_GAP
-    local stacked = caption < 200
+    local stacked = caption < 200 or (phone and control.Kind ~= "Toggle")
     if stacked then caption = available end
     local title = textHeight(control.Label, caption, 18)
     local description = control.DescriptionLabel.Text ~= "" and textHeight(control.DescriptionLabel, caption, 16) or 0
     local text = title + (description > 0 and 4 + description or 0)
-    local header = stacked and text + STACK_GAP + INPUT_HEIGHT or math.max(text, INPUT_HEIGHT)
+    local header = stacked and text + STACK_GAP + inputHeight or math.max(text, inputHeight)
     local slider = control.Kind == "Slider"
     local height = math.max(64, VERTICAL * 2 + header)
     local top = slider and VERTICAL or (height - header) / 2
     local result = {
         Stacked = stacked, Height = height, TextWidth = caption, TitleHeight = title, DescriptionHeight = description,
         TitleY = top + (stacked and 0 or (header - text) / 2),
-        ControlX = width - PAD - field, ControlY = top + (stacked and text + STACK_GAP or (header - INPUT_HEIGHT) / 2),
-        ControlWidth = field, ControlHeight = INPUT_HEIGHT,
+        ControlX = width - PAD - field, ControlY = top + (stacked and text + STACK_GAP or (header - inputHeight) / 2),
+        ControlWidth = field, ControlHeight = inputHeight,
     }
     result.DescriptionY = result.TitleY + title + 4
     if slider then
-        result.HitY, result.HitHeight = top + header + 8, 28
+        result.HitY, result.HitHeight = top + header + 8, phone and 44 or 28
         result.TrackY = result.HitY + result.HitHeight / 2
         result.BoundsY = result.HitY + result.HitHeight + 2
         result.LaneX, result.LaneWidth = PAD, available
@@ -200,6 +450,7 @@ function Runtime:Callback(callback, ...)
     end)
     self.Threads[thread] = true
     task.spawn(thread)
+    return thread
 end
 
 function Runtime:OnCleanup(callback)
@@ -365,6 +616,7 @@ function Section:AddButton(options) return Button.new(self, options or {}) end
 function Section:AddToggle(options) return Toggle.new(self, options or {}) end
 function Section:AddSlider(options) return Slider.new(self, options or {}) end
 function Section:AddDropdown(options) return Dropdown.new(self, options or {}) end
+function Section:AddImageDropdown(options) return Dropdown.new(self, options or {}) end
 
 return Section
 end
@@ -445,6 +697,12 @@ function Tab:GetContentWidth()
 end
 
 function Tab:Relayout()
+    local rowHeight = self.Window.Mobile and 48 or 42
+    self.Button.Size = UDim2.new(1, 0, 0, rowHeight)
+    self.Icon.Position = UDim2.fromOffset(14, (rowHeight - 16) / 2)
+    self.Indicator.Position = UDim2.fromOffset(1, (rowHeight - 14) / 2)
+    local padding = self.Window.Mobile and 16 or 26
+    self.Padding.PaddingLeft, self.Padding.PaddingRight = UDim.new(0, padding), UDim.new(0, padding)
     self.Label.Size = UDim2.new(1, -48, 1, 0)
     local width = self:GetContentWidth()
     local function height(label, available, minimum)
@@ -531,22 +789,22 @@ end
 __factories["Theme"] = function(__require)
 -- src/Theme.luau
 return {
-    Shell = Color3.fromRGB(21, 22, 20),
-    Shadow = Color3.fromRGB(8, 8, 7),
-    Sidebar = Color3.fromRGB(24, 25, 23),
-    Workspace = Color3.fromRGB(28, 29, 27),
-    Surface = Color3.fromRGB(34, 35, 32),
-    Raised = Color3.fromRGB(43, 44, 40),
-    Hover = Color3.fromRGB(50, 51, 46),
-    Line = Color3.fromRGB(61, 61, 55),
-    SoftLine = Color3.fromRGB(44, 45, 40),
+    Shell = Color3.fromRGB(13, 14, 15),
+    Shadow = Color3.fromRGB(4, 5, 6),
+    Sidebar = Color3.fromRGB(16, 17, 18),
+    Workspace = Color3.fromRGB(19, 20, 22),
+    Surface = Color3.fromRGB(24, 26, 28),
+    Raised = Color3.fromRGB(32, 34, 36),
+    Hover = Color3.fromRGB(40, 42, 44),
+    Line = Color3.fromRGB(55, 58, 60),
+    SoftLine = Color3.fromRGB(36, 38, 40),
     Text = Color3.fromRGB(245, 244, 237),
     Secondary = Color3.fromRGB(211, 210, 199),
     Muted = Color3.fromRGB(185, 184, 172),
     Accent = Color3.fromRGB(244, 230, 186),
     AccentHover = Color3.fromRGB(251, 241, 212),
     AccentSoft = Color3.fromRGB(153, 144, 116),
-    AccentWash = Color3.fromRGB(49, 48, 40),
+    AccentWash = Color3.fromRGB(40, 39, 34),
     Ink = Color3.fromRGB(46, 44, 35),
     Green = Color3.fromRGB(178, 192, 157),
     Danger = Color3.fromRGB(220, 155, 137),
@@ -694,6 +952,7 @@ local Motion = __require("Motion")
 local Inspector = __require("components/Inspector")
 local Shadow = __require("components/Shadow")
 local Presentation = __require("components/WindowPresentation")
+local Profile = __require("components/Profile")
 local Textos = __require("Textos")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
@@ -722,9 +981,11 @@ function Window.new(options)
     self.TopEdge = UI.frame(panel, "TopEdge", 12, 0, 840, 1, T.Secondary)
     self.TopEdge.BackgroundTransparency = 0.88
 
-    local sidebar = UI.frame(panel, "Sidebar", 0, 0, 184, 660, T.Sidebar, 12)
+    local sidebar = UI.frame(main, "Sidebar", 0, 0, 184, 660, T.Sidebar, 12)
     self.Sidebar = sidebar
-    UI.frame(sidebar, "InnerEdge", 174, 0, 10, 660, T.Sidebar)
+    sidebar.Active = true
+    self.SidebarShadow = Shadow.new(sidebar, 12)
+    UI.stroke(sidebar, T.Line)
     local brandTile = UI.frame(sidebar, "BrandTile", 21, 24, 30, 30, T.AccentWash, 7)
     UI.stroke(brandTile, T.AccentSoft).Transparency = 0.65
     UI.mark(brandTile, 5, 5, 20)
@@ -737,13 +998,13 @@ function Window.new(options)
         ScrollBarThickness = 2, ScrollBarImageColor3 = T.Muted, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
     })
     UI.list(self.Navigation, 5)
-    local footer = UI.frame(sidebar, "SidebarFooter", 20, 565, 144, 76)
-    self.SidebarFooter = footer
-    UI.line(footer, 0, 0, 144)
-    UI.mark(footer, 0, 20, 22, T.Secondary)
-    UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "v0.4.10", 33, 38, 110, 16, 11, T.Muted)
-    UI.frame(panel, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
+    self.Profile = Profile.new(self, options)
+    self.SidebarFooter = self.Profile.Frame
+    local navClose = UI.button(sidebar, "CloseNavigation", "", 0, 6, 44, 44)
+    UI.frame(navClose, "A", 16, 21, 12, 1, T.Secondary).Rotation = 45
+    UI.frame(navClose, "B", 16, 21, 12, 1, T.Secondary).Rotation = -45
+    rt:Connect(navClose.Activated, function() self:ToggleNavigation(false) end)
+    self.NavigationCloseButton = navClose
 
     local chrome = UI.frame(panel, "Chrome", 184, 0, 680, 48)
     self.Chrome = chrome
@@ -763,6 +1024,10 @@ function Window.new(options)
     UI.hover(rt, minimize, T.Shell, T.Hover)
     rt:Connect(minimize.Activated, function() self:Minimize() end)
     self.MinimizeButton = minimize
+    local menu = UI.button(chrome, "NavigationMenu", "", 8, 6, 44, 44)
+    for i = 1, 3 do UI.frame(menu, "Line" .. i, 14, 12 + i * 5, 16, 1, T.Secondary) end
+    self.MenuButton = menu
+    rt:Connect(menu.Activated, function() self:ToggleNavigation() end)
     UI.line(chrome, 0, 47, 916)
 
     self.Workspace = UI.frame(panel, "Workspace", 184, 48, 680, 584, T.Workspace)
@@ -773,7 +1038,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.10", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.11", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -843,19 +1108,26 @@ function Window:Fit()
     self:FinishEntrance(resized)
     self:ClosePopup()
     local compact = size.X < 1132 or size.Y < DESKTOP_HEIGHT + 32
-    self.Width = compact and math.max(320, math.min(1100, size.X - 32)) or 1100
-    self.Height = math.max(280, math.min(DESKTOP_HEIGHT, size.Y - 32))
-    self.SidebarWidth = size.X < 700 and 140 or 184
+    self.Width = compact and math.max(280, math.min(1100, size.X - 32)) or 1100
+    self.Mobile = size.X < 700 or Input.TouchEnabled
+    local inset = GuiService:GetGuiInset()
+    self.SafeTop = self.Mobile and math.max(8, inset.Y + 8) or 8
+    local verticalMargin = self.Mobile and self.SafeTop + 8 or 32
+    self.Height = math.max(280, math.min(DESKTOP_HEIGHT, size.Y - verticalMargin))
+    if not self.Mobile then self.NavigationOpen = false end
+    self.SidebarWidth = self.Mobile and self.Width or 184
     local sideWidth = self.SidebarWidth
-    self.Inspector.Visible = not compact
-    self.PanelWidth = self.Width - (compact and 0 or INSPECTOR_WIDTH + PANEL_GAP)
+    self.Inspector.Visible = not compact and not self.Mobile
+    self.PanelWidth = self.Width - (self.Inspector.Visible and INSPECTOR_WIDTH + PANEL_GAP or 0)
+    self.ContentX = self.Mobile and 0 or sideWidth + PANEL_GAP
     self.Main.Size = UDim2.fromOffset(self.Width, self.Height)
-    self.Panel.Size = UDim2.fromOffset(self.PanelWidth, self.Height)
-    self.TopEdge.Size = UDim2.fromOffset(self.PanelWidth - 24, 1)
+    self.Panel.Position = UDim2.fromOffset(self.ContentX, 0)
+    self.Panel.Size = UDim2.fromOffset(self.PanelWidth - self.ContentX, self.Height)
+    self.Panel.Visible = not (self.Mobile and self.NavigationOpen)
+    self.Sidebar.Visible = not self.Mobile or self.NavigationOpen == true
+    self.TopEdge.Size = UDim2.fromOffset(self.Panel.Size.X.Offset - 24, 1)
     self.Sidebar.Size = UDim2.fromOffset(sideWidth, self.Height)
-    self.Sidebar.InnerEdge.Position = UDim2.fromOffset(sideWidth - 10, 0)
-    self.Sidebar.InnerEdge.Size = UDim2.fromOffset(10, self.Height)
-    self.Sidebar.Brand.Size = UDim2.fromOffset(sideWidth - 70, 30)
+    self.Sidebar.Brand.Size = UDim2.fromOffset(sideWidth - (self.Mobile and 124 or 70), 30)
     self.Sidebar.BrandSub.Size = UDim2.fromOffset(sideWidth - 40, 14)
     self.Sidebar.BrandSub.Text = sideWidth < 170 and Textos.biblioteca or Textos.interfaz
     local short = self.Height < 480
@@ -866,31 +1138,39 @@ function Window:Fit()
     self.Sidebar.Rule.Size = UDim2.fromOffset(sideWidth - 40, 1)
     self.Navigation.Position = UDim2.fromOffset(12, navTop)
     self.Navigation.Size = UDim2.new(1, -24, 1, -(navTop + (short and 80 or 105)))
-    self.SidebarFooter.Position = UDim2.fromOffset(20, self.Height - (short and 69 or 95))
-    self.SidebarFooter.Size = UDim2.fromOffset(sideWidth - 40, short and 56 or 76)
-    self.SidebarFooter.Rule.Size = UDim2.fromOffset(sideWidth - 40, 1)
-    self.SidebarFooter.Build.Size = UDim2.fromOffset(sideWidth - 73, 18)
-    self.SidebarFooter.Version.Size = UDim2.fromOffset(sideWidth - 73, 16)
-    self.Panel.SidebarRule.Position = UDim2.fromOffset(sideWidth - 1, 0)
-    self.Panel.SidebarRule.Size = UDim2.fromOffset(1, self.Height)
-    local chromeWidth = self.PanelWidth - sideWidth
-    self.Chrome.Position = UDim2.fromOffset(sideWidth, 0)
-    self.Chrome.Size = UDim2.fromOffset(chromeWidth, 48)
-    self.CloseButton.Position = UDim2.fromOffset(chromeWidth - 44, 9)
-    self.MinimizeButton.Position = UDim2.fromOffset(chromeWidth - 80, 9)
-    self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, chromeWidth - 116), 48)
-    self.Workspace.Position = UDim2.fromOffset(sideWidth, 48)
-    self.Workspace.Size = UDim2.fromOffset(chromeWidth, self.Height - 76)
+    self.Profile:Fit(sideWidth - 40, short)
+    self.NavigationCloseButton.Position = UDim2.fromOffset(sideWidth - 52, 6)
+    self.NavigationCloseButton.Visible = self.Mobile
+    self.MenuButton.Visible = self.Mobile
+    local chromeWidth = self.Panel.Size.X.Offset
+    local chromeHeight = self.Mobile and 56 or 48
+    local buttonSize = self.Mobile and 44 or 30
+    self.Chrome.Position = UDim2.fromOffset(0, 0)
+    self.Chrome.Size = UDim2.fromOffset(chromeWidth, chromeHeight)
+    self.CloseButton.Position = UDim2.fromOffset(chromeWidth - (self.Mobile and 48 or 44), self.Mobile and 6 or 9)
+    self.MinimizeButton.Position = UDim2.fromOffset(chromeWidth - (self.Mobile and 96 or 80), self.Mobile and 6 or 9)
+    self.CloseButton.Size = UDim2.fromOffset(buttonSize, buttonSize)
+    self.MinimizeButton.Size = UDim2.fromOffset(buttonSize, buttonSize)
+    self.CloseButton.CloseA.Position = UDim2.fromOffset((buttonSize - 12) / 2, buttonSize / 2 - 1)
+    self.CloseButton.CloseB.Position = self.CloseButton.CloseA.Position
+    self.MinimizeButton.Dash.Position = UDim2.fromOffset((buttonSize - 12) / 2, buttonSize / 2)
+    self.Chrome.TitleDrag.Position = UDim2.fromOffset(self.Mobile and 56 or 0, 0)
+    self.Chrome.TitleDrag.Size = UDim2.fromOffset(math.max(1, chromeWidth - (self.Mobile and 160 or 90)), chromeHeight)
+    self.Breadcrumb.Position = UDim2.fromOffset(self.Mobile and 8 or 26, 0)
+    self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, chromeWidth - (self.Mobile and 168 or 116)), chromeHeight)
+    self.Workspace.Position = UDim2.fromOffset(0, chromeHeight)
+    self.Workspace.Size = UDim2.fromOffset(chromeWidth, self.Height - chromeHeight - (self.Mobile and 0 or 28))
     self.Inspector.Position = UDim2.fromOffset(self.PanelWidth + PANEL_GAP, 0)
     self.Inspector.Size = UDim2.fromOffset(INSPECTOR_WIDTH, self.Height)
-    self.Statusbar.Position = UDim2.fromOffset(sideWidth, self.Height - 28)
+    self.Statusbar.Visible = not self.Mobile
+    self.Statusbar.Position = UDim2.fromOffset(0, self.Height - 28)
     self.Statusbar.Size = UDim2.fromOffset(chromeWidth, 28)
     self.Chrome.Rule.Size = UDim2.fromOffset(chromeWidth, 1)
+    self.Chrome.Rule.Position = UDim2.fromOffset(0, chromeHeight - 1)
     self.Statusbar.Rule.Size = UDim2.fromOffset(chromeWidth, 1)
     self.StatusVersion.Position = UDim2.fromOffset(chromeWidth - 186, 0)
     self.StatusVersion.Visible = chromeWidth >= 650
-    self.Chrome.TitleDrag.Size = UDim2.fromOffset(chromeWidth - 90, 48)
-    self.Scale = math.min(1, math.max(0.1, (size.X - 32) / self.Width), math.max(0.1, (size.Y - 32) / self.Height))
+    self.Scale = math.min(1, math.max(0.1, (size.X - 32) / self.Width), math.max(0.1, (size.Y - verticalMargin) / self.Height))
     self.UIScale.Scale = self.Scale
     for _, tab in ipairs(self.Tabs) do tab:Relayout() end
     self:SetCenter(self.Center or size / 2)
@@ -903,7 +1183,8 @@ function Window:SetCenter(center, follow)
     local size = self.Viewport.AbsoluteSize
     local half = Vector2.new(self.Width * self.Scale / 2, self.Height * self.Scale / 2)
     local x = math.clamp(center.X, half.X + 8, math.max(half.X + 8, size.X - half.X - 8))
-    local y = math.clamp(center.Y, half.Y + 8, math.max(half.Y + 8, size.Y - half.Y - 8))
+    local top = self.SafeTop or 8
+    local y = math.clamp(center.Y, half.Y + top, math.max(half.Y + top, size.Y - half.Y - 8))
     self.Center = Vector2.new(x, y)
     self.Main.Position = UDim2.fromOffset(x, y)
     if follow and previous then self.Presentation:Follow(self.Center - previous)
@@ -996,6 +1277,7 @@ end
 
 function Window:SelectTab(tab)
     if self._destroyed or self._closing or not table.find(self.Tabs, tab) then return end
+    self:ToggleNavigation(false)
     if self.ActiveTab then self:FinishEntrance() end
     self:EndPointer()
     self:ClosePopup()
@@ -1044,6 +1326,16 @@ end
 function Window:Minimize() return self.Presentation:Minimize() end
 function Window:Restore() return self.Presentation:Restore() end
 function Window:IsMinimized() return self.Minimized end
+
+function Window:ToggleNavigation(open)
+    if not self.Mobile or self._destroyed or self._closing or self.Minimized then return false end
+    if open == nil then open = not self.NavigationOpen end
+    if (self.NavigationOpen == true) == (open == true) then return false end
+    self:FinishEntrance(); self:EndPointer(); self:ClosePopup(); self:ReleaseInput()
+    self.NavigationOpen = open == true
+    self.Sidebar.Visible, self.Panel.Visible = self.NavigationOpen, not self.NavigationOpen
+    return true
+end
 
 function Window:Close()
     if self._destroyed or self._closing then return end
@@ -1189,6 +1481,7 @@ function Inspector:Update(control)
     local shown = value == nil and Textos.sinSeleccion or tostring(value)
     if type(value) == "boolean" then shown = value and Textos.activado or Textos.desactivado end
     if type(value) == "number" then shown = (control.Format and control:Format(value) or UI.format(value)) .. (control.Suffix or "") end
+    if control.GetLabel and value ~= nil then shown = control:GetLabel() end
     window.DetailTitle.Text, window.DetailDescription.Text = control.Name, control.Description or ""
     window.DetailKind.Text = Textos.etiquetaTipo(control.Kind)
     self:SetValue(shown)
@@ -1248,6 +1541,135 @@ end
 return Inspector
 end
 
+__factories["components/Profile"] = function(__require)
+-- src/components/Profile.luau
+local Players = game:GetService("Players")
+local UI = __require("UI")
+local T = __require("Theme")
+local Profile = {}
+Profile.__index = Profile
+
+local function text(value)
+    if type(value) ~= "string" then return nil end
+    local clean = value:gsub("%c", " "):match("^%s*(.-)%s*$")
+    return clean ~= "" and clean or nil
+end
+
+local function initial(value)
+    local ok, nextByte = pcall(utf8.offset, value, 2)
+    if not ok then return "?" end
+    return string.upper(value:sub(1, (nextByte or #value + 1) - 1))
+end
+
+local function alive(self)
+    return not self._destroyed and not self.Runtime.Destroyed
+        and not self.Window._destroyed and not self.Window._closing
+        and self.Frame.Parent == self.Window.Sidebar
+        and self.Avatar.Parent == self.Frame
+        and self.NameLabel.Parent == self.Frame and self.UserLabel.Parent == self.Frame
+        and self._placeholder.Parent == self.Avatar
+end
+
+function Profile.new(window, options)
+    local rt = window.Runtime
+    local settings = type(options) == "table" and options.Profile
+    settings = type(settings) == "table" and settings or {}
+    local player = Players.LocalPlayer
+    local username = text(settings.Username)
+    if username then username = text((username:gsub("^@+", ""))) end
+    username = username or (player and text(player.Name)) or "usuario"
+    local displayName = text(settings.DisplayName) or (player and text(player.DisplayName)) or username
+    local first = displayName:match("^%S+") or displayName
+    local last = displayName:match("%s(%S+)$")
+    local initials = initial(first) .. (last and initial(last) or "")
+
+    local frame = UI.frame(window.Sidebar, "SidebarFooter", 20, 0, 144, 76)
+    frame.ClipsDescendants = true
+    local rule = UI.line(frame, 0, 0, 144)
+    local avatar = UI.new("ImageLabel", frame, {
+        Name = "Avatar", Image = "", Size = UDim2.fromOffset(34, 34),
+        BackgroundColor3 = T.Raised, BackgroundTransparency = 0,
+        ScaleType = Enum.ScaleType.Crop,
+    })
+    UI.corner(avatar, 999)
+    local placeholder = UI.text(avatar, "Initials", initials, 0, 0, 34, 34, 13, T.Secondary, T.Medium)
+    placeholder.TextXAlignment = Enum.TextXAlignment.Center
+    placeholder.TextTruncate = Enum.TextTruncate.None
+    placeholder.ZIndex = avatar.ZIndex + 1
+    local nameLabel = UI.text(frame, "DisplayName", displayName, 44, 20, 100, 18, 12, T.Text, T.Medium)
+    local userLabel = UI.text(frame, "Username", "@" .. username, 44, 38, 100, 16, 11, T.Muted)
+    local self = setmetatable({
+        Window = window, Runtime = rt, Frame = frame, Avatar = avatar,
+        NameLabel = nameLabel, UserLabel = userLabel,
+        _rule = rule, _placeholder = placeholder, _destroyed = false,
+        _distinctUsername = string.lower(displayName) ~= string.lower(username),
+    }, Profile)
+
+    rt:Connect(frame.Destroying, function() self._destroyed = true end)
+    rt:Connect(avatar.Destroying, function() self._destroyed = true end)
+    local function refreshPlaceholder()
+        if not alive(self) then return end
+        placeholder.Visible = avatar.Image == "" or not avatar.IsLoaded
+    end
+    rt:Connect(avatar:GetPropertyChangedSignal("Image"), refreshPlaceholder)
+    rt:Connect(avatar:GetPropertyChangedSignal("IsLoaded"), refreshPlaceholder)
+
+    self:Fit(math.max(0, window.Sidebar.Size.X.Offset - 40), false)
+    if settings.Avatar ~= nil then
+        rt:Callback(function()
+            if not alive(self) then return end
+            pcall(function() __require("ImageSource").Bind(rt, avatar, settings.Avatar) end)
+            refreshPlaceholder()
+        end)
+    elseif player then
+        rt:Callback(function()
+            if not alive(self) then return end
+            local ok, content, ready = pcall(function()
+                return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+            end)
+            -- La consulta cede; la ventana o el pie pueden haberse destruido.
+            if not alive(self) then return end
+            if ok and ready and type(content) == "string" and content ~= "" then
+                avatar.Image = content
+                refreshPlaceholder()
+            end
+        end)
+    end
+    return self
+end
+
+-- width es el ancho del pie: SidebarWidth - 40 (144 o 100).
+function Profile:Fit(width, short)
+    if not alive(self) then return end
+    width = math.max(0, math.floor(UI.number(width, self.Frame.Size.X.Offset)))
+    local height = short and 56 or 76
+    local compact = short or width < 124
+    local avatarSize = compact and 32 or 34
+    local gap = compact and 8 or 10
+    local avatarY = short and 12 or 20
+    local textX = avatarSize + gap
+    local textWidth = math.max(0, width - textX)
+    local showUser = self._distinctUsername and not short and textWidth >= 80
+    local nameY = avatarY + math.floor((avatarSize - (showUser and 34 or 18)) / 2)
+
+    self.Frame.Position = UDim2.new(0, 20, 1, -(height + (short and 13 or 19)))
+    self.Frame.Size = UDim2.fromOffset(width, height)
+    self._rule.Size = UDim2.fromOffset(width, 1)
+    self.Avatar.Position = UDim2.fromOffset(0, avatarY)
+    self.Avatar.Size = UDim2.fromOffset(avatarSize, avatarSize)
+    self.Avatar.Visible = width >= avatarSize
+    self._placeholder.Size = UDim2.fromOffset(avatarSize, avatarSize)
+    self.NameLabel.Position = UDim2.fromOffset(textX, nameY)
+    self.NameLabel.Size = UDim2.fromOffset(textWidth, 18)
+    self.NameLabel.Visible = textWidth > 0
+    self.UserLabel.Position = UDim2.fromOffset(textX, nameY + 18)
+    self.UserLabel.Size = UDim2.fromOffset(textWidth, 16)
+    self.UserLabel.Visible = showUser
+end
+
+return Profile
+end
+
 __factories["components/Shadow"] = function(__require)
 -- src/components/Shadow.luau
 local UI = __require("UI")
@@ -1284,6 +1706,30 @@ function Shadow.new(parent, radius)
 end
 
 return Shadow
+end
+
+__factories["components/Thumbnail"] = function(__require)
+-- src/components/Thumbnail.luau
+local UI = __require("UI")
+local T = __require("Theme")
+local Images = __require("ImageSource")
+local Thumbnail = {}
+
+function Thumbnail.new(runtime, parent, source, x, y, width, height)
+    local frame = UI.frame(parent, "ThumbnailFrame", x, y, width, height, T.Shell, 4)
+    frame.ClipsDescendants = true
+    -- A quiet placeholder remains underneath failed or loading images.
+    local mark = UI.frame(frame, "Placeholder", 0, 0, 12, 8)
+    mark.AnchorPoint, mark.Position = Vector2.new(.5, .5), UDim2.fromScale(.5, .5)
+    UI.stroke(mark, T.Muted).Transparency = .55
+    UI.frame(mark, "Horizon", 2, 5, 8, 1, T.Muted).BackgroundTransparency = .55
+    local image = UI.new("ImageLabel", frame, {Name = "Thumbnail", Size = UDim2.fromScale(1, 1),
+        Image = "", ScaleType = Enum.ScaleType.Crop})
+    UI.corner(image, 4)
+    return frame, Images.Bind(runtime, image, source)
+end
+
+return Thumbnail
 end
 
 __factories["components/WindowPresentation"] = function(__require)
@@ -1364,7 +1810,15 @@ function Presentation:Fit()
     local w = self.Window
     self:FinishTransition()
     local viewport = w.Viewport.AbsoluteSize
-    self.CapsuleHome = UDim2.fromOffset(viewport.X / 2, math.min(16, math.max(8, viewport.Y - 46)))
+    local height = w.Mobile and 44 or 38
+    w.Capsule.Size = UDim2.fromOffset(148, height)
+    w.Capsule.Label.Size = UDim2.fromOffset(70, height)
+    w.Capsule.LumiMark.Position = UDim2.fromOffset(13, (height - 20) / 2)
+    w.Capsule.ChevronA.Position = UDim2.fromOffset(125, height / 2 - 1)
+    w.Capsule.ChevronB.Position = UDim2.fromOffset(129, height / 2 - 1)
+    w.Capsule:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0, height / 2)
+    local top = w.Mobile and w.SafeTop or 16
+    self.CapsuleHome = UDim2.fromOffset(viewport.X / 2, math.min(top, math.max(8, viewport.Y - height - 8)))
     w.Capsule.Position = self.CapsuleHome
 end
 
@@ -1389,6 +1843,7 @@ function Presentation:Prepare()
     local w = self.Window
     w:FinishEntrance()
     self:FinishTransition()
+    w:ToggleNavigation(false)
     w:EndPointer()
     w:ClosePopup()
     w:ReleaseInput()
@@ -1526,13 +1981,25 @@ local T = __require("Theme")
 local Runtime = __require("Runtime")
 local Motion = __require("Motion")
 local Textos = __require("Textos")
+local Thumbnail = __require("components/Thumbnail")
 local Dropdown = {}
 
 function Dropdown.new(section, options)
     local c = section:Row(options, "Dropdown", 64)
     local rt, window = c.Runtime, section.Tab.Window
-    local values = {}
-    for _, value in ipairs(type(options.Values) == "table" and options.Values or {}) do table.insert(values, value) end
+    local values, entries = {}, {}
+    local pictures, detailed = false, false
+    for _, raw in ipairs(type(options.Values) == "table" and options.Values or {}) do
+        local entry = type(raw) == "table" and raw or {Value = raw, Label = tostring(raw)}
+        local value = entry.Value
+        if value ~= nil and not table.find(values, value) then
+            table.insert(values, value)
+            table.insert(entries, {Value = value, Label = tostring(entry.Label or value), Image = entry.Image,
+                Description = entry.Description and tostring(entry.Description)})
+            pictures = pictures or entry.Image ~= nil
+            detailed = detailed or entry.Description ~= nil
+        end
+    end
     local selected = table.find(values, options.Default) and options.Default or values[1]
     c.Range = Textos.cantidadOpciones(#values)
     local selector = UI.button(c.Row, "DropdownInput", "", 0, 14, 220, 31)
@@ -1543,12 +2010,34 @@ function Dropdown.new(section, options)
     UI.corner(selector, 5)
     local border = UI.stroke(selector, T.Line)
     local label = UI.text(selector, "Selection", selected == nil and Textos.vacio or selected, 12, 0, 178, 31, 13, T.Secondary)
+    local preview, binding
+    if pictures then
+        preview, binding = Thumbnail.new(rt, selector, nil, 6, 5, 32, 22)
+        c.ControlWidth = 244
+    end
     UI.chevron(selector, 197, 15)
     c.Input, c.Values = selector, values
+    c.Options, c.HasImages = entries, pictures
+    local function selectedEntry()
+        local index = table.find(values, selected)
+        return index and entries[index]
+    end
+    function c:GetLabel()
+        local entry = selectedEntry()
+        return entry and entry.Label or Textos.vacio
+    end
+    local function present()
+        label.Text = c:GetLabel()
+        local entry = selectedEntry()
+        if binding then binding:Set(entry and entry.Image) end
+    end
     c.Layout = function(place)
         selector.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
         selector.Size = UDim2.fromOffset(place.ControlWidth, place.ControlHeight)
-        label.Size = UDim2.new(1, -42, 1, 0)
+        local textX = pictures and 46 or 12
+        label.Position = UDim2.fromOffset(textX, 0)
+        label.Size = UDim2.new(1, -(textX + 30), 1, 0)
+        if preview then preview.Position = UDim2.fromOffset(6, (place.ControlHeight - 22) / 2) end
         local center = place.ControlHeight / 2
         selector.ChevronA.Position = UDim2.new(1, -23, 0, center)
         selector.ChevronB.Position = UDim2.new(1, -19, 0, center)
@@ -1562,7 +2051,7 @@ function Dropdown.new(section, options)
         if rt.Destroyed or window._closing or not table.find(values, value) then return false end
         local changed = value ~= selected
         selected = value
-        label.Text = tostring(selected)
+        present()
         self:Refresh()
         if changed and not silent then rt:Callback(options.Callback, selected) end
         return changed
@@ -1571,7 +2060,7 @@ function Dropdown.new(section, options)
         if window.PopupOwner == self then window:ClosePopup(animated) end
     end
     function c:Open()
-        if rt.Destroyed or window._closing or window.Minimized or not section.Tab.Page.Visible then return end
+        if rt.Destroyed or window._closing or window.Minimized or not window.Panel.Visible or not section.Tab.Page.Visible then return end
         window:FinishEntrance()
         window:ClosePopup()
         self:Focus()
@@ -1583,14 +2072,16 @@ function Dropdown.new(section, options)
         local scale = window.Scale
         local relative = (selector.AbsolutePosition - window.Main.AbsolutePosition) / scale
         local panelWidth = window.PanelWidth
-        local width = math.min(panelWidth - 16, math.max(180, selector.AbsoluteSize.X / scale))
-        local wanted = math.min(234, math.max(1, #values) * 32 + 38)
-        local below = window.Height - relative.Y - 37 - 12
+        local rowHeight = (pictures or detailed) and (window.Mobile and 56 or 52) or (window.Mobile and 44 or 32)
+        local width = math.min(window.Panel.Size.X.Offset - 16, math.max(pictures and 244 or 180, selector.AbsoluteSize.X / scale))
+        local wanted = math.min(266, math.max(1, #values) * rowHeight + 38)
+        local inputHeight = selector.AbsoluteSize.Y / scale
+        local below = window.Height - relative.Y - inputHeight - 12
         local above = relative.Y - 12
         local upward = below < wanted and above > below
-        local height = math.min(wanted, math.max(60, upward and above or below))
-        local x = math.clamp(relative.X, 8, panelWidth - width - 8)
-        local y = upward and relative.Y - height - 5 or relative.Y + 36
+        local height = math.min(wanted, window.Height - 16, math.max(60, upward and above or below))
+        local x = math.clamp(relative.X, window.ContentX + 8, panelWidth - width - 8)
+        local y = upward and relative.Y - height - 5 or relative.Y + inputHeight + 5
         y = math.clamp(y, 8, window.Height - height - 8)
         local menu = UI.frame(window.Main, "DropdownPopover", x, y, width, height, T.Raised, 7)
         menu.ZIndex = 101
@@ -1616,15 +2107,21 @@ function Dropdown.new(section, options)
             UI.text(scroller, "Empty", Textos.noHayOpciones, 7, 0, 192, 32, 11, T.Muted).Size = UDim2.new(1, -14, 0, 32)
         end
         for index, value in ipairs(values) do
-            local item = UI.button(scroller, "Option" .. tostring(index), "", 0, 0, 0, 32)
-            item.Size = UDim2.new(1, -3, 0, 32)
+            local entry = entries[index]
+            local item = UI.button(scroller, "Option" .. tostring(index), "", 0, 0, 0, rowHeight)
+            item.Size = UDim2.new(1, -3, 0, rowHeight)
             item.LayoutOrder = index
             item.BackgroundTransparency = 0
             item.BackgroundColor3 = value == selected and T.AccentWash or T.Raised
             item.ZIndex = 103
             UI.corner(item, 4)
-            UI.text(item, "Label", value, 8, 0, 167, 32, 13, value == selected and T.Accent or T.Text).Size = UDim2.new(1, -38, 0, 32)
-            if value == selected then UI.check(item, width - 39, 13) end
+            if pictures then Thumbnail.new(popupRuntime, item, entry.Image, 7, (rowHeight - 32) / 2, 48, 32) end
+            local textX = pictures and 64 or 8
+            local textHeight = entry.Description and 19 or rowHeight
+            UI.text(item, "Label", entry.Label, textX, entry.Description and 7 or 0, 167, textHeight, 13,
+                value == selected and T.Accent or T.Text).Size = UDim2.new(1, -(textX + 30), 0, textHeight)
+            if entry.Description then UI.text(item, "Description", entry.Description, textX, 27, 120, 17, 11, T.Muted).Size = UDim2.new(1, -(textX + 30), 0, 17) end
+            if value == selected then UI.check(item, width - 39, rowHeight / 2 - 3) end
             UI.hover(popupRuntime, item, value == selected and T.AccentWash or T.Raised, T.Hover)
             popupRuntime:Connect(item.Activated, function()
                 if window.PopupOwner ~= c or window.OpenDropdown ~= menu then return end
@@ -1642,6 +2139,7 @@ function Dropdown.new(section, options)
     end)
     rt:Connect(selector.SelectionGained, function() c:Focus(); border.Color = T.Accent end)
     rt:Connect(selector.SelectionLost, function() if window.PopupOwner ~= c then border.Color = T.Line end end)
+    present()
     return c
 end
 
@@ -1824,7 +2322,7 @@ function Toggle.new(section, options)
     local thumb = UI.frame(track, "Thumb", 4, 4, 12, 12, T.Secondary, 4)
     local notch = UI.frame(thumb, "Notch", 6, 4, 1, 4, T.Ink)
     c.Layout = function(place)
-        track.Position = UDim2.fromOffset(place.ControlX + place.ControlWidth - 36, place.ControlY + 6)
+        track.Position = UDim2.fromOffset(place.ControlX + place.ControlWidth - 36, place.ControlY + (place.ControlHeight - 20) / 2)
         state.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
         state.Size = UDim2.fromOffset(44, place.ControlHeight)
     end
@@ -1877,11 +2375,12 @@ end
 __factories["init"] = function(__require)
 -- src/init.luau
 local Window = __require("Window")
+local Images = __require("ImageSource")
 local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
 if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
 
-local Lumi = {Version = "0.4.10", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.4.11", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] La biblioteca está cerrada; vuelve a cargarla para continuar")
@@ -1897,6 +2396,8 @@ function Lumi:Destroy()
     table.clear(self._windows)
     if environment.__LumiUI == self then environment.__LumiUI = nil end
 end
+
+function Lumi:ResolveImage(source) return Images.Resolve(source) end
 
 environment.__LumiUI = Lumi
 return Lumi

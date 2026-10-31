@@ -6,6 +6,7 @@ local Motion = require("Motion")
 local Inspector = require("components/Inspector")
 local Shadow = require("components/Shadow")
 local Presentation = require("components/WindowPresentation")
+local Profile = require("components/Profile")
 local Textos = require("Textos")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
@@ -34,9 +35,11 @@ function Window.new(options)
     self.TopEdge = UI.frame(panel, "TopEdge", 12, 0, 840, 1, T.Secondary)
     self.TopEdge.BackgroundTransparency = 0.88
 
-    local sidebar = UI.frame(panel, "Sidebar", 0, 0, 184, 660, T.Sidebar, 12)
+    local sidebar = UI.frame(main, "Sidebar", 0, 0, 184, 660, T.Sidebar, 12)
     self.Sidebar = sidebar
-    UI.frame(sidebar, "InnerEdge", 174, 0, 10, 660, T.Sidebar)
+    sidebar.Active = true
+    self.SidebarShadow = Shadow.new(sidebar, 12)
+    UI.stroke(sidebar, T.Line)
     local brandTile = UI.frame(sidebar, "BrandTile", 21, 24, 30, 30, T.AccentWash, 7)
     UI.stroke(brandTile, T.AccentSoft).Transparency = 0.65
     UI.mark(brandTile, 5, 5, 20)
@@ -49,13 +52,13 @@ function Window.new(options)
         ScrollBarThickness = 2, ScrollBarImageColor3 = T.Muted, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
     })
     UI.list(self.Navigation, 5)
-    local footer = UI.frame(sidebar, "SidebarFooter", 20, 565, 144, 76)
-    self.SidebarFooter = footer
-    UI.line(footer, 0, 0, 144)
-    UI.mark(footer, 0, 20, 22, T.Secondary)
-    UI.text(footer, "Build", "Lumi UI", 33, 17, 100, 18, 12, T.Text, T.Medium)
-    UI.text(footer, "Version", "v0.4.10", 33, 38, 110, 16, 11, T.Muted)
-    UI.frame(panel, "SidebarRule", 183, 0, 1, 660, T.SoftLine)
+    self.Profile = Profile.new(self, options)
+    self.SidebarFooter = self.Profile.Frame
+    local navClose = UI.button(sidebar, "CloseNavigation", "", 0, 6, 44, 44)
+    UI.frame(navClose, "A", 16, 21, 12, 1, T.Secondary).Rotation = 45
+    UI.frame(navClose, "B", 16, 21, 12, 1, T.Secondary).Rotation = -45
+    rt:Connect(navClose.Activated, function() self:ToggleNavigation(false) end)
+    self.NavigationCloseButton = navClose
 
     local chrome = UI.frame(panel, "Chrome", 184, 0, 680, 48)
     self.Chrome = chrome
@@ -75,6 +78,10 @@ function Window.new(options)
     UI.hover(rt, minimize, T.Shell, T.Hover)
     rt:Connect(minimize.Activated, function() self:Minimize() end)
     self.MinimizeButton = minimize
+    local menu = UI.button(chrome, "NavigationMenu", "", 8, 6, 44, 44)
+    for i = 1, 3 do UI.frame(menu, "Line" .. i, 14, 12 + i * 5, 16, 1, T.Secondary) end
+    self.MenuButton = menu
+    rt:Connect(menu.Activated, function() self:ToggleNavigation() end)
     UI.line(chrome, 0, 47, 916)
 
     self.Workspace = UI.frame(panel, "Workspace", 184, 48, 680, 584, T.Workspace)
@@ -85,7 +92,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.10", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.11", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -155,19 +162,26 @@ function Window:Fit()
     self:FinishEntrance(resized)
     self:ClosePopup()
     local compact = size.X < 1132 or size.Y < DESKTOP_HEIGHT + 32
-    self.Width = compact and math.max(320, math.min(1100, size.X - 32)) or 1100
-    self.Height = math.max(280, math.min(DESKTOP_HEIGHT, size.Y - 32))
-    self.SidebarWidth = size.X < 700 and 140 or 184
+    self.Width = compact and math.max(280, math.min(1100, size.X - 32)) or 1100
+    self.Mobile = size.X < 700 or Input.TouchEnabled
+    local inset = GuiService:GetGuiInset()
+    self.SafeTop = self.Mobile and math.max(8, inset.Y + 8) or 8
+    local verticalMargin = self.Mobile and self.SafeTop + 8 or 32
+    self.Height = math.max(280, math.min(DESKTOP_HEIGHT, size.Y - verticalMargin))
+    if not self.Mobile then self.NavigationOpen = false end
+    self.SidebarWidth = self.Mobile and self.Width or 184
     local sideWidth = self.SidebarWidth
-    self.Inspector.Visible = not compact
-    self.PanelWidth = self.Width - (compact and 0 or INSPECTOR_WIDTH + PANEL_GAP)
+    self.Inspector.Visible = not compact and not self.Mobile
+    self.PanelWidth = self.Width - (self.Inspector.Visible and INSPECTOR_WIDTH + PANEL_GAP or 0)
+    self.ContentX = self.Mobile and 0 or sideWidth + PANEL_GAP
     self.Main.Size = UDim2.fromOffset(self.Width, self.Height)
-    self.Panel.Size = UDim2.fromOffset(self.PanelWidth, self.Height)
-    self.TopEdge.Size = UDim2.fromOffset(self.PanelWidth - 24, 1)
+    self.Panel.Position = UDim2.fromOffset(self.ContentX, 0)
+    self.Panel.Size = UDim2.fromOffset(self.PanelWidth - self.ContentX, self.Height)
+    self.Panel.Visible = not (self.Mobile and self.NavigationOpen)
+    self.Sidebar.Visible = not self.Mobile or self.NavigationOpen == true
+    self.TopEdge.Size = UDim2.fromOffset(self.Panel.Size.X.Offset - 24, 1)
     self.Sidebar.Size = UDim2.fromOffset(sideWidth, self.Height)
-    self.Sidebar.InnerEdge.Position = UDim2.fromOffset(sideWidth - 10, 0)
-    self.Sidebar.InnerEdge.Size = UDim2.fromOffset(10, self.Height)
-    self.Sidebar.Brand.Size = UDim2.fromOffset(sideWidth - 70, 30)
+    self.Sidebar.Brand.Size = UDim2.fromOffset(sideWidth - (self.Mobile and 124 or 70), 30)
     self.Sidebar.BrandSub.Size = UDim2.fromOffset(sideWidth - 40, 14)
     self.Sidebar.BrandSub.Text = sideWidth < 170 and Textos.biblioteca or Textos.interfaz
     local short = self.Height < 480
@@ -178,31 +192,39 @@ function Window:Fit()
     self.Sidebar.Rule.Size = UDim2.fromOffset(sideWidth - 40, 1)
     self.Navigation.Position = UDim2.fromOffset(12, navTop)
     self.Navigation.Size = UDim2.new(1, -24, 1, -(navTop + (short and 80 or 105)))
-    self.SidebarFooter.Position = UDim2.fromOffset(20, self.Height - (short and 69 or 95))
-    self.SidebarFooter.Size = UDim2.fromOffset(sideWidth - 40, short and 56 or 76)
-    self.SidebarFooter.Rule.Size = UDim2.fromOffset(sideWidth - 40, 1)
-    self.SidebarFooter.Build.Size = UDim2.fromOffset(sideWidth - 73, 18)
-    self.SidebarFooter.Version.Size = UDim2.fromOffset(sideWidth - 73, 16)
-    self.Panel.SidebarRule.Position = UDim2.fromOffset(sideWidth - 1, 0)
-    self.Panel.SidebarRule.Size = UDim2.fromOffset(1, self.Height)
-    local chromeWidth = self.PanelWidth - sideWidth
-    self.Chrome.Position = UDim2.fromOffset(sideWidth, 0)
-    self.Chrome.Size = UDim2.fromOffset(chromeWidth, 48)
-    self.CloseButton.Position = UDim2.fromOffset(chromeWidth - 44, 9)
-    self.MinimizeButton.Position = UDim2.fromOffset(chromeWidth - 80, 9)
-    self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, chromeWidth - 116), 48)
-    self.Workspace.Position = UDim2.fromOffset(sideWidth, 48)
-    self.Workspace.Size = UDim2.fromOffset(chromeWidth, self.Height - 76)
+    self.Profile:Fit(sideWidth - 40, short)
+    self.NavigationCloseButton.Position = UDim2.fromOffset(sideWidth - 52, 6)
+    self.NavigationCloseButton.Visible = self.Mobile
+    self.MenuButton.Visible = self.Mobile
+    local chromeWidth = self.Panel.Size.X.Offset
+    local chromeHeight = self.Mobile and 56 or 48
+    local buttonSize = self.Mobile and 44 or 30
+    self.Chrome.Position = UDim2.fromOffset(0, 0)
+    self.Chrome.Size = UDim2.fromOffset(chromeWidth, chromeHeight)
+    self.CloseButton.Position = UDim2.fromOffset(chromeWidth - (self.Mobile and 48 or 44), self.Mobile and 6 or 9)
+    self.MinimizeButton.Position = UDim2.fromOffset(chromeWidth - (self.Mobile and 96 or 80), self.Mobile and 6 or 9)
+    self.CloseButton.Size = UDim2.fromOffset(buttonSize, buttonSize)
+    self.MinimizeButton.Size = UDim2.fromOffset(buttonSize, buttonSize)
+    self.CloseButton.CloseA.Position = UDim2.fromOffset((buttonSize - 12) / 2, buttonSize / 2 - 1)
+    self.CloseButton.CloseB.Position = self.CloseButton.CloseA.Position
+    self.MinimizeButton.Dash.Position = UDim2.fromOffset((buttonSize - 12) / 2, buttonSize / 2)
+    self.Chrome.TitleDrag.Position = UDim2.fromOffset(self.Mobile and 56 or 0, 0)
+    self.Chrome.TitleDrag.Size = UDim2.fromOffset(math.max(1, chromeWidth - (self.Mobile and 160 or 90)), chromeHeight)
+    self.Breadcrumb.Position = UDim2.fromOffset(self.Mobile and 8 or 26, 0)
+    self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, chromeWidth - (self.Mobile and 168 or 116)), chromeHeight)
+    self.Workspace.Position = UDim2.fromOffset(0, chromeHeight)
+    self.Workspace.Size = UDim2.fromOffset(chromeWidth, self.Height - chromeHeight - (self.Mobile and 0 or 28))
     self.Inspector.Position = UDim2.fromOffset(self.PanelWidth + PANEL_GAP, 0)
     self.Inspector.Size = UDim2.fromOffset(INSPECTOR_WIDTH, self.Height)
-    self.Statusbar.Position = UDim2.fromOffset(sideWidth, self.Height - 28)
+    self.Statusbar.Visible = not self.Mobile
+    self.Statusbar.Position = UDim2.fromOffset(0, self.Height - 28)
     self.Statusbar.Size = UDim2.fromOffset(chromeWidth, 28)
     self.Chrome.Rule.Size = UDim2.fromOffset(chromeWidth, 1)
+    self.Chrome.Rule.Position = UDim2.fromOffset(0, chromeHeight - 1)
     self.Statusbar.Rule.Size = UDim2.fromOffset(chromeWidth, 1)
     self.StatusVersion.Position = UDim2.fromOffset(chromeWidth - 186, 0)
     self.StatusVersion.Visible = chromeWidth >= 650
-    self.Chrome.TitleDrag.Size = UDim2.fromOffset(chromeWidth - 90, 48)
-    self.Scale = math.min(1, math.max(0.1, (size.X - 32) / self.Width), math.max(0.1, (size.Y - 32) / self.Height))
+    self.Scale = math.min(1, math.max(0.1, (size.X - 32) / self.Width), math.max(0.1, (size.Y - verticalMargin) / self.Height))
     self.UIScale.Scale = self.Scale
     for _, tab in ipairs(self.Tabs) do tab:Relayout() end
     self:SetCenter(self.Center or size / 2)
@@ -215,7 +237,8 @@ function Window:SetCenter(center, follow)
     local size = self.Viewport.AbsoluteSize
     local half = Vector2.new(self.Width * self.Scale / 2, self.Height * self.Scale / 2)
     local x = math.clamp(center.X, half.X + 8, math.max(half.X + 8, size.X - half.X - 8))
-    local y = math.clamp(center.Y, half.Y + 8, math.max(half.Y + 8, size.Y - half.Y - 8))
+    local top = self.SafeTop or 8
+    local y = math.clamp(center.Y, half.Y + top, math.max(half.Y + top, size.Y - half.Y - 8))
     self.Center = Vector2.new(x, y)
     self.Main.Position = UDim2.fromOffset(x, y)
     if follow and previous then self.Presentation:Follow(self.Center - previous)
@@ -308,6 +331,7 @@ end
 
 function Window:SelectTab(tab)
     if self._destroyed or self._closing or not table.find(self.Tabs, tab) then return end
+    self:ToggleNavigation(false)
     if self.ActiveTab then self:FinishEntrance() end
     self:EndPointer()
     self:ClosePopup()
@@ -356,6 +380,16 @@ end
 function Window:Minimize() return self.Presentation:Minimize() end
 function Window:Restore() return self.Presentation:Restore() end
 function Window:IsMinimized() return self.Minimized end
+
+function Window:ToggleNavigation(open)
+    if not self.Mobile or self._destroyed or self._closing or self.Minimized then return false end
+    if open == nil then open = not self.NavigationOpen end
+    if (self.NavigationOpen == true) == (open == true) then return false end
+    self:FinishEntrance(); self:EndPointer(); self:ClosePopup(); self:ReleaseInput()
+    self.NavigationOpen = open == true
+    self.Sidebar.Visible, self.Panel.Visible = self.NavigationOpen, not self.NavigationOpen
+    return true
+end
 
 function Window:Close()
     if self._destroyed or self._closing then return end

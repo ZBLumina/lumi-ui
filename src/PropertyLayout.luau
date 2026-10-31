@@ -14,27 +14,29 @@ function Layout.inputWidth(text, font, size, minimum, maximum)
 end
 
 function Layout.measure(control, width)
+    local phone = control.Section.Tab.Window.Mobile
+    local inputHeight = phone and 44 or INPUT_HEIGHT
     local available = math.max(1, math.floor(width - 2 * PAD))
     local field = math.min(control.ControlWidth or widths[control.Kind], available)
     local caption = available - field - COLUMN_GAP
-    local stacked = caption < 200
+    local stacked = caption < 200 or (phone and control.Kind ~= "Toggle")
     if stacked then caption = available end
     local title = textHeight(control.Label, caption, 18)
     local description = control.DescriptionLabel.Text ~= "" and textHeight(control.DescriptionLabel, caption, 16) or 0
     local text = title + (description > 0 and 4 + description or 0)
-    local header = stacked and text + STACK_GAP + INPUT_HEIGHT or math.max(text, INPUT_HEIGHT)
+    local header = stacked and text + STACK_GAP + inputHeight or math.max(text, inputHeight)
     local slider = control.Kind == "Slider"
     local height = math.max(64, VERTICAL * 2 + header)
     local top = slider and VERTICAL or (height - header) / 2
     local result = {
         Stacked = stacked, Height = height, TextWidth = caption, TitleHeight = title, DescriptionHeight = description,
         TitleY = top + (stacked and 0 or (header - text) / 2),
-        ControlX = width - PAD - field, ControlY = top + (stacked and text + STACK_GAP or (header - INPUT_HEIGHT) / 2),
-        ControlWidth = field, ControlHeight = INPUT_HEIGHT,
+        ControlX = width - PAD - field, ControlY = top + (stacked and text + STACK_GAP or (header - inputHeight) / 2),
+        ControlWidth = field, ControlHeight = inputHeight,
     }
     result.DescriptionY = result.TitleY + title + 4
     if slider then
-        result.HitY, result.HitHeight = top + header + 8, 28
+        result.HitY, result.HitHeight = top + header + 8, phone and 44 or 28
         result.TrackY = result.HitY + result.HitHeight / 2
         result.BoundsY = result.HitY + result.HitHeight + 2
         result.LaneX, result.LaneWidth = PAD, available

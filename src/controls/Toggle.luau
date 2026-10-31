@@ -20,7 +20,7 @@ function Toggle.new(section, options)
     local thumb = UI.frame(track, "Thumb", 4, 4, 12, 12, T.Secondary, 4)
     local notch = UI.frame(thumb, "Notch", 6, 4, 1, 4, T.Ink)
     c.Layout = function(place)
-        track.Position = UDim2.fromOffset(place.ControlX + place.ControlWidth - 36, place.ControlY + 6)
+        track.Position = UDim2.fromOffset(place.ControlX + place.ControlWidth - 36, place.ControlY + (place.ControlHeight - 20) / 2)
         state.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
         state.Size = UDim2.fromOffset(44, place.ControlHeight)
     end

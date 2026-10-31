@@ -112,6 +112,7 @@ function Inspector:Update(control)
     local shown = value == nil and Textos.sinSeleccion or tostring(value)
     if type(value) == "boolean" then shown = value and Textos.activado or Textos.desactivado end
     if type(value) == "number" then shown = (control.Format and control:Format(value) or UI.format(value)) .. (control.Suffix or "") end
+    if control.GetLabel and value ~= nil then shown = control:GetLabel() end
     window.DetailTitle.Text, window.DetailDescription.Text = control.Name, control.Description or ""
     window.DetailKind.Text = Textos.etiquetaTipo(control.Kind)
     self:SetValue(shown)

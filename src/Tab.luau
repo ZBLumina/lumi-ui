@@ -72,6 +72,12 @@ function Tab:GetContentWidth()
 end
 
 function Tab:Relayout()
+    local rowHeight = self.Window.Mobile and 48 or 42
+    self.Button.Size = UDim2.new(1, 0, 0, rowHeight)
+    self.Icon.Position = UDim2.fromOffset(14, (rowHeight - 16) / 2)
+    self.Indicator.Position = UDim2.fromOffset(1, (rowHeight - 14) / 2)
+    local padding = self.Window.Mobile and 16 or 26
+    self.Padding.PaddingLeft, self.Padding.PaddingRight = UDim.new(0, padding), UDim.new(0, padding)
     self.Label.Size = UDim2.new(1, -48, 1, 0)
     local width = self:GetContentWidth()
     local function height(label, available, minimum)

@@ -73,6 +73,7 @@ function Runtime:Callback(callback, ...)
     end)
     self.Threads[thread] = true
     task.spawn(thread)
+    return thread
 end
 
 function Runtime:OnCleanup(callback)

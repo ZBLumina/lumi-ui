@@ -99,5 +99,6 @@ function Section:AddButton(options) return Button.new(self, options or {}) end
 function Section:AddToggle(options) return Toggle.new(self, options or {}) end
 function Section:AddSlider(options) return Slider.new(self, options or {}) end
 function Section:AddDropdown(options) return Dropdown.new(self, options or {}) end
+function Section:AddImageDropdown(options) return Dropdown.new(self, options or {}) end
 
 return Section

@@ -910,6 +910,122 @@ test("a minimized dropdown cannot reopen an invisible popup or its input blocker
     equal(owner.Blocker.Visible, false, "hidden dropdown installed an input blocker")
 end)
 
+test("navigation is a detached surface with its own open gap", function()
+    local owner = window()
+    owner.Viewport.Size = UDim2.fromOffset(1920, 1080)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    local gap = owner.Panel.AbsolutePosition.X - owner.Sidebar.AbsolutePosition.X - owner.Sidebar.AbsoluteSize.X
+    assert(gap >= 10 * owner.Scale, "navigation is still joined to the content")
+    equal(owner.Sidebar.Size.Y.Offset, owner.Panel.Size.Y.Offset, "navigation lost vertical alignment")
+end)
+
+test("navigation profile shows the local display name and account", function()
+    local owner = window()
+    assert(owner.Profile, "profile is missing")
+    local player = game:GetService("Players").LocalPlayer
+    equal(owner.Profile.NameLabel.Text, player.DisplayName, "profile display name")
+    equal(owner.Profile.UserLabel.Text, "@" .. player.Name, "profile account name")
+    assert(owner.Profile.Avatar:IsA("ImageLabel"), "profile has no avatar surface")
+end)
+
+test("image dropdown keeps stable values while presenting labels and thumbnails", function()
+    local group, owner = section()
+    local received
+    assert(type(group.AddImageDropdown) == "function", "image selector is missing")
+    local choice = group:AddImageDropdown({Name = "Cielo", Values = {
+        {Value = "day", Label = "Despejado", Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"},
+        {Value = "night", Label = "Noche", Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"},
+    }, Default = "night", Callback = function(value) received = value end})
+    equal(choice:Get(), "night", "selector lost its stable value")
+    equal(choice:GetLabel(), "Noche", "selector presents an internal ID")
+    choice:Set("day"); settle()
+    equal(received, "day", "callback received presentation data")
+    equal(choice:GetLabel(), "Despejado", "label did not follow selection")
+    choice:Open(); settle()
+    assert(owner.OpenDropdown.Options.Option1:FindFirstChild("Thumbnail", true), "menu has no thumbnail")
+    choice:Set("invalid")
+    equal(choice:Get(), "day", "invalid value replaced the selection")
+end)
+
+test("image resolver preserves native content and reports invalid embedded data", function()
+    assert(type(Lumi.ResolveImage) == "function", "image resolver is missing")
+    equal(Lumi:ResolveImage("rbxassetid://123"), "rbxassetid://123", "native content was rewritten")
+    local source, problem = Lumi:ResolveImage({Data = "!!invalid!!", Name = "invalid.png"})
+    equal(source, nil, "malformed image data was accepted")
+    assert(type(problem) == "string", "image failure has no diagnostic")
+end)
+
+test("phone layout gives content its width and opens navigation on demand", function()
+    local owner = window()
+    local first = owner:AddTab("Inicio")
+    first:AddSection("General"):AddDropdown({Name = "Modo", Values = {"Uno", "Dos"}})
+    local second = owner:AddTab("Aspecto")
+    owner.Viewport.Size = UDim2.fromOffset(320, 600)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    equal(owner.Sidebar.Visible, false, "phone sidebar takes the content width")
+    assert(owner.Workspace.AbsoluteSize.X >= 280, "phone content is too narrow")
+    assert(owner.MenuButton.Visible and owner.MenuButton.AbsoluteSize.X >= 44, "phone menu target is too small")
+    owner:ToggleNavigation(true)
+    equal(owner.Sidebar.Visible, true, "phone navigation did not open")
+    owner:SelectTab(second)
+    equal(owner.Sidebar.Visible, false, "page selection did not close phone navigation")
+    equal(owner.Panel.Visible, true, "page selection did not reveal content")
+    owner:SelectTab(first); settle()
+    assert(first.Controls[1].Input.AbsoluteSize.Y >= 44, "phone selector target is too short")
+end)
+
+test("phone navigation prevents controls behind it from opening a popup", function()
+    local group, owner = section()
+    local selector = group:AddDropdown({Values = {"Uno", "Dos"}})
+    owner.Viewport.Size = UDim2.fromOffset(390, 844)
+    settle(); owner:Fit(); owner:ToggleNavigation(true)
+    selector:Open()
+    equal(owner.OpenDropdown, nil, "hidden content opened a popup over phone navigation")
+    equal(owner.Blocker.Visible, false, "hidden content blocked phone navigation")
+end)
+
+test("short phone viewport contains a popup requested for an offscreen image selector", function()
+    local group, owner = section()
+    local last
+    for i = 1, 8 do last = group:AddImageDropdown({Name = "Cielo " .. i, Values = {
+        {Value = "a", Image = "rbxassetid://1"}, {Value = "b", Image = "rbxassetid://2"},
+        {Value = "c", Image = "rbxassetid://3"}, {Value = "d", Image = "rbxassetid://4"},
+        {Value = "e", Image = "rbxassetid://5"},
+    }}) end
+    owner.Viewport.Size = UDim2.fromOffset(320, 300)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    last:Open(); task.wait(.15)
+    assert(owner.OpenDropdown, "image popup did not open")
+    local menu = owner.OpenDropdown
+    assert(menu.Size.Y.Offset <= owner.Height - 16, "image popup escapes the short viewport")
+end)
+
+test("owned loading work can be cancelled before a suspended operation resumes", function()
+    local owner = window()
+    local gate = Instance.new("BindableEvent")
+    table.insert(cleanups, function() gate:Destroy() end)
+    local entered, resumed = false, false
+    local loading = owner.Runtime:Callback(function()
+        entered = true; gate.Event:Wait(); resumed = true
+    end)
+    eventually(function() return entered end, "loading fixture did not suspend")
+    owner.Runtime:CancelDelay(loading)
+    gate:Fire(); settle()
+    equal(resumed, false, "cancelled loading work resumed")
+end)
+
+test("phone panels and restore capsule leave space for the Roblox top bar", function()
+    local owner = window()
+    owner.Viewport.Size = UDim2.fromOffset(320, 568)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    local safe = game:GetService("GuiService"):GetGuiInset().Y + 8
+    local top = owner.Main.AbsolutePosition.Y - owner.Viewport.AbsolutePosition.Y
+    assert(top >= safe - .5, "phone controls overlap the Roblox top bar")
+    owner:Minimize(); task.wait(.25)
+    top = owner.Capsule.AbsolutePosition.Y - owner.Viewport.AbsolutePosition.Y
+    assert(top >= safe - .5, "restore capsule overlaps the Roblox top bar")
+end)
+
 local function cleanupCase()
     local errors = {}
     -- Release yielding callbacks before disposing their real BindableEvents.

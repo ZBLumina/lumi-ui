@@ -74,7 +74,15 @@ function Presentation:Fit()
     local w = self.Window
     self:FinishTransition()
     local viewport = w.Viewport.AbsoluteSize
-    self.CapsuleHome = UDim2.fromOffset(viewport.X / 2, math.min(16, math.max(8, viewport.Y - 46)))
+    local height = w.Mobile and 44 or 38
+    w.Capsule.Size = UDim2.fromOffset(148, height)
+    w.Capsule.Label.Size = UDim2.fromOffset(70, height)
+    w.Capsule.LumiMark.Position = UDim2.fromOffset(13, (height - 20) / 2)
+    w.Capsule.ChevronA.Position = UDim2.fromOffset(125, height / 2 - 1)
+    w.Capsule.ChevronB.Position = UDim2.fromOffset(129, height / 2 - 1)
+    w.Capsule:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0, height / 2)
+    local top = w.Mobile and w.SafeTop or 16
+    self.CapsuleHome = UDim2.fromOffset(viewport.X / 2, math.min(top, math.max(8, viewport.Y - height - 8)))
     w.Capsule.Position = self.CapsuleHome
 end
 
@@ -99,6 +107,7 @@ function Presentation:Prepare()
     local w = self.Window
     w:FinishEntrance()
     self:FinishTransition()
+    w:ToggleNavigation(false)
     w:EndPointer()
     w:ClosePopup()
     w:ReleaseInput()

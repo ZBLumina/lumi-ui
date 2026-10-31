@@ -3,13 +3,25 @@ local T = require("Theme")
 local Runtime = require("Runtime")
 local Motion = require("Motion")
 local Textos = require("Textos")
+local Thumbnail = require("components/Thumbnail")
 local Dropdown = {}
 
 function Dropdown.new(section, options)
     local c = section:Row(options, "Dropdown", 64)
     local rt, window = c.Runtime, section.Tab.Window
-    local values = {}
-    for _, value in ipairs(type(options.Values) == "table" and options.Values or {}) do table.insert(values, value) end
+    local values, entries = {}, {}
+    local pictures, detailed = false, false
+    for _, raw in ipairs(type(options.Values) == "table" and options.Values or {}) do
+        local entry = type(raw) == "table" and raw or {Value = raw, Label = tostring(raw)}
+        local value = entry.Value
+        if value ~= nil and not table.find(values, value) then
+            table.insert(values, value)
+            table.insert(entries, {Value = value, Label = tostring(entry.Label or value), Image = entry.Image,
+                Description = entry.Description and tostring(entry.Description)})
+            pictures = pictures or entry.Image ~= nil
+            detailed = detailed or entry.Description ~= nil
+        end
+    end
     local selected = table.find(values, options.Default) and options.Default or values[1]
     c.Range = Textos.cantidadOpciones(#values)
     local selector = UI.button(c.Row, "DropdownInput", "", 0, 14, 220, 31)
@@ -20,12 +32,34 @@ function Dropdown.new(section, options)
     UI.corner(selector, 5)
     local border = UI.stroke(selector, T.Line)
     local label = UI.text(selector, "Selection", selected == nil and Textos.vacio or selected, 12, 0, 178, 31, 13, T.Secondary)
+    local preview, binding
+    if pictures then
+        preview, binding = Thumbnail.new(rt, selector, nil, 6, 5, 32, 22)
+        c.ControlWidth = 244
+    end
     UI.chevron(selector, 197, 15)
     c.Input, c.Values = selector, values
+    c.Options, c.HasImages = entries, pictures
+    local function selectedEntry()
+        local index = table.find(values, selected)
+        return index and entries[index]
+    end
+    function c:GetLabel()
+        local entry = selectedEntry()
+        return entry and entry.Label or Textos.vacio
+    end
+    local function present()
+        label.Text = c:GetLabel()
+        local entry = selectedEntry()
+        if binding then binding:Set(entry and entry.Image) end
+    end
     c.Layout = function(place)
         selector.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
         selector.Size = UDim2.fromOffset(place.ControlWidth, place.ControlHeight)
-        label.Size = UDim2.new(1, -42, 1, 0)
+        local textX = pictures and 46 or 12
+        label.Position = UDim2.fromOffset(textX, 0)
+        label.Size = UDim2.new(1, -(textX + 30), 1, 0)
+        if preview then preview.Position = UDim2.fromOffset(6, (place.ControlHeight - 22) / 2) end
         local center = place.ControlHeight / 2
         selector.ChevronA.Position = UDim2.new(1, -23, 0, center)
         selector.ChevronB.Position = UDim2.new(1, -19, 0, center)
@@ -39,7 +73,7 @@ function Dropdown.new(section, options)
         if rt.Destroyed or window._closing or not table.find(values, value) then return false end
         local changed = value ~= selected
         selected = value
-        label.Text = tostring(selected)
+        present()
         self:Refresh()
         if changed and not silent then rt:Callback(options.Callback, selected) end
         return changed
@@ -48,7 +82,7 @@ function Dropdown.new(section, options)
         if window.PopupOwner == self then window:ClosePopup(animated) end
     end
     function c:Open()
-        if rt.Destroyed or window._closing or window.Minimized or not section.Tab.Page.Visible then return end
+        if rt.Destroyed or window._closing or window.Minimized or not window.Panel.Visible or not section.Tab.Page.Visible then return end
         window:FinishEntrance()
         window:ClosePopup()
         self:Focus()
@@ -60,14 +94,16 @@ function Dropdown.new(section, options)
         local scale = window.Scale
         local relative = (selector.AbsolutePosition - window.Main.AbsolutePosition) / scale
         local panelWidth = window.PanelWidth
-        local width = math.min(panelWidth - 16, math.max(180, selector.AbsoluteSize.X / scale))
-        local wanted = math.min(234, math.max(1, #values) * 32 + 38)
-        local below = window.Height - relative.Y - 37 - 12
+        local rowHeight = (pictures or detailed) and (window.Mobile and 56 or 52) or (window.Mobile and 44 or 32)
+        local width = math.min(window.Panel.Size.X.Offset - 16, math.max(pictures and 244 or 180, selector.AbsoluteSize.X / scale))
+        local wanted = math.min(266, math.max(1, #values) * rowHeight + 38)
+        local inputHeight = selector.AbsoluteSize.Y / scale
+        local below = window.Height - relative.Y - inputHeight - 12
         local above = relative.Y - 12
         local upward = below < wanted and above > below
-        local height = math.min(wanted, math.max(60, upward and above or below))
-        local x = math.clamp(relative.X, 8, panelWidth - width - 8)
-        local y = upward and relative.Y - height - 5 or relative.Y + 36
+        local height = math.min(wanted, window.Height - 16, math.max(60, upward and above or below))
+        local x = math.clamp(relative.X, window.ContentX + 8, panelWidth - width - 8)
+        local y = upward and relative.Y - height - 5 or relative.Y + inputHeight + 5
         y = math.clamp(y, 8, window.Height - height - 8)
         local menu = UI.frame(window.Main, "DropdownPopover", x, y, width, height, T.Raised, 7)
         menu.ZIndex = 101
@@ -93,15 +129,21 @@ function Dropdown.new(section, options)
             UI.text(scroller, "Empty", Textos.noHayOpciones, 7, 0, 192, 32, 11, T.Muted).Size = UDim2.new(1, -14, 0, 32)
         end
         for index, value in ipairs(values) do
-            local item = UI.button(scroller, "Option" .. tostring(index), "", 0, 0, 0, 32)
-            item.Size = UDim2.new(1, -3, 0, 32)
+            local entry = entries[index]
+            local item = UI.button(scroller, "Option" .. tostring(index), "", 0, 0, 0, rowHeight)
+            item.Size = UDim2.new(1, -3, 0, rowHeight)
             item.LayoutOrder = index
             item.BackgroundTransparency = 0
             item.BackgroundColor3 = value == selected and T.AccentWash or T.Raised
             item.ZIndex = 103
             UI.corner(item, 4)
-            UI.text(item, "Label", value, 8, 0, 167, 32, 13, value == selected and T.Accent or T.Text).Size = UDim2.new(1, -38, 0, 32)
-            if value == selected then UI.check(item, width - 39, 13) end
+            if pictures then Thumbnail.new(popupRuntime, item, entry.Image, 7, (rowHeight - 32) / 2, 48, 32) end
+            local textX = pictures and 64 or 8
+            local textHeight = entry.Description and 19 or rowHeight
+            UI.text(item, "Label", entry.Label, textX, entry.Description and 7 or 0, 167, textHeight, 13,
+                value == selected and T.Accent or T.Text).Size = UDim2.new(1, -(textX + 30), 0, textHeight)
+            if entry.Description then UI.text(item, "Description", entry.Description, textX, 27, 120, 17, 11, T.Muted).Size = UDim2.new(1, -(textX + 30), 0, 17) end
+            if value == selected then UI.check(item, width - 39, rowHeight / 2 - 3) end
             UI.hover(popupRuntime, item, value == selected and T.AccentWash or T.Raised, T.Hover)
             popupRuntime:Connect(item.Activated, function()
                 if window.PopupOwner ~= c or window.OpenDropdown ~= menu then return end
@@ -119,6 +161,7 @@ function Dropdown.new(section, options)
     end)
     rt:Connect(selector.SelectionGained, function() c:Focus(); border.Color = T.Accent end)
     rt:Connect(selector.SelectionLost, function() if window.PopupOwner ~= c then border.Color = T.Line end end)
+    present()
     return c
 end
 

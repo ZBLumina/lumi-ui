@@ -1,6 +1,6 @@
 # Lumi UI
 
-Biblioteca modular de interfaces en Luau para Potassium. **v0.4.10 añade seguimiento suave del inspector y minimización en una cápsula superior.** Conserva la presentación simplificada, los títulos destacados, las superficies de carbón cálido y los acentos crema. Toda la interfaz y la demostración están en español. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
+Biblioteca modular de interfaces en Luau para Potassium. **v0.4.11 separa la navegación, incorpora el perfil, añade selectores con miniaturas y adapta el uso a teléfono.** El grafito es más profundo y conserva texto claro, acento crema, seguimiento suave del inspector y minimización en una cápsula superior. Toda la interfaz y la demostración están en español. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
 
 Los textos propios de la biblioteca se concentran en `src/Textos.luau`: navegación, etiquetas, estados, ayudas, tipos de control, listas vacías y confirmaciones. La demostración también traduce todos sus títulos, descripciones y opciones. Se conservan los nombres de producto Lumi UI, Potassium y Luau, junto con los identificadores técnicos de la API. Los textos personalizados que proporciona quien usa la biblioteca se muestran tal como se reciben.
 
@@ -49,13 +49,32 @@ Todos los controles aceptan `Name`, `Description` y `Callback`. Los controles co
 
 Las páginas aceptan opcionalmente `Icon = "Grid"`, `"Sliders"` o `"Layers"`: cuadrícula, ajustes o capas. Son identificadores técnicos de iconos geométricos nativos. Si falta el valor o no se reconoce, se usa la cuadrícula. Los nombres aprovechan el ancho de la navegación y los títulos, el encabezado completo.
 
+## Perfil y selectores con imágenes
+
+El pie muestra el avatar y el nombre del jugador local, con `@usuario` cuando es distinto del nombre visible y hay espacio. Si la imagen falla, permanecen las iniciales. Se pueden personalizar mediante `CreateWindow({Profile = {DisplayName = "Nombre", Username = "usuario", Avatar = fuente}})`.
+
+`AddDropdown` conserva las listas de cadenas y admite opciones con `Value`, `Label`, `Image` y una `Description` opcional. `AddImageDropdown` es un alias explícito. `Get()` y la función asociada reciben `Value`; `GetLabel()` devuelve la etiqueta de presentación.
+
+```luau
+general:AddImageDropdown({Name = "Tipo de cielo", Default = "dia", Values = {
+    {Value = "dia", Label = "Despejado", Image = {Path = "mis-imagenes/dia.png"}},
+    {Value = "tarde", Label = "Atardecer", Image = {Url = "https://mi-dominio.com/tarde.png"}},
+}})
+```
+
+Las fuentes admiten URI de Roblox, ID numérico, `{Path = "archivo.png"}`, URL HTTPS o `{Data = "BASE64...", Name = "imagen.png"}`. `Lumi:ResolveImage(fuente)` devuelve una URI o `nil, error`. PNG y JPEG locales, remotos e integrados se registran mediante `getcustomasset` o `getsynasset`, sin publicar imágenes en Roblox. Las descargas y los datos integrados usan una caché propia en `lumi-ui/assets`; las URLs repetidas reutilizan el archivo. Las cargas tardías no reemplazan una selección nueva ni modifican una ventana destruida. Sin soporte del ejecutor o ante un fallo se mantiene un marcador y la selección sigue funcionando.
+
+La demostración incluye tres ilustraciones de cielo originales en base64 y sus PNG en `assets/demo/`. No necesita descargar esas imágenes al ejecutarse. No modifica el cielo del juego.
+
+La referencia [Neverlose](https://github.com/B5RLAS/Neverlose/blob/main/NeverLose.lua) usa IDs de Roblox para iconos y URLs para fuentes. No se ejecuta ni incorpora su código de juego. Sus imágenes PNG de GitHub pueden utilizarse como cualquier URL, por ejemplo del [paquete de iconos indicado](https://github.com/B5RLAS/otizimiconpack/tree/main/UmbrellaMenu/icons), si quien integra la biblioteca decide usarlas. Lumi conserva sus iconos geométricos propios.
+
 ## Distribución e interacción
 
 - Los campos y botones comparten una altura visual de 32 px y se alinean por el extremo derecho. Los nombres usan 15 px y las descripciones 12 px. El texto largo hace crecer la fila; cuando falta espacio, el campo pasa debajo del texto. Los títulos de página usan 32 px y sus encabezados crecen para mostrar títulos y subtítulos completos.
 - Los deslizadores separan la cabecera, la zona de arrastre y los límites. El campo numérico reserva espacio según su rango y sufijo para mantener estable el carril durante el arrastre. Los límites invertidos se normalizan, los valores se ajustan al rango y ambos extremos siguen siendo alcanzables. Si mínimo y máximo coinciden, el valor permanece fijo. `Step` vale 1 si no se especifica.
 - Pulsa el valor numérico para escribirlo. Los deslizadores seleccionados también admiten las flechas izquierda y derecha. Las listas largas permiten desplazamiento; las listas vacías conservan `nil`. Los valores no válidos no cambian la selección.
 - Los menús se cierran al pulsar fuera, usar Escape, cambiar de página, desplazar el contenido, mover la ventana o perder el foco.
-- El lienzo de escritorio mide 1100 × 688. Las ventanas que no pueden alojarlo adaptan sus dimensiones y ocultan el inspector antes de reducir la escala. El contenido compacto se desplaza. Los tamaños extremadamente pequeños todavía pueden reducir la escala.
+- El lienzo de escritorio mide 1100 × 688 y separa navegación, contenido e inspector con huecos de 12 px. Las ventanas que no pueden alojarlo ocultan el inspector. En anchos menores de 700 px o clientes con entrada táctil, la navegación se abre con el botón de menú y el contenido dispone del ancho de la ventana. Elegir una página cierra la navegación. Los botones y campos táctiles tienen 44 px de altura, los selectores visuales 56 px por opción y el contenido se desplaza. Los tamaños extremadamente pequeños todavía pueden reducir la escala.
 
 El inspector distingue rangos numéricos, estados, opciones discretas y acciones. Ajusta el tamaño de sus valores según el ancho real del texto. La sombra combina una caída ambiental suave con una sombra de contacto y acompaña las esquinas, el tamaño y las animaciones del panel.
 
@@ -95,14 +114,15 @@ src/
   Tab.luau            navegación y páginas
   Section.luau        grupos y filas
   PropertyLayout.luau distribución medida de textos y campos
-  components/         inspector y sombra
+  ImageSource.luau    resolución, caché y carga cancelable de imágenes
+  components/         inspector, perfil, miniaturas, sombra y presentación
   controls/           botón, interruptor, deslizador y selector
 ```
 
 La generación también produce `tests/runtime.bundle.luau`, excluido de Git. Ejecútalo completo en un cliente de Roblox mediante Potassium. Usa instancias y conexiones reales, crea ventanas temporales y las limpia. Las dos advertencias de las funciones que fallan intencionalmente forman parte de la prueba de aislamiento de errores.
 
-La composición y su verificación se registran en [las notas de v0.4.8](docs/design/studio-v048-composicion.md). Los registros históricos de [español](docs/design/studio-v047-espanol.md), [distribución](docs/design/studio-v046-layout.md), [sombra](docs/design/studio-v045-shadow.md) y [movimiento](docs/design/studio-v043-motion.md) documentan las mejoras previas.
+La composición, el perfil, las imágenes y la verificación móvil se registran en [las notas de v0.4.11](docs/design/studio-v0411-perfil-imagenes.md). Los registros históricos de [composición](docs/design/studio-v048-composicion.md), [español](docs/design/studio-v047-espanol.md), [distribución](docs/design/studio-v046-layout.md), [sombra](docs/design/studio-v045-shadow.md) y [movimiento](docs/design/studio-v0410-movimiento.md) documentan las mejoras previas.
 
 Puedes ejecutar `examples/verificar-espanol.luau` después de la demostración para revisar los textos de las páginas, los estados, los menús y los valores predeterminados. La traducción se comprobó en un cliente real mediante Potassium, junto con los controles, el arrastre, el cierre y la reinyección.
 
-`Window.Main` conserva la envolvente que centra y mueve todo el conjunto; ahora es transparente. `Window.Panel` expone la superficie principal y `Window.Inspector`, la superficie contextual. En modo compacto el panel principal recupera todo el ancho y el inspector se oculta.
+`Window.Main` conserva la envolvente transparente que centra y mueve todo el conjunto. `Window.Sidebar`, `Window.Panel` y `Window.Inspector` exponen las tres superficies. En modo teléfono el panel principal recupera el ancho; `ToggleNavigation()` alterna la navegación. El inspector se oculta cuando no hay espacio.
