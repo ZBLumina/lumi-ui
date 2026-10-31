@@ -1,10 +1,14 @@
 # Lumi UI
 
-Biblioteca modular de interfaces en Luau para Potassium. **v0.4.12 renueva la identidad visual con café oscuro, marfil, miel y curvas originales.** Los títulos usan Fredoka SemiBold; el texto, Nunito Sans Regular/Medium; los rótulos pequeños espaciados, Montserrat Medium; la marca, Comfortaa SemiBold. Conserva la composición de tres paneles, el perfil, los selectores con miniaturas, el seguimiento del inspector, la cápsula superior y la adaptación táctil. Toda la interfaz y la demostración están en español. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
+Biblioteca modular de interfaces en Luau para Potassium. **v0.4.13 incorpora fondos botánicos e ilustraciones PNG originales, con café oscuro, marfil y miel.** Los títulos usan Fredoka SemiBold; el texto, Nunito Sans Regular/Medium; los rótulos pequeños espaciados, Montserrat Medium; la marca, Comfortaa SemiBold. Conserva la composición de tres paneles, el perfil, los selectores con miniaturas, el seguimiento del inspector, la cápsula superior y la adaptación táctil. Toda la interfaz y la demostración están en español. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
 
-Las cinco variantes TTF y sus licencias OFL están en `assets/fonts`. El generador incorpora sus bytes en el script: no se descargan fuentes al abrirlo. Potassium las registra en su carpeta local `lumi-ui/fonts`; otros entornos sin registro de archivos usan fuentes nativas de respaldo. El ajuste de textos utiliza la FontFace real. Los ornamentos son geometría original de la interfaz; las imágenes de referencia del usuario no forman parte del paquete.
+Las cinco variantes TTF y sus licencias OFL están en `assets/fonts`. El generador incorpora sus bytes en el script: no se descargan fuentes al abrirlo. Potassium las registra en su carpeta local `lumi-ui/fonts`; otros entornos sin registro de archivos usan fuentes nativas de respaldo. El ajuste de textos utiliza la FontFace real.
+
+Las ilustraciones decorativas son PNG en `assets/decor`, con sus prompts de generación. `src/Artwork.luau` centraliza la cabecera transparente y los fondos de navegación, panel principal e inspector: `Header`, `Sidebar`, `Panel` e `Inspector`. Se descargan de una revisión fija del repositorio y se guardan en `lumi-ui/assets`. Usan el mismo cargador cancelable que las miniaturas, con reutilización de cada registro de archivo. Las imágenes no capturan entrada; si fallan permanece la superficie café. La ilustración de cabecera se oculta en teléfono o cuando el texto necesita el ancho. Las imágenes de referencia del usuario no forman parte del paquete.
 
 Los textos propios de la biblioteca se concentran en `src/Textos.luau`: navegación, etiquetas, estados, ayudas, tipos de control, listas vacías y confirmaciones. La demostración también traduce todos sus títulos, descripciones y opciones. Se conservan los nombres de producto Lumi UI, Potassium y Luau, junto con los identificadores técnicos de la API. Los textos personalizados que proporciona quien usa la biblioteca se muestran tal como se reciben.
+
+La decoración botánica y su comprobación se registran en [las notas de v0.4.13](docs/design/studio-v0413-imagenes.md).
 
 ## Probar la versión actual en Potassium
 

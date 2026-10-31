@@ -29,7 +29,7 @@ function Dropdown.new(section, options)
     selector.BackgroundTransparency = 0
     selector.BackgroundColor3 = T.Raised
     selector.ZIndex = 2
-    UI.corner(selector, 5)
+    UI.corner(selector, 7)
     local border = UI.stroke(selector, T.Line)
     local label = UI.text(selector, "Selection", selected == nil and Textos.vacio or selected, 12, 0, 178, 31, 13, T.Secondary)
     local preview, binding

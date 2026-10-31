@@ -10,11 +10,12 @@ Inspector.__index = Inspector
 
 function Inspector.new(window)
     local self = setmetatable({Window = window, Bars = {}, BarState = {}}, Inspector)
-    local frame = UI.frame(window.Main, "Inspector", 876, 0, 224, 688, T.Sidebar, 12)
+    local frame = UI.frame(window.Main, "Inspector", 876, 0, 224, 688, T.Sidebar, 14)
     frame.Active = true
     window.Inspector = frame
-    self.Shadow = Shadow.new(frame, 12)
+    self.Shadow = Shadow.new(frame, 14)
     UI.stroke(frame, T.Line)
+    BrandArt.footer(window.Runtime, frame)
     UI.micro(frame, "InspectorHeading", "INSPECTOR", 18, 20, 188, 16)
     UI.line(frame, 18, 47, 188)
     window.DetailTitle = UI.text(frame, "DetailTitle", Textos.tuEspacio, 18, 67, 188, 52, 21, T.Text, T.Title)
@@ -26,11 +27,12 @@ function Inspector.new(window)
     window.DetailDescription.TextTruncate = Enum.TextTruncate.None
     window.DetailDescription.TextYAlignment = Enum.TextYAlignment.Top
 
-    local preview = UI.frame(frame, "ValuePreview", 18, 190, 188, 164, T.Surface, 7)
+    local preview = UI.frame(frame, "ValuePreview", 18, 190, 188, 176, T.Surface, 10)
+    preview.BackgroundTransparency = 0.10
     UI.stroke(preview, T.SoftLine)
     window.DetailKind = UI.text(preview, "Kind", Textos.seleccion, 14, 14, 160, 16, 11, T.Muted, T.Medium)
     window.DetailValue = UI.text(preview, "Value", Textos.listo, 14, 40, 160, 40, 32, T.Accent, T.Title)
-    self.Meta = UI.text(preview, "ValueContext", Textos.espacioMayus, 14, 140, 160, 15, 11, T.Muted, T.Mono)
+    self.Meta = UI.text(preview, "ValueContext", Textos.espacioMayus, 14, 152, 160, 15, 11, T.Muted, T.Mono)
 
     self.Numeric = UI.frame(preview, "NumericRange", 14, 96, 160, 37)
     for i = 1, 29 do
@@ -39,8 +41,8 @@ function Inspector.new(window)
     end
     self.Marker = UI.frame(self.Numeric, "Position", 0, 1, 2, 32, T.Accent, 1)
     self.Marker.AnchorPoint = Vector2.new(0.5, 0)
-    self.Low = UI.text(preview, "LowerBound", "", 14, 140, 80, 15, 11, T.Muted, T.Mono)
-    self.High = UI.text(preview, "UpperBound", "", 94, 140, 80, 15, 11, T.Muted, T.Mono)
+    self.Low = UI.text(preview, "LowerBound", "", 14, 152, 80, 15, 11, T.Muted, T.Mono)
+    self.High = UI.text(preview, "UpperBound", "", 94, 152, 80, 15, 11, T.Muted, T.Mono)
     self.High.TextXAlignment = Enum.TextXAlignment.Right
 
     self.Boolean = UI.frame(preview, "BooleanState", 14, 104, 160, 26)
@@ -63,20 +65,19 @@ function Inspector.new(window)
     UI.frame(self.Action, "Upper", 136, 10, 7, 1, T.AccentSoft).Rotation = 45
     UI.frame(self.Action, "Lower", 136, 16, 7, 1, T.AccentSoft).Rotation = -45
 
-    UI.micro(frame, "Properties", Textos.propiedades, 18, 378, 188, 16)
+    UI.micro(frame, "Properties", Textos.propiedades, 18, 390, 188, 16)
     window.DetailRows = {}
     for i, name in ipairs({"Page", "Section", "Type", "Range"}) do
-        local y = 405 + (i - 1) * 34
+        local y = 417 + (i - 1) * 34
         UI.text(frame, name .. "Key", Textos.claves[i], 18, y, 50, 24, 12, T.Muted)
         window.DetailRows[i] = UI.text(frame, name .. "Value", "--", 74, y, 132, 24, 12, T.Secondary)
         window.DetailRows[i].TextXAlignment = Enum.TextXAlignment.Right
         UI.line(frame, 18, y + 29, 188)
     end
-    self.Hint = UI.text(frame, "Hint", Textos.pistaInicial, 18, 0, 188, 32, 12, T.Muted)
+    self.Hint = UI.text(frame, "Hint", Textos.pistaInicial, 18, 0, 188, 32, 12, T.Secondary)
     self.Hint.Position = UDim2.new(0, 18, 1, -56)
     self.Hint.TextWrapped = true
     self.Hint.TextTruncate = Enum.TextTruncate.None
-    BrandArt.footer(frame)
     window.Bars = self.Bars
     self:Clear()
     return self

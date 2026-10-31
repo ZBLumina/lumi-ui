@@ -12,15 +12,16 @@ Section.__index = Section
 function Section.new(tab, name, options)
     local frame = UI.new("Frame", tab.Page, {
         Name = tostring(name) .. "Section", Size = UDim2.new(1, 0, 0, 44),
-        AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 0, BackgroundColor3 = T.Surface,
+        AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 0.12, BackgroundColor3 = T.Surface,
         LayoutOrder = #tab.Sections + 1,
     })
-    UI.corner(frame, 8)
+    UI.corner(frame, 10)
     UI.stroke(frame, T.SoftLine)
     UI.list(frame, 0)
     local header = UI.new("Frame", frame, {Name = "SectionHeader", Size = UDim2.new(1, 0, 0, 43), LayoutOrder = 0})
     local index = #tab.Sections + 1
-    UI.text(header, "Index", string.format("%02d", index), 16, 0, 26, 43, 10, T.Muted, T.Mono)
+    UI.frame(header, "IndexBadge", 16, 10, 24, 24, T.AccentWash, 12).BackgroundTransparency = 0.35
+    UI.text(header, "Index", string.format("%02d", index), 16, 0, 24, 43, 10, T.Secondary, T.Mono).TextXAlignment = Enum.TextXAlignment.Center
     local heading = UI.text(header, "Title", name, 45, 0, 440, 43, 15, T.Text, T.Medium)
     local tag = UI.text(header, "Tag", options.Tag or Textos.ajustes, 510, 0, 116, 43, 9, T.Muted, T.Mono)
     tag.TextXAlignment = Enum.TextXAlignment.Right
@@ -48,7 +49,8 @@ function Section:Row(options, kind, height)
     self._order += 1
     local row = UI.new("Frame", self.Content, {Name = (options.Name or kind) .. "Row",
         Size = UDim2.new(1, 0, 0, height or 64), LayoutOrder = self._order, ClipsDescendants = true})
-    local selection = UI.frame(row, "SelectionWash", 6, 5, 0, 0, T.AccentWash, 4)
+    local selection = UI.frame(row, "SelectionWash", 6, 5, 0, 0, T.AccentWash, 8)
+    UI.stroke(selection, T.AccentSoft).Transparency = 0.45
     selection.Size = UDim2.new(1, -12, 1, -10)
     selection.BackgroundTransparency, selection.Visible = 0.4, false
     local rule = UI.new("Frame", row, {Name = "Divider", Size = UDim2.new(1, -32, 0, 1),

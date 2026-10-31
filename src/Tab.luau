@@ -37,7 +37,7 @@ function Tab.new(window, name, options)
     header.LayoutOrder = 0
     self.Header = header
     UI.micro(header, "Eyebrow", options.Eyebrow or string.format(Textos.espacioMayus .. " / %02d", index), 0, 0, 540, 14).Size = UDim2.new(1, 0, 0, 14)
-    self.Art = BrandArt.header(header)
+    self.Art = BrandArt.header(window.Runtime, header)
     self.Title = UI.text(header, "Title", name, 0, 21, 570, 39, 32, T.Text, T.Title)
     self.Subtitle = UI.text(header, "Subtitle", self.Description, 0, 66, 620, 18, 13, T.Secondary)
     for _, label in ipairs({self.Title, self.Subtitle}) do
@@ -74,7 +74,7 @@ function Tab:GetContentWidth()
 end
 
 function Tab:Relayout()
-    local rowHeight = self.Window.Mobile and 48 or 42
+    local rowHeight = self.Window.Mobile and 48 or 46
     self.Button.Size = UDim2.new(1, 0, 0, rowHeight)
     self.Icon.Position = UDim2.fromOffset(14, (rowHeight - 16) / 2)
     self.Indicator.Position = UDim2.fromOffset(1, (rowHeight - 14) / 2)
@@ -82,20 +82,22 @@ function Tab:Relayout()
     self.Padding.PaddingLeft, self.Padding.PaddingRight = UDim.new(0, padding), UDim.new(0, padding)
     self.Label.Size = UDim2.new(1, -48, 1, 0)
     local width = self:GetContentWidth()
+    self.Title.TextSize = self.Window.Mobile and 32 or 40
+    self.Subtitle.TextSize = self.Window.Mobile and 15 or 16
     local function height(label, available, minimum)
         local bounds = Fonts.bounds(label.Text, label.TextSize, label.FontFace, available - 1)
         return math.max(minimum, math.ceil(bounds.Y) + 2)
     end
-    local titleHeight = height(self.Title, width, 39)
-    local subtitleY = 21 + titleHeight + 6
+    local titleHeight = height(self.Title, width, self.Window.Mobile and 39 or 48)
+    local subtitleY = 21 + titleHeight + 8
     local subtitleHeight = height(self.Subtitle, width, 18)
     self.Title.Size = UDim2.new(1, 0, 0, titleHeight)
     self.Subtitle.Position = UDim2.fromOffset(0, subtitleY)
     self.Subtitle.Size = UDim2.new(1, 0, 0, subtitleHeight)
-    self.Header.Size = UDim2.new(1, 0, 0, math.max(88, subtitleY + subtitleHeight + 4))
-    self.Art.Visible = not self.Window.Mobile and width >= 480 and Fonts.bounds(self.Title.Text, self.Title.TextSize, self.Title.FontFace).X < width - 164
-        and Fonts.bounds(self.Subtitle.Text, self.Subtitle.TextSize, self.Subtitle.FontFace).X < width - 164
-        and Fonts.bounds(self.Header.Eyebrow.Text, self.Header.Eyebrow.TextSize, self.Header.Eyebrow.FontFace).X < width - 164
+    self.Header.Size = UDim2.new(1, 0, 0, math.max(self.Window.Mobile and 104 or 124, subtitleY + subtitleHeight + 4))
+    self.Art.Visible = not self.Window.Mobile and width >= 500 and Fonts.bounds(self.Title.Text, self.Title.TextSize, self.Title.FontFace).X < width - 212
+        and Fonts.bounds(self.Subtitle.Text, self.Subtitle.TextSize, self.Subtitle.FontFace).X < width - 212
+        and Fonts.bounds(self.Header.Eyebrow.Text, self.Header.Eyebrow.TextSize, self.Header.Eyebrow.FontFace).X < width - 212
     for _, section in ipairs(self.Sections) do section:Relayout() end
     for _, control in ipairs(self.Controls) do control:Relayout() end
 end

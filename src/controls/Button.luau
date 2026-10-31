@@ -20,8 +20,8 @@ function Button.new(section, options)
     action.TextTruncate = Enum.TextTruncate.AtEnd
     c.ControlWidth = PropertyLayout.inputWidth(action.Text, action.FontFace, action.TextSize, 144, 240)
     action.ZIndex = 2
-    UI.corner(action, 5)
-    if secondary then UI.stroke(action, T.Line) end
+    UI.corner(action, 8)
+    UI.stroke(action, secondary and T.Line or T.AccentHover).Transparency = secondary and 0.16 or 0.55
     c.Input = action
     local scale = UI.new("UIScale", action, {Scale = 1})
     local hovered, pressed = false, false

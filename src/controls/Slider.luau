@@ -36,7 +36,7 @@ function Slider.new(section, options)
     c.Range = c:Format(minimum) .. " - " .. c:Format(maximum)
     c.Get = function() return value end
     function c:Fraction() return maximum == minimum and 0 or (value - minimum) / (maximum - minimum) end
-    local field = UI.frame(c.Row, "ValueField", 0, 0, 96, 32, T.Raised, 5)
+    local field = UI.frame(c.Row, "ValueField", 0, 0, 96, 36, T.Raised, 7)
     field.ClipsDescendants, field.ZIndex = true, 2
     local box = UI.new("TextBox", field, {
         Name = "ValueInput", Size = UDim2.new(1, -20, 1, 0), Position = UDim2.fromOffset(10, 0),
@@ -46,10 +46,11 @@ function Slider.new(section, options)
     local border = UI.stroke(field, T.Line)
     c.ValueInput = box
     local track = UI.new("Frame", c.Row, {Name = "Track", Position = UDim2.fromOffset(18, 62),
-        Size = UDim2.new(1, -36, 0, 2), BackgroundTransparency = 0, BackgroundColor3 = T.Line})
+        Size = UDim2.new(1, -36, 0, 4), BackgroundTransparency = 0, BackgroundColor3 = T.Line})
     UI.corner(track, 2)
-    local fill = UI.frame(track, "Fill", 0, 0, 0, 2, T.Accent, 1)
-    local thumb = UI.frame(track, "Thumb", 0, -5, 6, 12, T.Text, 2)
+    local fill = UI.frame(track, "Fill", 0, 0, 0, 4, T.Accent, 2)
+    local thumb = UI.frame(track, "Thumb", 0, 0, 14, 14, T.Text, 999)
+    UI.stroke(thumb, T.AccentSoft).Transparency = 0.55
     thumb.AnchorPoint = Vector2.new(0.5, 0.5)
     local hit = UI.button(c.Row, "SliderInput", "", 18, 52, 0, 23)
     hit.Size = UDim2.new(1, -36, 0, 23)
@@ -68,8 +69,8 @@ function Slider.new(section, options)
     c.Layout = function(place)
         field.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
         field.Size = UDim2.fromOffset(place.ControlWidth, place.ControlHeight)
-        track.Position = UDim2.fromOffset(place.LaneX, place.TrackY)
-        track.Size = UDim2.fromOffset(place.LaneWidth, 2)
+        track.Position = UDim2.fromOffset(place.LaneX, place.TrackY - 2)
+        track.Size = UDim2.fromOffset(place.LaneWidth, 4)
         hit.Position = UDim2.fromOffset(place.LaneX, place.HitY)
         hit.Size = UDim2.fromOffset(place.LaneWidth, place.HitHeight)
         low.Position, low.Size = UDim2.fromOffset(place.LaneX, place.BoundsY), UDim2.fromOffset(place.BoundsWidth, 14)
@@ -79,7 +80,7 @@ function Slider.new(section, options)
     local dragging, hovered, focused = false, false, false
     local function emphasize()
         local active = dragging or hovered or focused
-        rt:Tween(thumb, {Size = UDim2.fromOffset(active and 8 or 6, active and 14 or 12),
+        rt:Tween(thumb, {Size = UDim2.fromOffset(active and 16 or 14, active and 16 or 14),
             BackgroundColor3 = active and T.Accent or T.Text}, 0.10)
     end
     local function render(instant)

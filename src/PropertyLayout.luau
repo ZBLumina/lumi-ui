@@ -1,6 +1,6 @@
 local Fonts = require("Fonts")
 local Layout = {}
-local PAD, VERTICAL, COLUMN_GAP, STACK_GAP, INPUT_HEIGHT = 16, 12, 24, 12, 32
+local PAD, VERTICAL, COLUMN_GAP, STACK_GAP, INPUT_HEIGHT = 16, 12, 24, 12, 36
 local widths = {Button = 144, Dropdown = 220, Toggle = 100, Slider = 96}
 
 local function textHeight(label, width, minimum)

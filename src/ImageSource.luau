@@ -3,6 +3,7 @@ local ImageSource = {}
 local Binding = {}
 Binding.__index = Binding
 local CACHE = "lumi-ui/assets"
+local registered = {}
 local alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 local sextets = {}
 for index = 1, #alphabet do sextets[alphabet:byte(index)] = index - 1 end
@@ -61,10 +62,13 @@ local function canRegister()
 end
 
 local function register(path)
+    -- Reuse a local asset URI across simultaneous consumers. Registering the
+    -- same file repeatedly can rewrite its mapped copy while Roblox reads it.
+    if registered[path] then return registered[path] end
     for _, loader in ipairs({getcustomasset or false, getsynasset or false}) do
         if type(loader) == "function" then
             local ok, uri = pcall(loader, path)
-            if ok and type(uri) == "string" and uri ~= "" then return uri end
+            if ok and type(uri) == "string" and uri ~= "" then registered[path] = uri; return uri end
         end
     end
     return nil, "No se pudo registrar la imagen local con el ejecutor"

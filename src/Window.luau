@@ -15,6 +15,7 @@ local GuiService = game:GetService("GuiService")
 local Window = {}
 Window.__index = Window
 local DESKTOP_HEIGHT = 688
+local PREFERRED_HEIGHT = 768
 local INSPECTOR_WIDTH, PANEL_GAP = 224, 12
 
 function Window.new(options)
@@ -29,25 +30,26 @@ function Window.new(options)
     main.Position = UDim2.fromScale(0.5, 0.5)
     self.Main = main
     self.UIScale = UI.new("UIScale", main, {Scale = 1})
-    local panel = UI.frame(main, "Panel", 0, 0, 864, DESKTOP_HEIGHT, T.Shell, 12)
+    local panel = UI.frame(main, "Panel", 0, 0, 864, DESKTOP_HEIGHT, T.Shell, 14)
     panel.Active = true
     self.Panel = panel
-    self.Shadow = Shadow.new(panel, 12)
+    self.Shadow = Shadow.new(panel, 14)
     UI.stroke(panel, T.Line)
+    BrandArt.panel(rt, panel)
     self.TopEdge = UI.frame(panel, "TopEdge", 12, 0, 840, 1, T.Secondary)
     self.TopEdge.BackgroundTransparency = 0.88
 
-    local sidebar = UI.frame(main, "Sidebar", 0, 0, 184, 660, T.Sidebar, 12)
+    local sidebar = UI.frame(main, "Sidebar", 0, 0, 184, 660, T.Sidebar, 14)
     self.Sidebar = sidebar
     sidebar.Active = true
-    self.SidebarShadow = Shadow.new(sidebar, 12)
+    self.SidebarShadow = Shadow.new(sidebar, 14)
     UI.stroke(sidebar, T.Line)
+    BrandArt.sidebar(rt, sidebar)
     local brandTile = UI.frame(sidebar, "BrandTile", 21, 24, 30, 30, T.AccentWash, 7)
     UI.stroke(brandTile, T.AccentSoft).Transparency = 0.65
     UI.mark(brandTile, 5, 5, 20)
-    UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 32, 25, T.Text, T.Brand)
+    UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 32, 27, T.Text, T.Brand)
     UI.micro(sidebar, "BrandSub", Textos.interfaz, 21, 65, 145, 14)
-    BrandArt.sidebar(sidebar)
     UI.micro(sidebar, "Group", Textos.secciones, 22, 122, 140, 16)
     self.Navigation = UI.new("ScrollingFrame", sidebar, {
         Name = "Navigation", Position = UDim2.fromOffset(12, 153), Size = UDim2.new(1, -24, 1, -258),
@@ -87,6 +89,7 @@ function Window.new(options)
     UI.line(chrome, 0, 47, 916)
 
     self.Workspace = UI.frame(panel, "Workspace", 184, 48, 680, 584, T.Workspace)
+    self.Workspace.BackgroundTransparency = 1
     self.Workspace.ClipsDescendants = true
     self.Context = Inspector.new(self)
 
@@ -94,7 +97,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.12", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.13", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -169,7 +172,7 @@ function Window:Fit()
     local inset = GuiService:GetGuiInset()
     self.SafeTop = self.Mobile and math.max(8, inset.Y + 8) or 8
     local verticalMargin = self.Mobile and self.SafeTop + 8 or 32
-    self.Height = math.max(280, math.min(DESKTOP_HEIGHT, size.Y - verticalMargin))
+    self.Height = math.max(280, math.min(PREFERRED_HEIGHT, size.Y - verticalMargin))
     if not self.Mobile then self.NavigationOpen = false end
     self.SidebarWidth = self.Mobile and self.Width or 184
     local sideWidth = self.SidebarWidth
@@ -187,11 +190,10 @@ function Window:Fit()
     self.Sidebar.BrandSub.Size = UDim2.fromOffset(sideWidth - 40, 14)
     self.Sidebar.BrandSub.Text = Fonts.tracked(sideWidth < 170 and Textos.biblioteca or Textos.interfaz)
     local short = self.Height < 480
-    local navTop = short and 112 or 153
+    local navTop = short and 112 or 169
     self.Sidebar.BrandSub.Position = UDim2.fromOffset(21, short and 60 or 65)
-    self.Sidebar.BrandWaves.Position = UDim2.fromOffset(20, short and 75 or 87)
-    self.Sidebar.Group.Position = UDim2.fromOffset(22, short and 89 or 122)
-    self.Sidebar.BrandWaves.Size = UDim2.fromOffset(sideWidth - 40, short and 10 or 26)
+    self.Sidebar.BrandWaves.Visible = not short
+    self.Sidebar.Group.Position = UDim2.fromOffset(22, short and 89 or 138)
     self.Navigation.Position = UDim2.fromOffset(12, navTop)
     self.Navigation.Size = UDim2.new(1, -24, 1, -(navTop + (short and 80 or 105)))
     self.Profile:Fit(sideWidth - 40, short)

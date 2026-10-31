@@ -2,6 +2,20 @@
 local Lumi = (function()
 -- Generado por scripts/build.mjs; edita src/*.luau.
 local __factories = {}
+__factories["Artwork"] = function(__require)
+-- src/Artwork.luau
+-- Original raster artwork. These URLs are centralized so image changes never
+-- require editing the layout, fonts, controls or their callbacks.
+local BOTANICAL = "https://raw.githubusercontent.com/ZBLumina/lumi-ui/76a9281b484b3e69f1e2627e132166f370acc240/assets/decor/"
+
+return {
+    Header = {Url = BOTANICAL .. "lumi-flor-cabecera-v1.png"},
+    Sidebar = {Url = BOTANICAL .. "lumi-sidebar-botanico-v1.png"},
+    Panel = {Url = BOTANICAL .. "lumi-panel-botanico-v1.png"},
+    Inspector = {Url = BOTANICAL .. "lumi-inspector-botanico-v1.png"},
+}
+end
+
 __factories["Fonts"] = function(__require)
 -- src/Fonts.luau
 -- Static OFL fonts are embedded by the builder; no runtime HTTP requests.
@@ -125,6 +139,7 @@ local ImageSource = {}
 local Binding = {}
 Binding.__index = Binding
 local CACHE = "lumi-ui/assets"
+local registered = {}
 local alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 local sextets = {}
 for index = 1, #alphabet do sextets[alphabet:byte(index)] = index - 1 end
@@ -183,10 +198,13 @@ local function canRegister()
 end
 
 local function register(path)
+    -- Reuse a local asset URI across simultaneous consumers. Registering the
+    -- same file repeatedly can rewrite its mapped copy while Roblox reads it.
+    if registered[path] then return registered[path] end
     for _, loader in ipairs({getcustomasset or false, getsynasset or false}) do
         if type(loader) == "function" then
             local ok, uri = pcall(loader, path)
-            if ok and type(uri) == "string" and uri ~= "" then return uri end
+            if ok and type(uri) == "string" and uri ~= "" then registered[path] = uri; return uri end
         end
     end
     return nil, "No se pudo registrar la imagen local con el ejecutor"
@@ -442,7 +460,7 @@ __factories["PropertyLayout"] = function(__require)
 -- src/PropertyLayout.luau
 local Fonts = __require("Fonts")
 local Layout = {}
-local PAD, VERTICAL, COLUMN_GAP, STACK_GAP, INPUT_HEIGHT = 16, 12, 24, 12, 32
+local PAD, VERTICAL, COLUMN_GAP, STACK_GAP, INPUT_HEIGHT = 16, 12, 24, 12, 36
 local widths = {Button = 144, Dropdown = 220, Toggle = 100, Slider = 96}
 
 local function textHeight(label, width, minimum)
@@ -647,15 +665,16 @@ Section.__index = Section
 function Section.new(tab, name, options)
     local frame = UI.new("Frame", tab.Page, {
         Name = tostring(name) .. "Section", Size = UDim2.new(1, 0, 0, 44),
-        AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 0, BackgroundColor3 = T.Surface,
+        AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 0.12, BackgroundColor3 = T.Surface,
         LayoutOrder = #tab.Sections + 1,
     })
-    UI.corner(frame, 8)
+    UI.corner(frame, 10)
     UI.stroke(frame, T.SoftLine)
     UI.list(frame, 0)
     local header = UI.new("Frame", frame, {Name = "SectionHeader", Size = UDim2.new(1, 0, 0, 43), LayoutOrder = 0})
     local index = #tab.Sections + 1
-    UI.text(header, "Index", string.format("%02d", index), 16, 0, 26, 43, 10, T.Muted, T.Mono)
+    UI.frame(header, "IndexBadge", 16, 10, 24, 24, T.AccentWash, 12).BackgroundTransparency = 0.35
+    UI.text(header, "Index", string.format("%02d", index), 16, 0, 24, 43, 10, T.Secondary, T.Mono).TextXAlignment = Enum.TextXAlignment.Center
     local heading = UI.text(header, "Title", name, 45, 0, 440, 43, 15, T.Text, T.Medium)
     local tag = UI.text(header, "Tag", options.Tag or Textos.ajustes, 510, 0, 116, 43, 9, T.Muted, T.Mono)
     tag.TextXAlignment = Enum.TextXAlignment.Right
@@ -683,7 +702,8 @@ function Section:Row(options, kind, height)
     self._order += 1
     local row = UI.new("Frame", self.Content, {Name = (options.Name or kind) .. "Row",
         Size = UDim2.new(1, 0, 0, height or 64), LayoutOrder = self._order, ClipsDescendants = true})
-    local selection = UI.frame(row, "SelectionWash", 6, 5, 0, 0, T.AccentWash, 4)
+    local selection = UI.frame(row, "SelectionWash", 6, 5, 0, 0, T.AccentWash, 8)
+    UI.stroke(selection, T.AccentSoft).Transparency = 0.45
     selection.Size = UDim2.new(1, -12, 1, -10)
     selection.BackgroundTransparency, selection.Visible = 0.4, false
     local rule = UI.new("Frame", row, {Name = "Divider", Size = UDim2.new(1, -32, 0, 1),
@@ -780,7 +800,7 @@ function Tab.new(window, name, options)
     header.LayoutOrder = 0
     self.Header = header
     UI.micro(header, "Eyebrow", options.Eyebrow or string.format(Textos.espacioMayus .. " / %02d", index), 0, 0, 540, 14).Size = UDim2.new(1, 0, 0, 14)
-    self.Art = BrandArt.header(header)
+    self.Art = BrandArt.header(window.Runtime, header)
     self.Title = UI.text(header, "Title", name, 0, 21, 570, 39, 32, T.Text, T.Title)
     self.Subtitle = UI.text(header, "Subtitle", self.Description, 0, 66, 620, 18, 13, T.Secondary)
     for _, label in ipairs({self.Title, self.Subtitle}) do
@@ -817,7 +837,7 @@ function Tab:GetContentWidth()
 end
 
 function Tab:Relayout()
-    local rowHeight = self.Window.Mobile and 48 or 42
+    local rowHeight = self.Window.Mobile and 48 or 46
     self.Button.Size = UDim2.new(1, 0, 0, rowHeight)
     self.Icon.Position = UDim2.fromOffset(14, (rowHeight - 16) / 2)
     self.Indicator.Position = UDim2.fromOffset(1, (rowHeight - 14) / 2)
@@ -825,20 +845,22 @@ function Tab:Relayout()
     self.Padding.PaddingLeft, self.Padding.PaddingRight = UDim.new(0, padding), UDim.new(0, padding)
     self.Label.Size = UDim2.new(1, -48, 1, 0)
     local width = self:GetContentWidth()
+    self.Title.TextSize = self.Window.Mobile and 32 or 40
+    self.Subtitle.TextSize = self.Window.Mobile and 15 or 16
     local function height(label, available, minimum)
         local bounds = Fonts.bounds(label.Text, label.TextSize, label.FontFace, available - 1)
         return math.max(minimum, math.ceil(bounds.Y) + 2)
     end
-    local titleHeight = height(self.Title, width, 39)
-    local subtitleY = 21 + titleHeight + 6
+    local titleHeight = height(self.Title, width, self.Window.Mobile and 39 or 48)
+    local subtitleY = 21 + titleHeight + 8
     local subtitleHeight = height(self.Subtitle, width, 18)
     self.Title.Size = UDim2.new(1, 0, 0, titleHeight)
     self.Subtitle.Position = UDim2.fromOffset(0, subtitleY)
     self.Subtitle.Size = UDim2.new(1, 0, 0, subtitleHeight)
-    self.Header.Size = UDim2.new(1, 0, 0, math.max(88, subtitleY + subtitleHeight + 4))
-    self.Art.Visible = not self.Window.Mobile and width >= 480 and Fonts.bounds(self.Title.Text, self.Title.TextSize, self.Title.FontFace).X < width - 164
-        and Fonts.bounds(self.Subtitle.Text, self.Subtitle.TextSize, self.Subtitle.FontFace).X < width - 164
-        and Fonts.bounds(self.Header.Eyebrow.Text, self.Header.Eyebrow.TextSize, self.Header.Eyebrow.FontFace).X < width - 164
+    self.Header.Size = UDim2.new(1, 0, 0, math.max(self.Window.Mobile and 104 or 124, subtitleY + subtitleHeight + 4))
+    self.Art.Visible = not self.Window.Mobile and width >= 500 and Fonts.bounds(self.Title.Text, self.Title.TextSize, self.Title.FontFace).X < width - 212
+        and Fonts.bounds(self.Subtitle.Text, self.Subtitle.TextSize, self.Subtitle.FontFace).X < width - 212
+        and Fonts.bounds(self.Header.Eyebrow.Text, self.Header.Eyebrow.TextSize, self.Header.Eyebrow.FontFace).X < width - 212
     for _, section in ipairs(self.Sections) do section:Relayout() end
     for _, control in ipairs(self.Controls) do control:Relayout() end
 end
@@ -914,22 +936,22 @@ __factories["Theme"] = function(__require)
 local Fonts = __require("Fonts")
 
 return {
-    Shell = Color3.fromRGB(28, 23, 20),
+    Shell = Color3.fromRGB(39, 29, 23),
     Shadow = Color3.fromRGB(8, 6, 5),
-    Sidebar = Color3.fromRGB(33, 27, 23),
-    Workspace = Color3.fromRGB(36, 30, 26),
-    Surface = Color3.fromRGB(44, 37, 32),
-    Raised = Color3.fromRGB(54, 45, 38),
-    Hover = Color3.fromRGB(66, 55, 46),
-    Line = Color3.fromRGB(95, 77, 61),
-    SoftLine = Color3.fromRGB(64, 53, 44),
+    Sidebar = Color3.fromRGB(43, 32, 25),
+    Workspace = Color3.fromRGB(45, 33, 26),
+    Surface = Color3.fromRGB(56, 42, 33),
+    Raised = Color3.fromRGB(65, 49, 38),
+    Hover = Color3.fromRGB(85, 65, 49),
+    Line = Color3.fromRGB(132, 102, 78),
+    SoftLine = Color3.fromRGB(91, 69, 53),
     Text = Color3.fromRGB(255, 241, 223),
     Secondary = Color3.fromRGB(228, 207, 184),
     Muted = Color3.fromRGB(196, 173, 148),
-    Accent = Color3.fromRGB(235, 196, 150),
+    Accent = Color3.fromRGB(239, 199, 155),
     AccentHover = Color3.fromRGB(247, 218, 184),
     AccentSoft = Color3.fromRGB(178, 138, 97),
-    AccentWash = Color3.fromRGB(73, 58, 44),
+    AccentWash = Color3.fromRGB(102, 77, 56),
     Ornament = Color3.fromRGB(169, 128, 92),
     Ink = Color3.fromRGB(51, 37, 27),
     Green = Color3.fromRGB(190, 198, 163),
@@ -1115,6 +1137,7 @@ local GuiService = game:GetService("GuiService")
 local Window = {}
 Window.__index = Window
 local DESKTOP_HEIGHT = 688
+local PREFERRED_HEIGHT = 768
 local INSPECTOR_WIDTH, PANEL_GAP = 224, 12
 
 function Window.new(options)
@@ -1129,25 +1152,26 @@ function Window.new(options)
     main.Position = UDim2.fromScale(0.5, 0.5)
     self.Main = main
     self.UIScale = UI.new("UIScale", main, {Scale = 1})
-    local panel = UI.frame(main, "Panel", 0, 0, 864, DESKTOP_HEIGHT, T.Shell, 12)
+    local panel = UI.frame(main, "Panel", 0, 0, 864, DESKTOP_HEIGHT, T.Shell, 14)
     panel.Active = true
     self.Panel = panel
-    self.Shadow = Shadow.new(panel, 12)
+    self.Shadow = Shadow.new(panel, 14)
     UI.stroke(panel, T.Line)
+    BrandArt.panel(rt, panel)
     self.TopEdge = UI.frame(panel, "TopEdge", 12, 0, 840, 1, T.Secondary)
     self.TopEdge.BackgroundTransparency = 0.88
 
-    local sidebar = UI.frame(main, "Sidebar", 0, 0, 184, 660, T.Sidebar, 12)
+    local sidebar = UI.frame(main, "Sidebar", 0, 0, 184, 660, T.Sidebar, 14)
     self.Sidebar = sidebar
     sidebar.Active = true
-    self.SidebarShadow = Shadow.new(sidebar, 12)
+    self.SidebarShadow = Shadow.new(sidebar, 14)
     UI.stroke(sidebar, T.Line)
+    BrandArt.sidebar(rt, sidebar)
     local brandTile = UI.frame(sidebar, "BrandTile", 21, 24, 30, 30, T.AccentWash, 7)
     UI.stroke(brandTile, T.AccentSoft).Transparency = 0.65
     UI.mark(brandTile, 5, 5, 20)
-    UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 32, 25, T.Text, T.Brand)
+    UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 32, 27, T.Text, T.Brand)
     UI.micro(sidebar, "BrandSub", Textos.interfaz, 21, 65, 145, 14)
-    BrandArt.sidebar(sidebar)
     UI.micro(sidebar, "Group", Textos.secciones, 22, 122, 140, 16)
     self.Navigation = UI.new("ScrollingFrame", sidebar, {
         Name = "Navigation", Position = UDim2.fromOffset(12, 153), Size = UDim2.new(1, -24, 1, -258),
@@ -1187,6 +1211,7 @@ function Window.new(options)
     UI.line(chrome, 0, 47, 916)
 
     self.Workspace = UI.frame(panel, "Workspace", 184, 48, 680, 584, T.Workspace)
+    self.Workspace.BackgroundTransparency = 1
     self.Workspace.ClipsDescendants = true
     self.Context = Inspector.new(self)
 
@@ -1194,7 +1219,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.12", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.13", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -1269,7 +1294,7 @@ function Window:Fit()
     local inset = GuiService:GetGuiInset()
     self.SafeTop = self.Mobile and math.max(8, inset.Y + 8) or 8
     local verticalMargin = self.Mobile and self.SafeTop + 8 or 32
-    self.Height = math.max(280, math.min(DESKTOP_HEIGHT, size.Y - verticalMargin))
+    self.Height = math.max(280, math.min(PREFERRED_HEIGHT, size.Y - verticalMargin))
     if not self.Mobile then self.NavigationOpen = false end
     self.SidebarWidth = self.Mobile and self.Width or 184
     local sideWidth = self.SidebarWidth
@@ -1287,11 +1312,10 @@ function Window:Fit()
     self.Sidebar.BrandSub.Size = UDim2.fromOffset(sideWidth - 40, 14)
     self.Sidebar.BrandSub.Text = Fonts.tracked(sideWidth < 170 and Textos.biblioteca or Textos.interfaz)
     local short = self.Height < 480
-    local navTop = short and 112 or 153
+    local navTop = short and 112 or 169
     self.Sidebar.BrandSub.Position = UDim2.fromOffset(21, short and 60 or 65)
-    self.Sidebar.BrandWaves.Position = UDim2.fromOffset(20, short and 75 or 87)
-    self.Sidebar.Group.Position = UDim2.fromOffset(22, short and 89 or 122)
-    self.Sidebar.BrandWaves.Size = UDim2.fromOffset(sideWidth - 40, short and 10 or 26)
+    self.Sidebar.BrandWaves.Visible = not short
+    self.Sidebar.Group.Position = UDim2.fromOffset(22, short and 89 or 138)
     self.Navigation.Position = UDim2.fromOffset(12, navTop)
     self.Navigation.Size = UDim2.new(1, -24, 1, -(navTop + (short and 80 or 105)))
     self.Profile:Fit(sideWidth - 40, short)
@@ -1523,53 +1547,52 @@ end
 
 __factories["components/BrandArt"] = function(__require)
 -- src/components/BrandArt.luau
--- Original, still line art. Decorative frames never capture input or affect lists.
+-- Original PNG illustrations. Passive frames preserve the same layout anchors.
 local UI = __require("UI")
-local T = __require("Theme")
+local Images = __require("ImageSource")
+local Artwork = __require("Artwork")
 local Art = {}
 
-local function curve(parent, a, b, c, d, color, transparency, thickness)
-    local previous = a
-    for i = 1, 20 do
-        local t, s = i / 20, 1 - i / 20
-        local point = a * s ^ 3 + b * (3 * s ^ 2 * t) + c * (3 * s * t ^ 2) + d * t ^ 3
-        local delta = point - previous
-        local line = UI.frame(parent, "Arc", 0, 0, delta.Magnitude + 0.6, thickness or 1, color, 1)
-        line.AnchorPoint = Vector2.new(0.5, 0.5)
-        line.Position = UDim2.fromOffset((point.X + previous.X) / 2, (point.Y + previous.Y) / 2)
-        line.Rotation = math.deg(math.atan2(delta.Y, delta.X))
-        line.BackgroundTransparency = transparency
-        previous = point
-    end
+local function picture(runtime, parent, source, transparency)
+    local image = UI.new("ImageLabel", parent, {
+        Name = "ArtworkImage", Image = "", Size = UDim2.fromScale(1, 1),
+        ScaleType = Enum.ScaleType.Fit, ImageTransparency = transparency,
+        Active = false, Selectable = false,
+    })
+    -- Use the existing cancellable cache/loader. Failed art stays transparent;
+    -- no placeholder icon or error message is drawn over the workspace.
+    Images.Bind(runtime, image, source)
+    return image
 end
 
-function Art.header(parent)
-    local art = UI.frame(parent, "LumiArcs", 0, 0, 136, 78)
+function Art.header(runtime, parent)
+    local art = UI.frame(parent, "LumiArcs", 0, 0, 200, 118)
     art.AnchorPoint, art.Position = Vector2.new(1, 0), UDim2.new(1, 0, 0, 0)
     art.ClipsDescendants = true
-    curve(art, Vector2.new(1, 77), Vector2.new(29, 26), Vector2.new(113, 81), Vector2.new(143, 4), T.Ornament, 0.53, 1)
-    curve(art, Vector2.new(14, 82), Vector2.new(42, 37), Vector2.new(117, 75), Vector2.new(130, 12), T.Accent, 0.73, 1)
-    curve(art, Vector2.new(43, 84), Vector2.new(73, 50), Vector2.new(110, 66), Vector2.new(114, 25), T.Ornament, 0.80, 2)
-    UI.sparkle(art, 104, 7, 13, T.Accent, 0.30)
-    UI.sparkle(art, 85, 25, 5, T.Accent, 0.55)
+    picture(runtime, art, Artwork.Header, 0.10)
     return art
 end
 
-function Art.sidebar(parent)
-    local art = UI.frame(parent, "BrandWaves", 20, 87, 144, 26)
+local function surface(runtime, parent, name, source, transparency)
+    local art = UI.frame(parent, name, 0, 0, 0, 0)
+    art.Size = UDim2.fromScale(1, 1)
     art.ClipsDescendants = true
-    curve(art, Vector2.new(-4, 6), Vector2.new(42, 35), Vector2.new(89, -9), Vector2.new(151, 12), T.Accent, 0.65, 1)
-    curve(art, Vector2.new(-4, 12), Vector2.new(52, 39), Vector2.new(102, -3), Vector2.new(151, 19), T.Ornament, 0.78, 1)
+    local image = picture(runtime, art, source, transparency)
+    image.ScaleType = Enum.ScaleType.Crop
+    UI.corner(image, 14)
     return art
 end
 
-function Art.footer(parent)
-    local art = UI.frame(parent, "FooterWaves", 18, 0, 188, 32)
-    art.Position = UDim2.new(0, 18, 1, -106)
-    art.ClipsDescendants = true
-    curve(art, Vector2.new(-5, 25), Vector2.new(60, -9), Vector2.new(106, 43), Vector2.new(193, 5), T.Ornament, 0.81, 1)
-    curve(art, Vector2.new(-5, 31), Vector2.new(73, 0), Vector2.new(120, 47), Vector2.new(193, 15), T.Accent, 0.90, 1)
-    return art
+function Art.sidebar(runtime, parent)
+    return surface(runtime, parent, "BrandWaves", Artwork.Sidebar, 0.48)
+end
+
+function Art.panel(runtime, parent)
+    return surface(runtime, parent, "PanelArtwork", Artwork.Panel, 0.08)
+end
+
+function Art.footer(runtime, parent)
+    return surface(runtime, parent, "FooterWaves", Artwork.Inspector, 0.38)
 end
 
 return Art
@@ -1589,11 +1612,12 @@ Inspector.__index = Inspector
 
 function Inspector.new(window)
     local self = setmetatable({Window = window, Bars = {}, BarState = {}}, Inspector)
-    local frame = UI.frame(window.Main, "Inspector", 876, 0, 224, 688, T.Sidebar, 12)
+    local frame = UI.frame(window.Main, "Inspector", 876, 0, 224, 688, T.Sidebar, 14)
     frame.Active = true
     window.Inspector = frame
-    self.Shadow = Shadow.new(frame, 12)
+    self.Shadow = Shadow.new(frame, 14)
     UI.stroke(frame, T.Line)
+    BrandArt.footer(window.Runtime, frame)
     UI.micro(frame, "InspectorHeading", "INSPECTOR", 18, 20, 188, 16)
     UI.line(frame, 18, 47, 188)
     window.DetailTitle = UI.text(frame, "DetailTitle", Textos.tuEspacio, 18, 67, 188, 52, 21, T.Text, T.Title)
@@ -1605,11 +1629,12 @@ function Inspector.new(window)
     window.DetailDescription.TextTruncate = Enum.TextTruncate.None
     window.DetailDescription.TextYAlignment = Enum.TextYAlignment.Top
 
-    local preview = UI.frame(frame, "ValuePreview", 18, 190, 188, 164, T.Surface, 7)
+    local preview = UI.frame(frame, "ValuePreview", 18, 190, 188, 176, T.Surface, 10)
+    preview.BackgroundTransparency = 0.10
     UI.stroke(preview, T.SoftLine)
     window.DetailKind = UI.text(preview, "Kind", Textos.seleccion, 14, 14, 160, 16, 11, T.Muted, T.Medium)
     window.DetailValue = UI.text(preview, "Value", Textos.listo, 14, 40, 160, 40, 32, T.Accent, T.Title)
-    self.Meta = UI.text(preview, "ValueContext", Textos.espacioMayus, 14, 140, 160, 15, 11, T.Muted, T.Mono)
+    self.Meta = UI.text(preview, "ValueContext", Textos.espacioMayus, 14, 152, 160, 15, 11, T.Muted, T.Mono)
 
     self.Numeric = UI.frame(preview, "NumericRange", 14, 96, 160, 37)
     for i = 1, 29 do
@@ -1618,8 +1643,8 @@ function Inspector.new(window)
     end
     self.Marker = UI.frame(self.Numeric, "Position", 0, 1, 2, 32, T.Accent, 1)
     self.Marker.AnchorPoint = Vector2.new(0.5, 0)
-    self.Low = UI.text(preview, "LowerBound", "", 14, 140, 80, 15, 11, T.Muted, T.Mono)
-    self.High = UI.text(preview, "UpperBound", "", 94, 140, 80, 15, 11, T.Muted, T.Mono)
+    self.Low = UI.text(preview, "LowerBound", "", 14, 152, 80, 15, 11, T.Muted, T.Mono)
+    self.High = UI.text(preview, "UpperBound", "", 94, 152, 80, 15, 11, T.Muted, T.Mono)
     self.High.TextXAlignment = Enum.TextXAlignment.Right
 
     self.Boolean = UI.frame(preview, "BooleanState", 14, 104, 160, 26)
@@ -1642,20 +1667,19 @@ function Inspector.new(window)
     UI.frame(self.Action, "Upper", 136, 10, 7, 1, T.AccentSoft).Rotation = 45
     UI.frame(self.Action, "Lower", 136, 16, 7, 1, T.AccentSoft).Rotation = -45
 
-    UI.micro(frame, "Properties", Textos.propiedades, 18, 378, 188, 16)
+    UI.micro(frame, "Properties", Textos.propiedades, 18, 390, 188, 16)
     window.DetailRows = {}
     for i, name in ipairs({"Page", "Section", "Type", "Range"}) do
-        local y = 405 + (i - 1) * 34
+        local y = 417 + (i - 1) * 34
         UI.text(frame, name .. "Key", Textos.claves[i], 18, y, 50, 24, 12, T.Muted)
         window.DetailRows[i] = UI.text(frame, name .. "Value", "--", 74, y, 132, 24, 12, T.Secondary)
         window.DetailRows[i].TextXAlignment = Enum.TextXAlignment.Right
         UI.line(frame, 18, y + 29, 188)
     end
-    self.Hint = UI.text(frame, "Hint", Textos.pistaInicial, 18, 0, 188, 32, 12, T.Muted)
+    self.Hint = UI.text(frame, "Hint", Textos.pistaInicial, 18, 0, 188, 32, 12, T.Secondary)
     self.Hint.Position = UDim2.new(0, 18, 1, -56)
     self.Hint.TextWrapped = true
     self.Hint.TextTruncate = Enum.TextTruncate.None
-    BrandArt.footer(frame)
     window.Bars = self.Bars
     self:Clear()
     return self
@@ -2130,8 +2154,8 @@ function Button.new(section, options)
     action.TextTruncate = Enum.TextTruncate.AtEnd
     c.ControlWidth = PropertyLayout.inputWidth(action.Text, action.FontFace, action.TextSize, 144, 240)
     action.ZIndex = 2
-    UI.corner(action, 5)
-    if secondary then UI.stroke(action, T.Line) end
+    UI.corner(action, 8)
+    UI.stroke(action, secondary and T.Line or T.AccentHover).Transparency = secondary and 0.16 or 0.55
     c.Input = action
     local scale = UI.new("UIScale", action, {Scale = 1})
     local hovered, pressed = false, false
@@ -2219,7 +2243,7 @@ function Dropdown.new(section, options)
     selector.BackgroundTransparency = 0
     selector.BackgroundColor3 = T.Raised
     selector.ZIndex = 2
-    UI.corner(selector, 5)
+    UI.corner(selector, 7)
     local border = UI.stroke(selector, T.Line)
     local label = UI.text(selector, "Selection", selected == nil and Textos.vacio or selected, 12, 0, 178, 31, 13, T.Secondary)
     local preview, binding
@@ -2398,7 +2422,7 @@ function Slider.new(section, options)
     c.Range = c:Format(minimum) .. " - " .. c:Format(maximum)
     c.Get = function() return value end
     function c:Fraction() return maximum == minimum and 0 or (value - minimum) / (maximum - minimum) end
-    local field = UI.frame(c.Row, "ValueField", 0, 0, 96, 32, T.Raised, 5)
+    local field = UI.frame(c.Row, "ValueField", 0, 0, 96, 36, T.Raised, 7)
     field.ClipsDescendants, field.ZIndex = true, 2
     local box = UI.new("TextBox", field, {
         Name = "ValueInput", Size = UDim2.new(1, -20, 1, 0), Position = UDim2.fromOffset(10, 0),
@@ -2408,10 +2432,11 @@ function Slider.new(section, options)
     local border = UI.stroke(field, T.Line)
     c.ValueInput = box
     local track = UI.new("Frame", c.Row, {Name = "Track", Position = UDim2.fromOffset(18, 62),
-        Size = UDim2.new(1, -36, 0, 2), BackgroundTransparency = 0, BackgroundColor3 = T.Line})
+        Size = UDim2.new(1, -36, 0, 4), BackgroundTransparency = 0, BackgroundColor3 = T.Line})
     UI.corner(track, 2)
-    local fill = UI.frame(track, "Fill", 0, 0, 0, 2, T.Accent, 1)
-    local thumb = UI.frame(track, "Thumb", 0, -5, 6, 12, T.Text, 2)
+    local fill = UI.frame(track, "Fill", 0, 0, 0, 4, T.Accent, 2)
+    local thumb = UI.frame(track, "Thumb", 0, 0, 14, 14, T.Text, 999)
+    UI.stroke(thumb, T.AccentSoft).Transparency = 0.55
     thumb.AnchorPoint = Vector2.new(0.5, 0.5)
     local hit = UI.button(c.Row, "SliderInput", "", 18, 52, 0, 23)
     hit.Size = UDim2.new(1, -36, 0, 23)
@@ -2430,8 +2455,8 @@ function Slider.new(section, options)
     c.Layout = function(place)
         field.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
         field.Size = UDim2.fromOffset(place.ControlWidth, place.ControlHeight)
-        track.Position = UDim2.fromOffset(place.LaneX, place.TrackY)
-        track.Size = UDim2.fromOffset(place.LaneWidth, 2)
+        track.Position = UDim2.fromOffset(place.LaneX, place.TrackY - 2)
+        track.Size = UDim2.fromOffset(place.LaneWidth, 4)
         hit.Position = UDim2.fromOffset(place.LaneX, place.HitY)
         hit.Size = UDim2.fromOffset(place.LaneWidth, place.HitHeight)
         low.Position, low.Size = UDim2.fromOffset(place.LaneX, place.BoundsY), UDim2.fromOffset(place.BoundsWidth, 14)
@@ -2441,7 +2466,7 @@ function Slider.new(section, options)
     local dragging, hovered, focused = false, false, false
     local function emphasize()
         local active = dragging or hovered or focused
-        rt:Tween(thumb, {Size = UDim2.fromOffset(active and 8 or 6, active and 14 or 12),
+        rt:Tween(thumb, {Size = UDim2.fromOffset(active and 16 or 14, active and 16 or 14),
             BackgroundColor3 = active and T.Accent or T.Text}, 0.10)
     end
     local function render(instant)
@@ -2528,22 +2553,22 @@ function Toggle.new(section, options)
     c.Input = input
     local state = UI.text(input, "State", "", 0, 0, 36, 58, 10, T.Secondary, T.Mono)
     state.Position = UDim2.new(1, -100, 0, 0)
-    local track = UI.frame(input, "Switch", 0, 19, 36, 20, T.Raised, 6)
+    local track = UI.frame(input, "Switch", 0, 19, 44, 24, T.Raised, 12)
     track.Position = UDim2.new(1, -52, 0, 19)
     local outline = UI.stroke(track, T.Line)
-    local thumb = UI.frame(track, "Thumb", 4, 4, 12, 12, T.Secondary, 4)
+    local thumb = UI.frame(track, "Thumb", 3, 3, 18, 18, T.Secondary, 999)
     local notch = UI.frame(thumb, "Notch", 6, 4, 1, 4, T.Ink)
     c.Layout = function(place)
-        track.Position = UDim2.fromOffset(place.ControlX + place.ControlWidth - 36, place.ControlY + (place.ControlHeight - 20) / 2)
+        track.Position = UDim2.fromOffset(place.ControlX + place.ControlWidth - 44, place.ControlY + (place.ControlHeight - 24) / 2)
         state.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
-        state.Size = UDim2.fromOffset(44, place.ControlHeight)
+        state.Size = UDim2.fromOffset(36, place.ControlHeight)
     end
     local function render(instant)
         state.Text = value and Textos.si or Textos.no
         local stateColor = value and T.Accent or T.Muted
         local outlineColor = value and T.AccentSoft or T.Line
         local props = {BackgroundColor3 = value and T.AccentWash or T.Raised}
-        local knobProps = {Position = UDim2.fromOffset(value and 20 or 4, 4), BackgroundColor3 = value and T.Accent or T.Secondary}
+        local knobProps = {Position = UDim2.fromOffset(value and 23 or 3, 3), BackgroundColor3 = value and T.Text or T.Secondary}
         if instant then
             state.TextColor3, outline.Color = stateColor, outlineColor
             track.BackgroundColor3 = props.BackgroundColor3
@@ -2554,7 +2579,7 @@ function Toggle.new(section, options)
             rt:Tween(track, props)
             rt:Tween(thumb, knobProps)
         end
-        notch.Visible = value
+        notch.Visible = false
     end
     c.Get = function() return value end
     function c:Set(nextValue, silent)
@@ -2592,7 +2617,7 @@ local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
 if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
 
-local Lumi = {Version = "0.4.12", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.4.13", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] La biblioteca está cerrada; vuelve a cargarla para continuar")

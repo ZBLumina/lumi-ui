@@ -1,50 +1,49 @@
--- Original, still line art. Decorative frames never capture input or affect lists.
+-- Original PNG illustrations. Passive frames preserve the same layout anchors.
 local UI = require("UI")
-local T = require("Theme")
+local Images = require("ImageSource")
+local Artwork = require("Artwork")
 local Art = {}
 
-local function curve(parent, a, b, c, d, color, transparency, thickness)
-    local previous = a
-    for i = 1, 20 do
-        local t, s = i / 20, 1 - i / 20
-        local point = a * s ^ 3 + b * (3 * s ^ 2 * t) + c * (3 * s * t ^ 2) + d * t ^ 3
-        local delta = point - previous
-        local line = UI.frame(parent, "Arc", 0, 0, delta.Magnitude + 0.6, thickness or 1, color, 1)
-        line.AnchorPoint = Vector2.new(0.5, 0.5)
-        line.Position = UDim2.fromOffset((point.X + previous.X) / 2, (point.Y + previous.Y) / 2)
-        line.Rotation = math.deg(math.atan2(delta.Y, delta.X))
-        line.BackgroundTransparency = transparency
-        previous = point
-    end
+local function picture(runtime, parent, source, transparency)
+    local image = UI.new("ImageLabel", parent, {
+        Name = "ArtworkImage", Image = "", Size = UDim2.fromScale(1, 1),
+        ScaleType = Enum.ScaleType.Fit, ImageTransparency = transparency,
+        Active = false, Selectable = false,
+    })
+    -- Use the existing cancellable cache/loader. Failed art stays transparent;
+    -- no placeholder icon or error message is drawn over the workspace.
+    Images.Bind(runtime, image, source)
+    return image
 end
 
-function Art.header(parent)
-    local art = UI.frame(parent, "LumiArcs", 0, 0, 136, 78)
+function Art.header(runtime, parent)
+    local art = UI.frame(parent, "LumiArcs", 0, 0, 200, 118)
     art.AnchorPoint, art.Position = Vector2.new(1, 0), UDim2.new(1, 0, 0, 0)
     art.ClipsDescendants = true
-    curve(art, Vector2.new(1, 77), Vector2.new(29, 26), Vector2.new(113, 81), Vector2.new(143, 4), T.Ornament, 0.53, 1)
-    curve(art, Vector2.new(14, 82), Vector2.new(42, 37), Vector2.new(117, 75), Vector2.new(130, 12), T.Accent, 0.73, 1)
-    curve(art, Vector2.new(43, 84), Vector2.new(73, 50), Vector2.new(110, 66), Vector2.new(114, 25), T.Ornament, 0.80, 2)
-    UI.sparkle(art, 104, 7, 13, T.Accent, 0.30)
-    UI.sparkle(art, 85, 25, 5, T.Accent, 0.55)
+    picture(runtime, art, Artwork.Header, 0.10)
     return art
 end
 
-function Art.sidebar(parent)
-    local art = UI.frame(parent, "BrandWaves", 20, 87, 144, 26)
+local function surface(runtime, parent, name, source, transparency)
+    local art = UI.frame(parent, name, 0, 0, 0, 0)
+    art.Size = UDim2.fromScale(1, 1)
     art.ClipsDescendants = true
-    curve(art, Vector2.new(-4, 6), Vector2.new(42, 35), Vector2.new(89, -9), Vector2.new(151, 12), T.Accent, 0.65, 1)
-    curve(art, Vector2.new(-4, 12), Vector2.new(52, 39), Vector2.new(102, -3), Vector2.new(151, 19), T.Ornament, 0.78, 1)
+    local image = picture(runtime, art, source, transparency)
+    image.ScaleType = Enum.ScaleType.Crop
+    UI.corner(image, 14)
     return art
 end
 
-function Art.footer(parent)
-    local art = UI.frame(parent, "FooterWaves", 18, 0, 188, 32)
-    art.Position = UDim2.new(0, 18, 1, -106)
-    art.ClipsDescendants = true
-    curve(art, Vector2.new(-5, 25), Vector2.new(60, -9), Vector2.new(106, 43), Vector2.new(193, 5), T.Ornament, 0.81, 1)
-    curve(art, Vector2.new(-5, 31), Vector2.new(73, 0), Vector2.new(120, 47), Vector2.new(193, 15), T.Accent, 0.90, 1)
-    return art
+function Art.sidebar(runtime, parent)
+    return surface(runtime, parent, "BrandWaves", Artwork.Sidebar, 0.48)
+end
+
+function Art.panel(runtime, parent)
+    return surface(runtime, parent, "PanelArtwork", Artwork.Panel, 0.08)
+end
+
+function Art.footer(runtime, parent)
+    return surface(runtime, parent, "FooterWaves", Artwork.Inspector, 0.38)
 end
 
 return Art

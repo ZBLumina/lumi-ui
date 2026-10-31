@@ -14,22 +14,22 @@ function Toggle.new(section, options)
     c.Input = input
     local state = UI.text(input, "State", "", 0, 0, 36, 58, 10, T.Secondary, T.Mono)
     state.Position = UDim2.new(1, -100, 0, 0)
-    local track = UI.frame(input, "Switch", 0, 19, 36, 20, T.Raised, 6)
+    local track = UI.frame(input, "Switch", 0, 19, 44, 24, T.Raised, 12)
     track.Position = UDim2.new(1, -52, 0, 19)
     local outline = UI.stroke(track, T.Line)
-    local thumb = UI.frame(track, "Thumb", 4, 4, 12, 12, T.Secondary, 4)
+    local thumb = UI.frame(track, "Thumb", 3, 3, 18, 18, T.Secondary, 999)
     local notch = UI.frame(thumb, "Notch", 6, 4, 1, 4, T.Ink)
     c.Layout = function(place)
-        track.Position = UDim2.fromOffset(place.ControlX + place.ControlWidth - 36, place.ControlY + (place.ControlHeight - 20) / 2)
+        track.Position = UDim2.fromOffset(place.ControlX + place.ControlWidth - 44, place.ControlY + (place.ControlHeight - 24) / 2)
         state.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
-        state.Size = UDim2.fromOffset(44, place.ControlHeight)
+        state.Size = UDim2.fromOffset(36, place.ControlHeight)
     end
     local function render(instant)
         state.Text = value and Textos.si or Textos.no
         local stateColor = value and T.Accent or T.Muted
         local outlineColor = value and T.AccentSoft or T.Line
         local props = {BackgroundColor3 = value and T.AccentWash or T.Raised}
-        local knobProps = {Position = UDim2.fromOffset(value and 20 or 4, 4), BackgroundColor3 = value and T.Accent or T.Secondary}
+        local knobProps = {Position = UDim2.fromOffset(value and 23 or 3, 3), BackgroundColor3 = value and T.Text or T.Secondary}
         if instant then
             state.TextColor3, outline.Color = stateColor, outlineColor
             track.BackgroundColor3 = props.BackgroundColor3
@@ -40,7 +40,7 @@ function Toggle.new(section, options)
             rt:Tween(track, props)
             rt:Tween(thumb, knobProps)
         end
-        notch.Visible = value
+        notch.Visible = false
     end
     c.Get = function() return value end
     function c:Set(nextValue, silent)
