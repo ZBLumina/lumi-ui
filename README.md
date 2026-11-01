@@ -1,14 +1,14 @@
 # Lumi UI
 
-Biblioteca modular de interfaces en Luau para Potassium. **v0.4.18 amplía la barra izquierda a 228 px, organiza nueve accesos en Principal, Espacio y Herramientas, y añade tarjetas de perfil y Configuraciones con porcentaje real.** La barra superior incluye Inicio, ruta y búsqueda funcional. Los títulos usan Fredoka SemiBold; el texto, Nunito Sans Regular/Medium; los rótulos pequeños espaciados, Montserrat Medium; la marca, Comfortaa SemiBold. Combina bases de carbón cálido con superficies café y acentos crema. Conserva los tres paneles separados, los fondos suaves, el seguimiento lateral, los selectores con miniaturas y la cápsula superior. Toda la interfaz y la demostración están en español. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
+Biblioteca modular de interfaces en Luau para Potassium. **v0.4.19 retira la planta central e integra iconos reales de MingCute como PNG transparentes incluidos en el script.** La barra izquierda de 228 px organiza nueve accesos en Principal, Espacio y Herramientas; el perfil y Configuraciones permanecen al pie. La barra superior incluye Inicio, ruta y búsqueda funcional. Los títulos usan Fredoka SemiBold; el texto, Nunito Sans Regular/Medium; los rótulos pequeños espaciados, Montserrat Medium; la marca, Comfortaa SemiBold. Combina bases de carbón cálido con superficies café y acentos crema. Conserva los tres paneles separados, los fondos suaves, el seguimiento lateral, los selectores con miniaturas y la cápsula superior. Toda la interfaz y la demostración están en español. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
 
 Las cinco variantes TTF y sus licencias OFL están en `assets/fonts`. El generador incorpora sus bytes en el script: no se descargan fuentes al abrirlo. Potassium las registra en su carpeta local `lumi-ui/fonts`; otros entornos sin registro de archivos usan fuentes nativas de respaldo. El ajuste de textos utiliza la FontFace real.
 
-Las ilustraciones decorativas son PNG en `assets/decor`, con sus prompts de generación. `src/Artwork.luau` centraliza la cabecera transparente y los fondos de navegación, panel principal e inspector: `Header`, `Sidebar`, `Panel` e `Inspector`. Se descargan de una revisión fija del repositorio y se guardan en `lumi-ui/assets`. Usan el mismo cargador cancelable que las miniaturas, con reutilización de cada registro de archivo. Las imágenes no capturan entrada; si fallan permanece la superficie café. La cabecera reserva una zona transparente para el texto y se amplía si la descripción lo requiere. La ilustración se oculta en teléfono y en paneles estrechos. Las imágenes de referencia del usuario no forman parte del paquete.
+Los fondos decorativos son PNG en `assets/decor`, con sus prompts de generación. `src/Artwork.luau` centraliza los fondos suaves de navegación, panel principal e inspector: `Sidebar`, `Panel` e `Inspector`. Se descargan de una revisión fija del repositorio y se guardan en `lumi-ui/assets`. Las imágenes no capturan entrada y mantienen la superficie de carbón si fallan. La planta central se retiró: títulos y descripciones disponen del ancho completo y la cabecera ya no reserva espacio para una ilustración. Las imágenes de referencia del usuario no forman parte del paquete.
 
 Los textos propios de la biblioteca se concentran en `src/Textos.luau`: navegación, etiquetas, estados, ayudas, tipos de control, listas vacías y confirmaciones. La demostración también traduce todos sus títulos, descripciones y opciones. Se conservan los nombres de producto Lumi UI, Potassium y Luau, junto con los identificadores técnicos de la API. Los textos personalizados que proporciona quien usa la biblioteca se muestran tal como se reciben.
 
-La barra completa se registra en [las notas de v0.4.18](docs/design/studio-v0418-barra-completa.md). La navegación superior se registra en [las notas de v0.4.17](docs/design/studio-v0417-navegacion.md). Los fondos y el seguimiento lateral se registran en [las notas de v0.4.16](docs/design/studio-v0416-fondos-seguimiento.md). La cabecera completa y su comprobación se registran en [las notas de v0.4.15](docs/design/studio-v0415-cabecera.md). La corrección de claridad y marca se registra en [las notas de v0.4.14](docs/design/studio-v0414-claridad.md). La decoración botánica y su comprobación se registran en [las notas de v0.4.13](docs/design/studio-v0413-imagenes.md).
+Los iconos y la cabecera se registran en [las notas de v0.4.19](docs/design/studio-v0419-mingcute.md). La barra completa se registra en [las notas de v0.4.18](docs/design/studio-v0418-barra-completa.md). La navegación superior se registra en [las notas de v0.4.17](docs/design/studio-v0417-navegacion.md). Los fondos y el seguimiento lateral se registran en [las notas de v0.4.16](docs/design/studio-v0416-fondos-seguimiento.md). La cabecera completa y su comprobación se registran en [las notas de v0.4.15](docs/design/studio-v0415-cabecera.md). La corrección de claridad y marca se registra en [las notas de v0.4.14](docs/design/studio-v0414-claridad.md). La decoración botánica y su comprobación se registran en [las notas de v0.4.13](docs/design/studio-v0413-imagenes.md).
 
 ## Probar la versión actual en Potassium
 
@@ -53,7 +53,15 @@ print(intensidad:Get())
 
 Todos los controles aceptan `Name`, `Description` y `Callback`. Los controles con valor ofrecen `Get()`, `Set(valor, omitirFuncion?)` y `Focus()`. Los botones ofrecen `Press()` y un estado legible mediante `Get()`: «Listo», «1 ejecución», «2 ejecuciones»… Los selectores también ofrecen `Open()` y `Close()`.
 
-Las páginas aceptan `Group = "Principal"`, `"Espacio"` o `"Herramientas"` para organizar la navegación, y `NavigationLabel` para abreviar el acceso sin cambiar el título. Los grupos se crean según se necesitan. Los iconos disponibles incluyen `Grid`, `Sliders`, `Layers`, `User`, `Cube`, `Stack`, `Document`, `Bookmark`, `Help` y `Settings`. Son identificadores técnicos de iconos geométricos nativos. Si falta el valor o no se reconoce, se usa la cuadrícula. Los nombres aprovechan el ancho de la navegación y los títulos, el encabezado completo.
+Las páginas aceptan `Group = "Principal"`, `"Espacio"` o `"Herramientas"` para organizar la navegación, y `NavigationLabel` para abreviar el acceso sin cambiar el título. Los grupos se crean según se necesitan. Los iconos disponibles incluyen `Grid`, `Sliders`, `Layers`, `User`, `Cube`, `Stack`, `Document`, `Bookmark`, `Help` y `Settings`. Son alias de iconos MingCute Core Regular. Si falta el valor o no se reconoce, se usa la cuadrícula. Los nombres aprovechan el ancho de la navegación y los títulos, el encabezado completo.
+
+## Iconos locales de MingCute
+
+Se incluyen 18 iconos de [MingCute](https://github.com/mingcute-design/mingcute-icons), serie Core Regular, bajo Apache-2.0. `assets/icons/mingcute` contiene los SVG originales, PNG de 96×96 con fondo transparente, licencia, atribución y un manifiesto con la revisión y ruta de cada fuente. Los PNG se incorporan como Base64 al generar ambos scripts, junto con la licencia.
+
+Al ejecutar Lumi en Potassium, el cargador convierte esos bytes en archivos dentro de `lumi-ui/assets` y los registra con `getcustomasset` o `getsynasset`. Cada dibujo se muestra en un único ImageLabel, con suavizado y color aplicado mediante ImageColor3. Los iconos no dependen de Roblox IDs ni de peticiones HTTP al abrir la interfaz. También se usan imágenes para flechas, búsqueda, selección, menú, cerrar y minimizar. La marca L con punto se conserva.
+
+Para añadir otro icono al paquete: guarda el SVG oficial en `assets/icons/mingcute/svg`, registra su alias y procedencia en `manifest.json`, ejecuta `npm ci`, `npm run icons:render` y `npm run build`. Puedes usar el alias resultante con `ventana:AddTab("Página", {Icon = "Alias"})`. No basta con introducir una URL SVG en ImageLabel: este paquete proporciona la conversión a PNG y el registro local. En un ejecutor sin acceso a archivos o registro de imágenes locales, los nombres y controles continúan disponibles, pero estos iconos pueden quedar ocultos.
 
 ## Configuraciones y búsqueda
 
@@ -102,7 +110,7 @@ Las fuentes admiten URI de Roblox, ID numérico, `{Path = "archivo.png"}`, URL H
 
 La demostración incluye tres ilustraciones de cielo originales en base64 y sus PNG en `assets/demo/`. No necesita descargar esas imágenes al ejecutarse. No modifica el cielo del juego.
 
-La referencia [Neverlose](https://github.com/B5RLAS/Neverlose/blob/main/NeverLose.lua) usa IDs de Roblox para iconos y URLs para fuentes. No se ejecuta ni incorpora su código de juego. Sus imágenes PNG de GitHub pueden utilizarse como cualquier URL, por ejemplo del [paquete de iconos indicado](https://github.com/B5RLAS/otizimiconpack/tree/main/UmbrellaMenu/icons), si quien integra la biblioteca decide usarlas. Lumi conserva sus iconos geométricos propios.
+La referencia [Neverlose](https://github.com/B5RLAS/Neverlose/blob/main/NeverLose.lua) usa IDs de Roblox para iconos y URLs para fuentes. No se ejecuta ni incorpora su código de juego. Sus imágenes PNG de GitHub pueden utilizarse como cualquier URL, por ejemplo del [paquete de iconos indicado](https://github.com/B5RLAS/otizimiconpack/tree/main/UmbrellaMenu/icons), si quien integra la biblioteca decide usarlas. Lumi utiliza ahora iconos de MingCute; la marca L con punto mantiene su dibujo propio.
 
 ## Distribución e interacción
 
@@ -130,7 +138,7 @@ Limitación conocida: si cambias un selector por código mientras su menú está
 
 ## Desarrollo
 
-Se requiere Node.js 18 o posterior. No hay dependencias de npm.
+Se requiere Node.js 18 o posterior. La generación de los scripts usa los PNG ya incluidos y no requiere paquetes. Solo para volver a convertir los SVG se necesita `npm ci` y `npm run icons:render`, con resvg-js como dependencia de desarrollo.
 
 ```sh
 npm run build
@@ -145,7 +153,8 @@ src/
   Runtime.luau        montaje, conexiones, animaciones y limpieza
   Theme.luau          colores y tipografías
   Textos.luau         textos de la interfaz en español
-  UI.luau             elementos gráficos nativos
+  UI.luau             elementos de interfaz e iconos de imagen
+  Icons.luau          registro de PNG integrados de MingCute
   Window.luau         ventana, entrada y escalado
   Tab.luau            navegación y páginas
   Section.luau        grupos y filas

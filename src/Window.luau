@@ -13,6 +13,7 @@ local Fonts = require("Fonts")
 local Settings = require("components/Settings")
 local Search = require("components/Search")
 local Navigation = require("components/Navigation")
+local Icons = require("Icons")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
@@ -25,6 +26,7 @@ function Window.new(options)
     local rt = Runtime.new()
     rt.Animations = options.Animations ~= false
     local root = rt:Mount()
+    Icons.mount(rt, root)
     local self = setmetatable({Runtime = rt, Root = root, Tabs = {}, _destroyed = false,
         Width = 1100, Height = DESKTOP_HEIGHT, Scale = 1, OpenDropdown = nil, Minimized = false}, Window)
     -- A transparent assembly anchors the three independently painted surfaces.
@@ -65,8 +67,7 @@ function Window.new(options)
     self.SidebarFooter = self.Profile.Frame
     self.Settings = Settings.new(self)
     local navClose = UI.button(sidebar, "CloseNavigation", "", 0, 6, 44, 44)
-    UI.frame(navClose, "A", 16, 21, 12, 1, T.Secondary).Rotation = 45
-    UI.frame(navClose, "B", 16, 21, 12, 1, T.Secondary).Rotation = -45
+    UI.icon(navClose, "Close", 14, 14, T.Secondary)
     rt:Connect(navClose.Activated, function() self:ToggleNavigation(false) end)
     self.NavigationCloseButton = navClose
 
@@ -81,25 +82,21 @@ function Window.new(options)
     UI.hover(rt, home, T.Shell, T.Hover)
     rt:Connect(home.Activated, function() self:GoHome() end)
     self.HomeButton = home
-    UI.chevron(drag, 49, 20, T.Muted)
-    drag.ChevronA.Rotation, drag.ChevronB.Rotation = 45, -45
-    drag.ChevronB.Position = UDim2.fromOffset(49, 24)
+    UI.chevron(drag, 49, 22, T.Muted, true)
     local close = UI.button(chrome, "Close", "", 872, 9, 30, 30)
     UI.corner(close, 5)
-    local ca = UI.frame(close, "CloseA", 9, 14, 12, 1, T.Secondary)
-    local cb = UI.frame(close, "CloseB", 9, 14, 12, 1, T.Secondary)
-    ca.Rotation, cb.Rotation = 45, -45
+    UI.icon(close, "Close", 7, 7, T.Secondary)
     UI.hover(rt, close, T.Shell, T.Hover)
     rt:Connect(close.Activated, function() self:Close() end)
     self.CloseButton = close
     local minimize = UI.button(chrome, "Minimize", "", 600, 9, 30, 30)
     UI.corner(minimize, 5)
-    UI.frame(minimize, "Dash", 9, 15, 12, 1, T.Secondary)
+    UI.icon(minimize, "Minus", 7, 7, T.Secondary)
     UI.hover(rt, minimize, T.Shell, T.Hover)
     rt:Connect(minimize.Activated, function() self:Minimize() end)
     self.MinimizeButton = minimize
     local menu = UI.button(chrome, "NavigationMenu", "", 8, 6, 44, 44)
-    for i = 1, 3 do UI.frame(menu, "Line" .. i, 14, 12 + i * 5, 16, 1, T.Secondary) end
+    UI.icon(menu, "Menu", 14, 14, T.Secondary)
     self.MenuButton = menu
     rt:Connect(menu.Activated, function() self:ToggleNavigation() end)
     UI.line(chrome, 0, 47, 916)
@@ -114,7 +111,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.18", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.19", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -226,17 +223,15 @@ function Window:Fit()
     self.MinimizeButton.Position = UDim2.fromOffset(chromeWidth - (self.Mobile and 96 or 80), self.Mobile and 6 or 7)
     self.CloseButton.Size = UDim2.fromOffset(buttonSize, buttonSize)
     self.MinimizeButton.Size = UDim2.fromOffset(buttonSize, buttonSize)
-    self.CloseButton.CloseA.Position = UDim2.fromOffset((buttonSize - 12) / 2, buttonSize / 2 - 1)
-    self.CloseButton.CloseB.Position = self.CloseButton.CloseA.Position
-    self.MinimizeButton.Dash.Position = UDim2.fromOffset((buttonSize - 12) / 2, buttonSize / 2)
+    self.CloseButton.Icon.Position = UDim2.fromOffset((buttonSize - 16) / 2, (buttonSize - 16) / 2)
+    self.MinimizeButton.Icon.Position = self.CloseButton.Icon.Position
     local searchX = self.Search:Fit(chromeWidth, chromeHeight, self.Mobile)
     local dragX = self.Mobile and 56 or 0
     local dragWidth = math.max(1, searchX - dragX - 8)
     self.Chrome.TitleDrag.Position = UDim2.fromOffset(dragX, 0)
     self.Chrome.TitleDrag.Size = UDim2.fromOffset(dragWidth, chromeHeight)
     self.HomeButton.Visible = not self.Mobile
-    self.Chrome.TitleDrag.ChevronA.Visible = not self.Mobile
-    self.Chrome.TitleDrag.ChevronB.Visible = not self.Mobile
+    self.Chrome.TitleDrag.Chevron.Visible = not self.Mobile
     self.Breadcrumb.Position = UDim2.fromOffset(self.Mobile and 8 or 64, 0)
     self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, dragWidth - (self.Mobile and 12 or 76)), chromeHeight)
     self.Workspace.Position = UDim2.fromOffset(0, chromeHeight)

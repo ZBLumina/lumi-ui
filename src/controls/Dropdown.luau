@@ -61,8 +61,7 @@ function Dropdown.new(section, options)
         label.Size = UDim2.new(1, -(textX + 30), 1, 0)
         if preview then preview.Position = UDim2.fromOffset(6, (place.ControlHeight - 22) / 2) end
         local center = place.ControlHeight / 2
-        selector.ChevronA.Position = UDim2.new(1, -23, 0, center)
-        selector.ChevronB.Position = UDim2.new(1, -19, 0, center)
+        selector.Chevron.Position = UDim2.new(1, -28, 0, center - 8)
     end
     c.Get = function() return selected end
     function c:Fraction()
@@ -87,8 +86,7 @@ function Dropdown.new(section, options)
         window:ClosePopup()
         self:Focus()
         rt:Tween(border, {Color = T.Accent}, 0.12)
-        rt:Tween(selector.ChevronA, {Rotation = -45}, 0.12)
-        rt:Tween(selector.ChevronB, {Rotation = 45}, 0.12)
+        rt:Tween(selector.Chevron, {Rotation = 180}, 0.12)
         local popupRuntime = Runtime.new()
         popupRuntime.Animations = rt.Animations
         local scale = window.Scale
@@ -116,8 +114,7 @@ function Dropdown.new(section, options)
             popupRuntime:Destroy()
             if not rt.Destroyed then
                 rt:Tween(border, {Color = T.Line}, 0.12)
-                rt:Tween(selector.ChevronA, {Rotation = 45}, 0.12)
-                rt:Tween(selector.ChevronB, {Rotation = -45}, 0.12)
+                rt:Tween(selector.Chevron, {Rotation = 0}, 0.12)
             end
         end
         UI.text(menu, "Caption", Textos.elegirOpcion, 11, 4, 198, 25, 9, T.Muted, T.Mono).Size = UDim2.new(1, -22, 0, 25)

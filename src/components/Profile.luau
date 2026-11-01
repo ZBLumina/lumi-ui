@@ -60,8 +60,7 @@ function Profile.new(window, options)
     local userLabel = UI.text(frame, "Username", "@" .. username, 44, 38, 100, 16, 11, T.Muted)
     local status = UI.text(frame, "Status", Textos.enLinea, 58, 30, 80, 15, 10, T.Muted)
     local dot = UI.frame(frame, "StatusDot", 48, 35, 4, 4, T.Green, 999)
-    UI.chevron(frame, 184, 28, T.Secondary)
-    frame.ChevronA.Rotation, frame.ChevronB.Rotation = 45, -45
+    UI.chevron(frame, 184, 28, T.Secondary, true)
     local self = setmetatable({
         Window = window, Runtime = rt, Frame = frame, Avatar = avatar,
         NameLabel = nameLabel, UserLabel = userLabel,
@@ -137,8 +136,7 @@ function Profile:Fit(width, short, bottom)
     self.Status.Visible = not showUser and textWidth >= 50
     self.StatusDot.Position = UDim2.fromOffset(textX, nameY + 25)
     self.StatusDot.Visible = self.Status.Visible
-    self.Frame.ChevronA.Position = UDim2.fromOffset(width - 20, height / 2 - 2)
-    self.Frame.ChevronB.Position = UDim2.fromOffset(width - 20, height / 2 + 2)
+    self.Frame.Chevron.Position = UDim2.fromOffset(width - 25, height / 2 - 8)
 end
 
 function Profile:Open()

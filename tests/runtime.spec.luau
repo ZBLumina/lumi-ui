@@ -1123,7 +1123,7 @@ test("settings controls change real animation, artwork and inspector preferences
     local controls = owner.Settings.Controls
     controls.Animations:Set(false); settle()
     equal(owner.Runtime.Animations, false, "animation control did not change runtime")
-    local image = owner.Tabs[1].Art.ArtworkImage
+    local image = owner.Sidebar.BrandWaves.ArtworkImage
     local original = image.ImageTransparency
     controls.Decoration:Set(0); settle()
     equal(image.ImageTransparency, 1, "decoration control did not hide artwork")
@@ -1229,7 +1229,7 @@ test("decoration preferences survive an in-flight minimize or restore animation"
     local group, owner, tab = section()
     owner:FinishEntrance(); owner:FinishPages(); settle()
     assert(type(owner.SetPreference) == "function", "settings preferences are missing")
-    local image = tab.Art.ArtworkImage
+    local image = owner.Sidebar.BrandWaves.ArtworkImage
     owner:Minimize(); owner:SetPreference("Decoration", 0)
     task.wait(.25); owner:Restore(); task.wait(.25)
     equal(owner.Preferences.Decoration, 0, "minimize changed the preference")
@@ -1343,6 +1343,32 @@ test("long notes expose every line and keep the focused caret in view", function
     note.Input.CursorPosition=1
     eventually(function() return note.Field.CanvasPosition.Y<1 end,"home caret stayed outside the field")
     note.Input:ReleaseFocus()
+end)
+
+test("navigation icons load as complete images and retain selection tint", function()
+    local owner=window()
+    local tabs={}
+    for _,style in ipairs({"Grid","User","Cube","Stack","Sliders","Settings","Document","Bookmark","Help","Layers"}) do
+        local tab=owner:AddTab(style,{Icon=style})
+        table.insert(tabs,tab)
+        assert(tab.Icon:IsA("ImageLabel"),style.." is still assembled from geometry")
+        eventually(function() return tab.Icon.Image~="" and tab.Icon.IsLoaded end,style.." image did not load")
+        equal(tab.Icon.Active,false,"icon captures pointer input")
+    end
+    owner:SelectTab(tabs[8]);owner:FinishPages();task.wait(.2)
+    equal(tabs[8].Icon.ImageColor3,tabs[8].Label.TextColor3,"selected icon lost its accent")
+    equal(tabs[1].Icon.ImageColor3,tabs[1].Label.TextColor3,"inactive icon lost its text color")
+    equal(tabs[8].Icon.BackgroundTransparency,1,"image has an opaque square behind it")
+end)
+
+test("page headers leave room for controls without the central plant", function()
+    local group,owner,tab=section()
+    owner.Viewport.Size=UDim2.fromOffset(1920,1080);settle();owner:Fit();owner:FinishEntrance();settle()
+    for _,object in ipairs(tab.Header:GetDescendants()) do
+        assert(not object:IsA("ImageLabel"),"central plant is still mounted")
+    end
+    assert(tab.Header.AbsoluteSize.Y<=140,"removed plant still reserves a tall hero area")
+    assert(group.Frame.AbsolutePosition.Y>=tab.Subtitle.AbsolutePosition.Y+tab.Subtitle.AbsoluteSize.Y+8,"section crowds the subtitle")
 end)
 
 local function cleanupCase()

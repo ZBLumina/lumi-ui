@@ -1,0 +1,99 @@
+{
+  "source": "https://github.com/mingcute-design/mingcute-icons",
+  "commit": "4b85ae197f6c10c8740f2b03a0be0f0864fc18ec",
+  "license": "Apache-2.0",
+  "rasterizer": "@resvg/resvg-js@2.6.2",
+  "size": 96,
+  "icons": {
+    "Grid": {
+      "upstream": "assets/svg/core/regular/system/grid_2.svg",
+      "svg": "svg/Grid.svg",
+      "png": "png/Grid.png"
+    },
+    "Home": {
+      "upstream": "assets/svg/core/regular/buildings/home_1.svg",
+      "svg": "svg/Home.svg",
+      "png": "png/Home.png"
+    },
+    "Sliders": {
+      "upstream": "assets/svg/core/regular/system/settings_horizontal.svg",
+      "svg": "svg/Sliders.svg",
+      "png": "png/Sliders.png"
+    },
+    "Layers": {
+      "upstream": "assets/svg/core/regular/design/layer.svg",
+      "svg": "svg/Layers.svg",
+      "png": "png/Layers.png"
+    },
+    "Stack": {
+      "upstream": "assets/svg/core/regular/system/layers_2.svg",
+      "svg": "svg/Stack.svg",
+      "png": "png/Stack.png"
+    },
+    "Settings": {
+      "upstream": "assets/svg/core/regular/system/settings_3.svg",
+      "svg": "svg/Settings.svg",
+      "png": "png/Settings.png"
+    },
+    "User": {
+      "upstream": "assets/svg/core/regular/users/user_3.svg",
+      "svg": "svg/User.svg",
+      "png": "png/User.png"
+    },
+    "Cube": {
+      "upstream": "assets/svg/core/regular/system/cube.svg",
+      "svg": "svg/Cube.svg",
+      "png": "png/Cube.png"
+    },
+    "Document": {
+      "upstream": "assets/svg/core/regular/files/document.svg",
+      "svg": "svg/Document.svg",
+      "png": "png/Document.png"
+    },
+    "Bookmark": {
+      "upstream": "assets/svg/core/regular/education/bookmark.svg",
+      "svg": "svg/Bookmark.svg",
+      "png": "png/Bookmark.png"
+    },
+    "Help": {
+      "upstream": "assets/svg/core/regular/system/question.svg",
+      "svg": "svg/Help.svg",
+      "png": "png/Help.png"
+    },
+    "Search": {
+      "upstream": "assets/svg/core/regular/files/search_2.svg",
+      "svg": "svg/Search.svg",
+      "png": "png/Search.png"
+    },
+    "ChevronDown": {
+      "upstream": "assets/svg/core/regular/arrow/down.svg",
+      "svg": "svg/ChevronDown.svg",
+      "png": "png/ChevronDown.png"
+    },
+    "ChevronRight": {
+      "upstream": "assets/svg/core/regular/arrow/right.svg",
+      "svg": "svg/ChevronRight.svg",
+      "png": "png/ChevronRight.png"
+    },
+    "Check": {
+      "upstream": "assets/svg/core/regular/system/check.svg",
+      "svg": "svg/Check.svg",
+      "png": "png/Check.png"
+    },
+    "Close": {
+      "upstream": "assets/svg/core/regular/system/close.svg",
+      "svg": "svg/Close.svg",
+      "png": "png/Close.png"
+    },
+    "Menu": {
+      "upstream": "assets/svg/core/regular/editing/menu.svg",
+      "svg": "svg/Menu.svg",
+      "png": "png/Menu.png"
+    },
+    "Minus": {
+      "upstream": "assets/svg/core/regular/system/minimize.svg",
+      "svg": "svg/Minus.svg",
+      "png": "png/Minus.png"
+    }
+  }
+}

@@ -24,9 +24,6 @@ function Settings.new(window)
     self.Track = UI.frame(button, "Meter", 50, 36, 142, 4, T.SoftLine, 2)
     self.Fill = UI.frame(self.Track, "Fill", 0, 0, 0, 4, T.Accent, 2)
     self.Fill.Size = UDim2.fromScale(1, 1)
-    UI.chevron(button, 144, 25, T.Accent)
-    button.ChevronA.Rotation, button.ChevronB.Rotation = 45, -45
-    button.ChevronA.Visible, button.ChevronB.Visible = false, false
     self.Button, window.SettingsButton = button, button
     UI.hover(window.Runtime, button, T.Raised, T.Hover)
     window.Runtime:Connect(button.Activated, function() self:Open() end)
@@ -46,8 +43,6 @@ function Settings:Fit(width, short)
     self.Value.Position = UDim2.fromOffset(cardWidth - 47, 10)
     self.Track.Position = UDim2.fromOffset(50, short and 34 or 36)
     self.Track.Size = UDim2.fromOffset(cardWidth - 62, 4)
-    button.ChevronA.Position = UDim2.fromOffset(cardWidth - 16, height / 2 - 2)
-    button.ChevronB.Position = UDim2.fromOffset(cardWidth - 16, height / 2 + 2)
     self.Window.Profile:Fit(cardWidth, short, height + 20)
     return height + 20 + (short and 50 or 60) + 8
 end

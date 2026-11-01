@@ -184,6 +184,23 @@ async function main() {
   const license = notices.join('\n');
   if (license.includes(']=]')) throw new Error('Delimitador inesperado en licencia tipográfica');
   modules.set('FontsData', imports(`--[=[\nGoogle Fonts · font notices and SIL OFL 1.1 licenses\n${license}]=]\nreturn {\n${fonts.join('\n')}\n}\n`, 'assets/fonts'));
+  const iconRoot = path.join(root, 'assets', 'icons', 'mingcute');
+  const manifest = JSON.parse(await readFile(path.join(iconRoot, 'manifest.json'), 'utf8'));
+  const iconLicense = await readFile(path.join(iconRoot, 'LICENSE'), 'utf8');
+  const iconNotice = await readFile(path.join(iconRoot, 'NOTICE'), 'utf8');
+  const icons = [];
+  for (const [name, entry] of Object.entries(manifest.icons).sort(([a], [b]) => compare(a, b))) {
+    if (!/^[A-Za-z]+$/.test(name) || !/^png\/[A-Za-z]+\.png$/.test(entry.png)) throw new Error('Nombre de icono no válido');
+    const bytes = await readFile(path.join(iconRoot, entry.png));
+    if (bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a'
+      || bytes.readUInt32BE(16) !== manifest.size || bytes.readUInt32BE(20) !== manifest.size) {
+      throw new Error(`PNG de icono no válido: ${name}`);
+    }
+    icons.push(`    ${name} = {Name = ${quote(name + '.png')}, Data = ${quote(bytes.toString('base64'))}},`);
+  }
+  const notice = `${iconNotice}\n${iconLicense}`;
+  if (notice.includes(']=]')) throw new Error('Delimitador inesperado en licencia de iconos');
+  modules.set('IconsData', imports(`--[=[\n${notice}]=]\nreturn {\n${icons.join('\n')}\n}\n`, 'assets/icons/mingcute'));
   validate(modules);
   const built = library(modules);
   const demo = normalize(await readFile(path.join(root, 'examples', 'potassium-pilot.luau'), 'utf8'));

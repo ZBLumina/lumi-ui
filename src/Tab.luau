@@ -4,7 +4,6 @@ local Section = require("Section")
 local Motion = require("Motion")
 local Textos = require("Textos")
 local Fonts = require("Fonts")
-local BrandArt = require("components/BrandArt")
 local Tab = {}
 Tab.__index = Tab
 
@@ -40,7 +39,6 @@ function Tab.new(window, name, options)
     header.Size = UDim2.new(1, 0, 0, 88)
     header.LayoutOrder = 0
     self.Header = header
-    self.Art = BrandArt.header(window.Runtime, header)
     UI.micro(header, "Eyebrow", options.Eyebrow or string.format(Textos.espacioMayus .. " / %02d", index), 0, 0, 540, 14).Size = UDim2.new(1, 0, 0, 14)
     self.Title = UI.text(header, "Title", name, 0, 21, 570, 39, 32, T.Text, T.Title)
     self.Subtitle = UI.text(header, "Subtitle", self.Description, 0, 66, 620, 18, 13, T.Secondary)
@@ -90,14 +88,14 @@ end
 function Tab:Relayout()
     local rowHeight = self.Window.Mobile and 48 or 42
     self.Button.Size = UDim2.new(1, 0, 0, rowHeight)
-    self.Icon.Position = UDim2.fromOffset(14, (rowHeight - 16) / 2)
+    self.Icon.Size = UDim2.fromOffset(20, 20)
+    self.Icon.Position = UDim2.fromOffset(12, (rowHeight - 20) / 2)
     self.Indicator.Position = UDim2.fromOffset(1, (rowHeight - 14) / 2)
     local padding = self.Window.Mobile and 16 or 26
     self.Padding.PaddingLeft, self.Padding.PaddingRight = UDim.new(0, padding), UDim.new(0, padding)
     self.Label.Size = UDim2.new(1, -48, 1, 0)
     local width = self:GetContentWidth()
-    local hero = not self.Window.Mobile and width >= 500
-    local textWidth = hero and math.floor(width * 0.56) or width
+    local textWidth = width
     self.Title.TextSize = self.Window.Mobile and 32 or 40
     self.Subtitle.TextSize = self.Window.Mobile and 15 or 16
     local function height(label, available, minimum)
@@ -111,12 +109,8 @@ function Tab:Relayout()
     self.Title.Size = UDim2.fromOffset(textWidth, titleHeight)
     self.Subtitle.Position = UDim2.fromOffset(0, subtitleY)
     self.Subtitle.Size = UDim2.fromOffset(textWidth, subtitleHeight)
-    -- The PNG leaves its upper-left 56% x 55% clear. Grow long captions inside
-    -- that area instead of hiding the full-width composition on desktop.
-    local headerHeight = hero and math.max(180, math.ceil((subtitleY + subtitleHeight + 6) / 0.55))
-        or math.max(self.Window.Mobile and 104 or 124, subtitleY + subtitleHeight + 4)
+    local headerHeight = math.max(self.Window.Mobile and 104 or 124, subtitleY + subtitleHeight + 4)
     self.Header.Size = UDim2.new(1, 0, 0, headerHeight)
-    self.Art.Visible = hero
     for _, section in ipairs(self.Sections) do section:Relayout() end
     for _, control in ipairs(self.Controls) do control:Relayout() end
 end
@@ -127,8 +121,7 @@ function Tab:SetActive(active, duration)
     rt:Tween(self.Button, {BackgroundTransparency = active and 0 or 1}, duration)
     rt:Tween(self.Label, {TextColor3 = active and T.Accent or T.Secondary}, duration)
     for _, part in ipairs(self.IconParts) do
-        rt:Tween(part, part:IsA("UIStroke") and {Color = active and T.Accent or T.Secondary}
-            or {BackgroundColor3 = active and T.Accent or T.Secondary}, duration)
+        rt:Tween(part, {ImageColor3 = active and T.Accent or T.Secondary}, duration)
     end
     self.Outline.Enabled, self.Indicator.Visible = active, active
 end

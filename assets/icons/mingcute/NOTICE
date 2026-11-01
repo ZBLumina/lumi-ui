@@ -1,0 +1,9 @@
+MingCute Icons
+Copyright MingCute Design and contributors.
+Source: https://github.com/mingcute-design/mingcute-icons
+Revision: 4b85ae197f6c10c8740f2b03a0be0f0864fc18ec
+License: Apache-2.0 (see LICENSE).
+
+Lumi modifications: selected Core Regular SVGs rendered as white transparent
+96 x 96 PNGs with resvg-js 2.6.2. Original SVGs are retained unchanged.
+The PNG pixels are tinted by Roblox ImageColor3 at runtime.

@@ -17,17 +17,6 @@ local function picture(runtime, parent, source, transparency)
     return image
 end
 
-function Art.header(runtime, parent)
-    local art = UI.frame(parent, "LumiArcs", 0, 0, 0, 0)
-    art.Size = UDim2.fromScale(1, 1)
-    art.ClipsDescendants = true
-    local image = picture(runtime, art, Artwork.Header, 0.64)
-    image.Position = UDim2.fromOffset(8, 6)
-    image.Size = UDim2.new(1, -16, 1, -12)
-    image.ScaleType = Enum.ScaleType.Stretch
-    return art
-end
-
 local function surface(runtime, parent, name, source, transparency)
     local art = UI.frame(parent, name, 0, 0, 0, 0)
     art.Size = UDim2.fromScale(1, 1)
