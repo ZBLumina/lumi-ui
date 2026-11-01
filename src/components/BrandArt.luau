@@ -7,9 +7,10 @@ local Art = {}
 local function picture(runtime, parent, source, transparency)
     local image = UI.new("ImageLabel", parent, {
         Name = "ArtworkImage", Image = "", Size = UDim2.fromScale(1, 1),
-        ScaleType = Enum.ScaleType.Fit, ImageTransparency = transparency,
+        ScaleType = Enum.ScaleType.Fit, ImageTransparency = 1 - (1 - transparency) * (runtime.Decoration or 1),
         Active = false, Selectable = false,
     })
+    image:SetAttribute("LumiArtworkOpacity", 1 - transparency)
     -- Use the existing cancellable cache/loader. Failed art stays transparent;
     -- no placeholder icon or error message is drawn over the workspace.
     Images.Bind(runtime, image, source)

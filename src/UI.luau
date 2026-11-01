@@ -98,7 +98,52 @@ function UI.icon(parent, style, x, y, color)
         local part = UI.frame(icon, name, px, py, width, height, color or T.Secondary, 1)
         table.insert(parts, part)
     end
-    if style == "Sliders" then
+    local function edge(x1, y1, x2, y2)
+        local dx, dy = x2 - x1, y2 - y1
+        local length = math.sqrt(dx * dx + dy * dy)
+        line("Line", (x1 + x2 - length) / 2, (y1 + y2) / 2 - .5, length, 1)
+        parts[#parts].Rotation = math.deg(math.atan2(dy, dx))
+    end
+    if style == "Search" then
+        local ring = UI.frame(icon, "Lens", 1, 1, 10, 10, nil, 999)
+        table.insert(parts, UI.stroke(ring, color or T.Secondary))
+        line("Handle", 10, 11, 6, 1)
+        parts[#parts].Rotation = 45
+    elseif style == "Home" then
+        line("RoofA", 1, 4, 9, 1); parts[#parts].Rotation = -40
+        line("RoofB", 7, 4, 9, 1); parts[#parts].Rotation = 40
+        line("WallA", 3, 7, 1, 8); line("WallB", 13, 7, 1, 8)
+        line("Floor", 3, 14, 11, 1); line("Door", 8, 10, 1, 4)
+    elseif style == "Settings" then
+        local ring = UI.frame(icon, "Gear", 3, 3, 10, 10, nil, 999)
+        table.insert(parts, UI.stroke(ring, color or T.Secondary))
+        for i = 0, 7 do
+            local angle = i * math.pi / 4
+            line("Tooth", 7 + math.cos(angle) * 6, 7 + math.sin(angle) * 6, 3, 1)
+            parts[#parts].Rotation = i * 45
+        end
+    elseif style == "User" then
+        table.insert(parts, UI.stroke(UI.frame(icon, "Head", 5, 0, 6, 6, nil, 999), color or T.Secondary))
+        table.insert(parts, UI.stroke(UI.frame(icon, "Body", 2, 10, 12, 5, nil, 4), color or T.Secondary))
+    elseif style == "Cube" then
+        edge(8, 1, 15, 5); edge(15, 5, 15, 12); edge(15, 12, 8, 16)
+        edge(8, 16, 1, 12); edge(1, 12, 1, 5); edge(1, 5, 8, 1)
+        edge(1, 5, 8, 9); edge(8, 9, 15, 5); edge(8, 9, 8, 16)
+    elseif style == "Stack" then
+        edge(8, 1, 15, 5); edge(15, 5, 8, 9); edge(8, 9, 1, 5); edge(1, 5, 8, 1)
+        edge(1, 9, 8, 13); edge(8, 13, 15, 9)
+        edge(1, 12, 8, 16); edge(8, 16, 15, 12)
+    elseif style == "Document" then
+        table.insert(parts, UI.stroke(UI.frame(icon, "Sheet", 2, 1, 12, 14, nil, 2), color or T.Secondary))
+        for y = 5, 11, 3 do line("Text", 5, y, 6, 1) end
+    elseif style == "Bookmark" then
+        edge(4, 1, 12, 1); edge(12, 1, 12, 15); edge(12, 15, 8, 12)
+        edge(8, 12, 4, 15); edge(4, 15, 4, 1)
+    elseif style == "Help" then
+        table.insert(parts, UI.stroke(UI.frame(icon, "Circle", 1, 1, 14, 14, nil, 999), color or T.Secondary))
+        edge(5, 5, 7, 4); edge(7, 4, 10, 5); edge(10, 5, 10, 7)
+        edge(10, 7, 8, 9); edge(8, 9, 8, 10); line("Dot", 7.5, 12, 1, 1)
+    elseif style == "Sliders" then
         for i, offset in ipairs({4, 10, 7}) do
             line("Track", 1, (i - 1) * 6 + 2, 14, 1)
             line("Handle", offset, (i - 1) * 6, 2, 5)

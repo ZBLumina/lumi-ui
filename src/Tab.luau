@@ -12,13 +12,17 @@ function Tab.new(window, name, options)
     local index = #window.Tabs + 1
     local self = setmetatable({Name = tostring(name), Description = options.Description or Textos.descripcionPagina,
         Window = window, Sections = {}, Controls = {}}, Tab)
-    local button = UI.button(window.Navigation, tostring(name) .. "TabButton", "", 0, 0, 160, 42)
+    local group = window:GetNavigationGroup(options.Group)
+    group.Count += 1
+    self.NavigationGroup = group
+    self.NavigationLabel = options.NavigationLabel or name
+    local button = UI.button(group.Content, tostring(name) .. "TabButton", "", 0, 0, 160, 42)
     button.Size = UDim2.new(1, 0, 0, 42)
-    button.LayoutOrder = index
+    button.LayoutOrder = group.Count
     UI.corner(button, 6)
     self.Button = button
     self.Icon, self.IconParts = UI.icon(button, options.Icon, 14, 13, T.Secondary)
-    self.Label = UI.text(button, "Label", name, 40, 0, 85, 42, 14, T.Secondary, T.Medium)
+    self.Label = UI.text(button, "Label", self.NavigationLabel, 40, 0, 85, 42, 14, T.Secondary, T.Medium)
     self.Outline = UI.stroke(button, T.AccentSoft)
     self.Outline.Transparency, self.Outline.Enabled = 0.66, false
     self.Indicator = UI.frame(button, "Selected", 1, 14, 2, 14, T.Accent, 1)
@@ -73,8 +77,18 @@ function Tab:GetContentWidth()
     return math.max(1, math.floor(page * (1 - left.Scale - right.Scale) - left.Offset - right.Offset))
 end
 
+function Tab:SetNavigation(groupName, label)
+    local group = self.Window:GetNavigationGroup(groupName)
+    group.Count += 1
+    self.NavigationGroup = group
+    self.Button.Parent, self.Button.LayoutOrder = group.Content, group.Count
+    self.NavigationLabel = label or self.Name
+    self.Label.Text = self.NavigationLabel
+    return self
+end
+
 function Tab:Relayout()
-    local rowHeight = self.Window.Mobile and 48 or 46
+    local rowHeight = self.Window.Mobile and 48 or 42
     self.Button.Size = UDim2.new(1, 0, 0, rowHeight)
     self.Icon.Position = UDim2.fromOffset(14, (rowHeight - 16) / 2)
     self.Indicator.Position = UDim2.fromOffset(1, (rowHeight - 14) / 2)

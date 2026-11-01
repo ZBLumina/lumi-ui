@@ -6,6 +6,7 @@ local Button = require("controls/Button")
 local Toggle = require("controls/Toggle")
 local Slider = require("controls/Slider")
 local Dropdown = require("controls/Dropdown")
+local Input = require("controls/Input")
 local Section = {}
 Section.__index = Section
 
@@ -102,5 +103,6 @@ function Section:AddToggle(options) return Toggle.new(self, options or {}) end
 function Section:AddSlider(options) return Slider.new(self, options or {}) end
 function Section:AddDropdown(options) return Dropdown.new(self, options or {}) end
 function Section:AddImageDropdown(options) return Dropdown.new(self, options or {}) end
+function Section:AddInput(options) return Input.new(self, options or {}) end
 
 return Section

@@ -1,6 +1,6 @@
 # Lumi UI
 
-Biblioteca modular de interfaces en Luau para Potassium. **v0.4.16 integra las ilustraciones como fondos suaves y añade seguimiento al arrastrar tanto la barra izquierda como el inspector.** Los títulos usan Fredoka SemiBold; el texto, Nunito Sans Regular/Medium; los rótulos pequeños espaciados, Montserrat Medium; la marca, Comfortaa SemiBold. Conserva la composición de tres paneles, la cabecera amplia, el perfil, los selectores con miniaturas, la cápsula superior y la adaptación táctil. Toda la interfaz y la demostración están en español. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
+Biblioteca modular de interfaces en Luau para Potassium. **v0.4.18 amplía la barra izquierda a 228 px, organiza nueve accesos en Principal, Espacio y Herramientas, y añade tarjetas de perfil y Configuraciones con porcentaje real.** La barra superior incluye Inicio, ruta y búsqueda funcional. Los títulos usan Fredoka SemiBold; el texto, Nunito Sans Regular/Medium; los rótulos pequeños espaciados, Montserrat Medium; la marca, Comfortaa SemiBold. Combina bases de carbón cálido con superficies café y acentos crema. Conserva los tres paneles separados, los fondos suaves, el seguimiento lateral, los selectores con miniaturas y la cápsula superior. Toda la interfaz y la demostración están en español. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
 
 Las cinco variantes TTF y sus licencias OFL están en `assets/fonts`. El generador incorpora sus bytes en el script: no se descargan fuentes al abrirlo. Potassium las registra en su carpeta local `lumi-ui/fonts`; otros entornos sin registro de archivos usan fuentes nativas de respaldo. El ajuste de textos utiliza la FontFace real.
 
@@ -8,7 +8,7 @@ Las ilustraciones decorativas son PNG en `assets/decor`, con sus prompts de gene
 
 Los textos propios de la biblioteca se concentran en `src/Textos.luau`: navegación, etiquetas, estados, ayudas, tipos de control, listas vacías y confirmaciones. La demostración también traduce todos sus títulos, descripciones y opciones. Se conservan los nombres de producto Lumi UI, Potassium y Luau, junto con los identificadores técnicos de la API. Los textos personalizados que proporciona quien usa la biblioteca se muestran tal como se reciben.
 
-Los fondos y el seguimiento lateral se registran en [las notas de v0.4.16](docs/design/studio-v0416-fondos-seguimiento.md). La cabecera completa y su comprobación se registran en [las notas de v0.4.15](docs/design/studio-v0415-cabecera.md). La corrección de claridad y marca se registra en [las notas de v0.4.14](docs/design/studio-v0414-claridad.md). La decoración botánica y su comprobación se registran en [las notas de v0.4.13](docs/design/studio-v0413-imagenes.md).
+La barra completa se registra en [las notas de v0.4.18](docs/design/studio-v0418-barra-completa.md). La navegación superior se registra en [las notas de v0.4.17](docs/design/studio-v0417-navegacion.md). Los fondos y el seguimiento lateral se registran en [las notas de v0.4.16](docs/design/studio-v0416-fondos-seguimiento.md). La cabecera completa y su comprobación se registran en [las notas de v0.4.15](docs/design/studio-v0415-cabecera.md). La corrección de claridad y marca se registra en [las notas de v0.4.14](docs/design/studio-v0414-claridad.md). La decoración botánica y su comprobación se registran en [las notas de v0.4.13](docs/design/studio-v0413-imagenes.md).
 
 ## Probar la versión actual en Potassium
 
@@ -22,7 +22,7 @@ La dirección que usa `main`, conservada en `examples/potassium-loader.luau`, si
 
 ## Usar la biblioteca
 
-`dist/LumiUI.luau` devuelve la biblioteca sin crear la demostración. `dist/LumiUI.pilot.luau` incluye las páginas Inicio, Jugador y Aspecto.
+`dist/LumiUI.luau` devuelve la biblioteca sin crear la demostración. `dist/LumiUI.pilot.luau` incluye Inicio, Jugador, Aspecto, Espacios, Interacción, Ajustes, Registros, Notas y Ayuda.
 
 ```luau
 local Lumi = loadstring(game:HttpGet("https://raw.githubusercontent.com/ZBLumina/lumi-ui/feat/lumi-studio-v04/dist/LumiUI.luau"))()
@@ -53,11 +53,41 @@ print(intensidad:Get())
 
 Todos los controles aceptan `Name`, `Description` y `Callback`. Los controles con valor ofrecen `Get()`, `Set(valor, omitirFuncion?)` y `Focus()`. Los botones ofrecen `Press()` y un estado legible mediante `Get()`: «Listo», «1 ejecución», «2 ejecuciones»… Los selectores también ofrecen `Open()` y `Close()`.
 
-Las páginas aceptan opcionalmente `Icon = "Grid"`, `"Sliders"` o `"Layers"`: cuadrícula, ajustes o capas. Son identificadores técnicos de iconos geométricos nativos. Si falta el valor o no se reconoce, se usa la cuadrícula. Los nombres aprovechan el ancho de la navegación y los títulos, el encabezado completo.
+Las páginas aceptan `Group = "Principal"`, `"Espacio"` o `"Herramientas"` para organizar la navegación, y `NavigationLabel` para abreviar el acceso sin cambiar el título. Los grupos se crean según se necesitan. Los iconos disponibles incluyen `Grid`, `Sliders`, `Layers`, `User`, `Cube`, `Stack`, `Document`, `Bookmark`, `Help` y `Settings`. Son identificadores técnicos de iconos geométricos nativos. Si falta el valor o no se reconoce, se usa la cuadrícula. Los nombres aprovechan el ancho de la navegación y los títulos, el encabezado completo.
+
+## Configuraciones y búsqueda
+
+La tarjeta inferior abre Configuraciones. Su porcentaje y barra reflejan la intensidad de la decoración; Ajustes en el grupo Espacio abre la misma página. Sus preferencias actúan sobre la ventana: animaciones, intensidad de la decoración y visibilidad del inspector cuando hay espacio. Restablecer recupera los valores iniciales. Se conservan al cambiar de página y minimizar; pertenecen a la sesión de esa ventana.
+
+```luau
+window:OpenSettings()
+window:SetPreference("Animations", false)
+window:SetPreference("Decoration", 70) -- 0 a 100; multiplica la decoración de fondo.
+window:SetPreference("Inspector", true)
+window:GoHome()
+```
+
+Pulsa la búsqueda o Ctrl+K para localizar páginas y controles por nombre y descripción, con o sin tildes. Elegir un control abre su página, lo desplaza a la vista y lo selecciona sin cambiar su valor. Las flechas recorren resultados; Intro abre el seleccionado y Escape cierra. En teléfono y paneles estrechos la búsqueda usa un botón compacto. La ruta y los botones de ventana conservan su propio espacio.
+
+## Campos de texto y herramientas
+
+`AddInput` permite campos de una línea o multilínea, con texto de solo lectura cuando corresponde. El texto largo tiene un área desplazable y el cursor permanece visible al escribir. Los valores pertenecen a la sesión: no se guardan en disco.
+
+```luau
+local notas = general:AddInput({Name = "Notas", MultiLine = true, Height = 180,
+    Placeholder = "Escribe aquí...", Default = "", MaxLength = 2000,
+    Callback = function(texto) print(texto) end})
+local registros = general:AddInput({Name = "Actividad", MultiLine = true,
+    ReadOnly = true, Default = "Sesión iniciada."})
+ventana:ShowSettingsInNavigation("Espacio", "Ajustes")
+ventana:OpenProfile()
+```
+
+La demostración incluye herramientas de distribución, controles de movimiento, registros locales de navegación, un bloc de notas y ayuda. Registros no recopila datos del juego ni transmite información. Las notas se conservan al navegar y minimizar hasta cerrar o recargar la demostración.
 
 ## Perfil y selectores con imágenes
 
-El pie muestra el avatar y el nombre del jugador local, con `@usuario` cuando es distinto del nombre visible y hay espacio. Si la imagen falla, permanecen las iniciales. Se pueden personalizar mediante `CreateWindow({Profile = {DisplayName = "Nombre", Username = "usuario", Avatar = fuente}})`.
+La tarjeta del perfil abre una página con los datos de la cuenta y muestra una flecha. El pie muestra el avatar y el nombre del jugador local, con `@usuario` cuando es distinto del nombre visible y hay espacio. Si la imagen falla, permanecen las iniciales. Se pueden personalizar mediante `CreateWindow({Profile = {DisplayName = "Nombre", Username = "usuario", Avatar = fuente}})`.
 
 `AddDropdown` conserva las listas de cadenas y admite opciones con `Value`, `Label`, `Image` y una `Description` opcional. `AddImageDropdown` es un alias explícito. `Get()` y la función asociada reciben `Value`; `GetLabel()` devuelve la etiqueta de presentación.
 
@@ -121,7 +151,7 @@ src/
   Section.luau        grupos y filas
   PropertyLayout.luau distribución medida de textos y campos
   ImageSource.luau    resolución, caché y carga cancelable de imágenes
-  components/         inspector, perfil, miniaturas, sombra y presentación
+  components/         inspector, perfil, búsqueda, configuraciones y presentación
   controls/           botón, interruptor, deslizador y selector
 ```
 

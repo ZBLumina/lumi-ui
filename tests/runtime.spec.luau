@@ -1099,6 +1099,252 @@ test("phone panels and restore capsule leave space for the Roblox top bar", func
     assert(top >= safe - .5, "restore capsule overlaps the Roblox top bar")
 end)
 
+test("settings shortcut opens one reusable settings page without changing user controls", function()
+    local group, owner, first = section()
+    local slider = group:AddSlider({Name = "Volumen", Min = 0, Max = 100, Default = 37})
+    assert(owner.SettingsButton and type(owner.OpenSettings) == "function", "settings shortcut is missing")
+    local page = owner:OpenSettings()
+    equal(owner.ActiveTab, page, "settings did not become active")
+    equal(page.Name, "Configuraciones", "settings page is not Spanish")
+    local count = #owner.Tabs
+    equal(owner:OpenSettings(), page, "settings page was recreated")
+    equal(#owner.Tabs, count, "settings accumulated duplicate pages")
+    owner:GoHome()
+    equal(owner.ActiveTab, first, "home did not return to the first page")
+    equal(slider:Get(), 37, "navigation changed a user value")
+end)
+
+test("settings controls change real animation, artwork and inspector preferences", function()
+    local group, owner = section()
+    owner.Viewport.Size = UDim2.fromOffset(1920, 1080)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    assert(type(owner.OpenSettings) == "function", "settings page is missing")
+    owner:OpenSettings(); owner:FinishPages()
+    local controls = owner.Settings.Controls
+    controls.Animations:Set(false); settle()
+    equal(owner.Runtime.Animations, false, "animation control did not change runtime")
+    local image = owner.Tabs[1].Art.ArtworkImage
+    local original = image.ImageTransparency
+    controls.Decoration:Set(0); settle()
+    equal(image.ImageTransparency, 1, "decoration control did not hide artwork")
+    controls.Inspector:Set(false); settle()
+    equal(owner.Inspector.Visible, false, "inspector preference did not hide the panel")
+    owner.Settings:Reset(); settle()
+    equal(owner.Runtime.Animations, true, "reset did not restore animations")
+    equal(owner.Inspector.Visible, true, "reset did not restore inspector")
+    assert(math.abs(image.ImageTransparency-original)<.001, "reset did not restore artwork")
+end)
+
+test("profile and settings cards leave a separate scrollable navigation area", function()
+    local owner = window()
+    owner:AddTab("Inicio")
+    assert(owner.SettingsButton, "settings card is missing")
+    for _, viewport in ipairs({Vector2.new(1920,1080),Vector2.new(900,720),Vector2.new(640,360),Vector2.new(390,844),Vector2.new(320,500)}) do
+        owner.Viewport.Size = UDim2.fromOffset(viewport.X,viewport.Y)
+        settle(); owner:Fit(); owner:FinishEntrance(); settle()
+        if owner.Mobile then owner:ToggleNavigation(true) end
+        local nav, profile, settings = owner.Navigation, owner.Profile.Frame, owner.SettingsButton
+        assert(nav.AbsolutePosition.Y+nav.AbsoluteSize.Y<=profile.AbsolutePosition.Y+1,"navigation overlaps profile")
+        assert(profile.AbsolutePosition.Y+profile.AbsoluteSize.Y<=settings.AbsolutePosition.Y-3,"profile overlaps settings")
+        assert(settings.AbsolutePosition.Y+settings.AbsoluteSize.Y<=owner.Sidebar.AbsolutePosition.Y+owner.Sidebar.AbsoluteSize.Y-7,"settings escapes sidebar")
+        assert(settings.Label.TextFits,"settings label is clipped")
+        assert(nav.AbsoluteSize.Y>=35,"footer consumed navigation")
+        if owner.Mobile then assert(settings.AbsoluteSize.Y>=44,"settings touch target is too short") end
+    end
+end)
+
+test("top bar search and window buttons fit without overlapping the drag region", function()
+    local owner = window()
+    owner:AddTab("Inicio")
+    assert(owner.Search and owner.HomeButton,"new top bar is missing")
+    for _, viewport in ipairs({Vector2.new(1920,1080),Vector2.new(900,720),Vector2.new(750,720),Vector2.new(640,360),Vector2.new(320,500)}) do
+        owner.Viewport.Size=UDim2.fromOffset(viewport.X,viewport.Y)
+        settle();owner:Fit();owner:FinishEntrance();settle()
+        local search, minimize, close = owner.Search.Button, owner.MinimizeButton, owner.CloseButton
+        assert(owner.Chrome.TitleDrag.AbsolutePosition.X+owner.Chrome.TitleDrag.AbsoluteSize.X<=search.AbsolutePosition.X+1,"search overlaps drag region")
+        assert(search.AbsolutePosition.X+search.AbsoluteSize.X<=minimize.AbsolutePosition.X-2,"search overlaps minimize")
+        assert(minimize.AbsolutePosition.X+minimize.AbsoluteSize.X<=close.AbsolutePosition.X-2,"window buttons overlap")
+        assert(close.AbsolutePosition.X+close.AbsoluteSize.X<=owner.Chrome.AbsolutePosition.X+owner.Chrome.AbsoluteSize.X,"close escapes chrome")
+        if owner.Mobile then assert(search.AbsoluteSize.Y>=44,"phone search target is too short") end
+    end
+end)
+
+test("search matches accents and routes to a control while preserving its value", function()
+    local group, owner, first=section()
+    local destination=owner:AddTab("Aspecto")
+    local settings=destination:AddSection("Iluminación")
+    local slider=settings:AddSlider({Name="Iluminación cálida",Description="Brillo del espacio.",Min=0,Max=100,Default=42})
+    assert(owner.Search,"search is missing")
+    local results=owner.Search:Find("ILUMINACION CALIDA")
+    local target
+    for _, entry in ipairs(results) do if entry.Control==slider then target=entry end end
+    assert(target,"accent-insensitive search did not find the control")
+    owner.Search:Choose(target);settle()
+    equal(owner.ActiveTab,destination,"search did not navigate")
+    equal(owner.SelectedControl,slider,"search did not focus its result")
+    equal(slider:Get(),42,"search changed a control value")
+    owner:GoHome();equal(owner.ActiveTab,first,"home did not restore first page")
+end)
+
+test("empty search closes its popup and releases editing focus", function()
+    local group, owner=section()
+    assert(owner.Search,"search is missing")
+    equal(#owner.Search:Find("zzzz-nothing-zzzz"),0,"unknown query returned a result")
+    owner.Search:Open("zzzz-nothing-zzzz");settle()
+    equal(owner.PopupOwner,owner.Search,"search did not own its popup")
+    assert(owner.OpenDropdown:FindFirstChild("Empty",true),"empty search has no explanation")
+    owner:ClosePopup();settle()
+    equal(owner.OpenDropdown,nil,"search left a popup")
+    local focused=game:GetService("UserInputService"):GetFocusedTextBox()
+    assert(not focused or not focused:IsDescendantOf(owner.Root),"search retained editing focus")
+    owner:Minimize();owner.Search:Open("test")
+    equal(owner.OpenDropdown,nil,"search opened over a minimized window")
+end)
+
+test("search shortcut targets the latest open window and preserves an existing query", function()
+    local first, second = window(), window()
+    first:AddTab("Primera"); second:AddTab("Segunda")
+    first:FinishEntrance(); second:FinishEntrance(); settle()
+    assert(second.Search, "search is missing")
+    local vim = game:GetService("VirtualInputManager")
+    local function shortcut()
+        vim:SendKeyEvent(true, Enum.KeyCode.LeftControl, false, game)
+        vim:SendKeyEvent(true, Enum.KeyCode.K, false, game)
+        vim:SendKeyEvent(false, Enum.KeyCode.K, false, game)
+        vim:SendKeyEvent(false, Enum.KeyCode.LeftControl, false, game)
+        settle()
+    end
+    shortcut()
+    equal(first.OpenDropdown, nil, "shortcut opened search in an older window")
+    equal(second.PopupOwner, second.Search, "shortcut missed the latest window")
+    local popup = second.OpenDropdown
+    popup.Query.Text = "segunda"; settle(); shortcut()
+    equal(second.OpenDropdown, popup, "shortcut recreated an open search")
+    equal(popup.Query.Text, "segunda", "shortcut erased the query")
+    second:Destroy(); shortcut()
+    equal(first.PopupOwner, first.Search, "closed window kept keyboard ownership")
+end)
+
+test("decoration preferences survive an in-flight minimize or restore animation", function()
+    local group, owner, tab = section()
+    owner:FinishEntrance(); owner:FinishPages(); settle()
+    assert(type(owner.SetPreference) == "function", "settings preferences are missing")
+    local image = tab.Art.ArtworkImage
+    owner:Minimize(); owner:SetPreference("Decoration", 0)
+    task.wait(.25); owner:Restore(); task.wait(.25)
+    equal(owner.Preferences.Decoration, 0, "minimize changed the preference")
+    equal(image.ImageTransparency, 1, "minimize animation overwrote the artwork preference")
+    owner:SetPreference("Decoration", 100)
+    owner:Minimize(); task.wait(.25)
+    owner:Restore(); owner:SetPreference("Decoration", 0); task.wait(.25)
+    equal(image.ImageTransparency, 1, "restore animation overwrote the artwork preference")
+end)
+
+test("navigation groups retain all nine entries and their separated headings", function()
+    local owner=window()
+    assert(type(owner.GetNavigationGroup)=="function","navigation groups are missing")
+    local groups={{"Principal",{"Inicio","Jugador","Aspecto"}},{"Espacio",{"Espacios","Interacción","Ajustes"}},{"Herramientas",{"Registros","Notas","Ayuda"}}}
+    for _, definition in ipairs(groups) do
+        local group=owner:GetNavigationGroup(definition[1])
+        equal(owner:GetNavigationGroup(definition[1]),group,"group was duplicated")
+        for _, name in ipairs(definition[2]) do
+            local tab=owner:AddTab(name,{Group=definition[1]})
+            equal(tab.Button.Parent,group.Content,"tab is outside its group")
+        end
+    end
+    settle()
+    equal(#owner.Tabs,9,"navigation lost an entry")
+    local first=owner:GetNavigationGroup("Principal")
+    local second=owner:GetNavigationGroup("Espacio")
+    local third=owner:GetNavigationGroup("Herramientas")
+    assert(first.Frame.AbsolutePosition.Y<second.Frame.AbsolutePosition.Y and second.Frame.AbsolutePosition.Y<third.Frame.AbsolutePosition.Y,"group order is wrong")
+    assert(second.Divider.Visible and third.Divider.Visible,"group separators are missing")
+end)
+
+test("wider sidebar gives its cards room and keeps the meter tied to preferences", function()
+    local owner=window();owner:AddTab("Inicio")
+    owner.Viewport.Size=UDim2.fromOffset(1920,1080)
+    settle();owner:Fit();owner:FinishEntrance();settle()
+    assert(owner.SidebarWidth>=220,"sidebar did not become wider")
+    assert(owner.Settings.Value and owner.Settings.Fill,"configuration meter is missing")
+    owner:SetPreference("Decoration",65);settle()
+    equal(owner.Settings.Value.Text,"65%","meter percentage is not real")
+    assert(math.abs(owner.Settings.Fill.Size.X.Scale-.65)<.001,"meter fill does not follow decoration")
+    assert(owner.SettingsButton.Label.TextFits,"configuration label is clipped")
+    assert(owner.Profile.NameLabel.AbsoluteSize.X>=110,"profile still has a narrow text area")
+end)
+
+test("settings navigation entry and footer share the same preferences page", function()
+    local owner=window();local home=owner:AddTab("Inicio")
+    assert(type(owner.ShowSettingsInNavigation)=="function","settings navigation API is missing")
+    local settings=owner:ShowSettingsInNavigation("Espacio","Ajustes")
+    equal(settings.Button.Parent,owner:GetNavigationGroup("Espacio").Content,"settings entry is in the wrong group")
+    equal(settings.Label.Text,"Ajustes","settings entry did not use its caption")
+    assert(settings.Button.Visible,"settings navigation entry is hidden")
+    equal(owner:OpenSettings(),settings,"footer created a different page")
+    local found=false
+    for _, entry in ipairs(owner.Search:Find("ajustes"))do if entry.Tab==settings then found=true end end
+    assert(found,"search does not recognize the navigation caption")
+    owner:GoHome();equal(owner.ActiveTab,home,"home did not preserve first user page")
+end)
+
+test("profile card opens one account page and keeps the home destination", function()
+    local owner=window();local home=owner:AddTab("Inicio")
+    assert(owner.Profile.Frame:IsA("GuiButton"),"profile card is not an entry point")
+    assert(type(owner.OpenProfile)=="function","profile page is missing")
+    local page=owner:OpenProfile();local count=#owner.Tabs
+    equal(owner.ActiveTab,page,"profile did not become active")
+    equal(owner:OpenProfile(),page,"profile was recreated")
+    equal(#owner.Tabs,count,"profile accumulated pages")
+    equal(page.Name,"Perfil","profile page is not Spanish")
+    owner:GoHome();equal(owner.ActiveTab,home,"profile replaced home")
+end)
+
+test("text inputs retain Unicode multiline values and honor silent updates", function()
+    local group,owner=section()
+    assert(type(group.AddInput)=="function","text input is missing")
+    local changes=0;local received
+    local note=group:AddInput({Name="Notas",MultiLine=true,Default="Primera línea",Callback=function(value)changes+=1;received=value end})
+    note.Input.Text="Nueva línea\nEspañol: áéíóú";settle()
+    equal(note:Get(),"Nueva línea\nEspañol: áéíóú","typing did not update value")
+    equal(received,note:Get(),"text callback did not receive value")
+    local before=changes;note:Set("Cambio silencioso",true);settle()
+    equal(changes,before,"silent update invoked callback")
+    equal(note.Input.Text,"Cambio silencioso","programmatic update did not reach input")
+    local readonly=group:AddInput({Name="Registro",ReadOnly=true,MultiLine=true,Default="Actividad local"})
+    equal(readonly.Input.TextEditable,false,"read-only field can be edited")
+    readonly:Set("Actividad nueva",true);equal(readonly:Get(),"Actividad nueva","read-only field rejected programmatic updates")
+end)
+
+test("multiline text fields keep their caption above a bounded scroll area", function()
+    local group,owner=section()
+    assert(type(group.AddInput)=="function","text input is missing")
+    local note=group:AddInput({Name="Notas personales",Description="Texto de la sesión.",MultiLine=true,Height=112})
+    for _, viewport in ipairs({Vector2.new(1920,1080),Vector2.new(900,720),Vector2.new(390,844),Vector2.new(320,500)})do
+        owner.Viewport.Size=UDim2.fromOffset(viewport.X,viewport.Y);settle();owner:Fit();owner:FinishEntrance();settle()
+        local field=note.ValueInput and note.ValueInput.Parent or note.Input
+        assert(field.AbsolutePosition.Y>=note.DescriptionLabel.AbsolutePosition.Y+note.DescriptionLabel.AbsoluteSize.Y+8,"text field overlaps description")
+        assert(field.AbsolutePosition.X>=note.Row.AbsolutePosition.X+8,"text field escapes row")
+        assert(field.AbsolutePosition.X+field.AbsoluteSize.X<=note.Row.AbsolutePosition.X+note.Row.AbsoluteSize.X-8,"text field escapes right edge")
+        assert(field.AbsoluteSize.Y>=80,"multiline area is too short")
+    end
+end)
+
+test("long notes expose every line and keep the focused caret in view", function()
+    local group,owner=section()
+    owner:FinishEntrance()
+    local note=group:AddInput({Name="Notas largas",MultiLine=true,Height=112,
+        Default=string.rep("Línea con acento.\n",30)})
+    settle()
+    assert(note.Field.AbsoluteCanvasSize.Y>400,"long text has no scrollable canvas")
+    note.Input:CaptureFocus();settle()
+    note.Input.CursorPosition=#note.Input.Text+1
+    eventually(function() return note.Field.CanvasPosition.Y>250 end,"end caret stayed outside the field")
+    note.Input.CursorPosition=1
+    eventually(function() return note.Field.CanvasPosition.Y<1 end,"home caret stayed outside the field")
+    note.Input:ReleaseFocus()
+end)
+
 local function cleanupCase()
     local errors = {}
     -- Release yielding callbacks before disposing their real BindableEvents.

@@ -116,6 +116,11 @@ function Inspector:Update(control)
     if type(value) == "boolean" then shown = value and Textos.activado or Textos.desactivado end
     if type(value) == "number" then shown = (control.Format and control:Format(value) or UI.format(value)) .. (control.Suffix or "") end
     if control.GetLabel and value ~= nil then shown = control:GetLabel() end
+    if control.Kind == "Input" then
+        local count = 0
+        for _ in utf8.graphemes(tostring(value or "")) do count += 1 end
+        shown = Textos.cantidadCaracteres(count)
+    end
     window.DetailTitle.Text, window.DetailDescription.Text = control.Name, control.Description or ""
     window.DetailKind.Text = Textos.etiquetaTipo(control.Kind)
     self:SetValue(shown)
@@ -166,6 +171,10 @@ function Inspector:Update(control)
             end
         end
         self.Hint.Text = count == 0 and Textos.pistaVacia or Textos.pistaOpcion
+    elseif control.Kind == "Input" then
+        self.Meta.Text = control.ReadOnly and Textos.soloLectura or Textos.texto
+        self.Hint.Text = control.ReadOnly and Textos.pistaSoloLectura
+            or (control.MultiLine and Textos.pistaTextoMultilinea or Textos.pistaTexto)
     else
         self.Meta.Text = Textos.alPulsar
         self.Hint.Text = Textos.pistaAccion

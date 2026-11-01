@@ -1,7 +1,7 @@
 local Fonts = require("Fonts")
 local Layout = {}
 local PAD, VERTICAL, COLUMN_GAP, STACK_GAP, INPUT_HEIGHT = 16, 12, 24, 12, 36
-local widths = {Button = 144, Dropdown = 220, Toggle = 100, Slider = 96}
+local widths = {Button = 144, Dropdown = 220, Toggle = 100, Slider = 96, Input = 220}
 
 local function textHeight(label, width, minimum)
     local bounds = Fonts.bounds(label.Text, label.TextSize, label.FontFace, width - 1)
@@ -17,6 +17,19 @@ function Layout.measure(control, width)
     local phone = control.Section.Tab.Window.Mobile
     local inputHeight = phone and 44 or INPUT_HEIGHT
     local available = math.max(1, math.floor(width - 2 * PAD))
+    if control.Kind == "Input" and control.MultiLine then
+        local title = textHeight(control.Label, available, 18)
+        local description = control.DescriptionLabel.Text ~= "" and textHeight(control.DescriptionLabel, available, 16) or 0
+        local text = title + (description > 0 and 4 + description or 0)
+        local fieldHeight = math.clamp(control.FieldHeight or 112, 80, 240)
+        local fieldY = VERTICAL + text + STACK_GAP
+        return {
+            Stacked = true, Height = fieldY + fieldHeight + VERTICAL, TextWidth = available,
+            TitleHeight = title, DescriptionHeight = description, TitleY = VERTICAL,
+            DescriptionY = VERTICAL + title + 4,
+            ControlX = PAD, ControlY = fieldY, ControlWidth = available, ControlHeight = fieldHeight,
+        }
+    end
     local field = math.min(control.ControlWidth or widths[control.Kind], available)
     local caption = available - field - COLUMN_GAP
     local stacked = caption < 200 or (phone and control.Kind ~= "Toggle")

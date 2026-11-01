@@ -462,7 +462,7 @@ __factories["PropertyLayout"] = function(__require)
 local Fonts = __require("Fonts")
 local Layout = {}
 local PAD, VERTICAL, COLUMN_GAP, STACK_GAP, INPUT_HEIGHT = 16, 12, 24, 12, 36
-local widths = {Button = 144, Dropdown = 220, Toggle = 100, Slider = 96}
+local widths = {Button = 144, Dropdown = 220, Toggle = 100, Slider = 96, Input = 220}
 
 local function textHeight(label, width, minimum)
     local bounds = Fonts.bounds(label.Text, label.TextSize, label.FontFace, width - 1)
@@ -478,6 +478,19 @@ function Layout.measure(control, width)
     local phone = control.Section.Tab.Window.Mobile
     local inputHeight = phone and 44 or INPUT_HEIGHT
     local available = math.max(1, math.floor(width - 2 * PAD))
+    if control.Kind == "Input" and control.MultiLine then
+        local title = textHeight(control.Label, available, 18)
+        local description = control.DescriptionLabel.Text ~= "" and textHeight(control.DescriptionLabel, available, 16) or 0
+        local text = title + (description > 0 and 4 + description or 0)
+        local fieldHeight = math.clamp(control.FieldHeight or 112, 80, 240)
+        local fieldY = VERTICAL + text + STACK_GAP
+        return {
+            Stacked = true, Height = fieldY + fieldHeight + VERTICAL, TextWidth = available,
+            TitleHeight = title, DescriptionHeight = description, TitleY = VERTICAL,
+            DescriptionY = VERTICAL + title + 4,
+            ControlX = PAD, ControlY = fieldY, ControlWidth = available, ControlHeight = fieldHeight,
+        }
+    end
     local field = math.min(control.ControlWidth or widths[control.Kind], available)
     local caption = available - field - COLUMN_GAP
     local stacked = caption < 200 or (phone and control.Kind ~= "Toggle")
@@ -660,6 +673,7 @@ local Button = __require("controls/Button")
 local Toggle = __require("controls/Toggle")
 local Slider = __require("controls/Slider")
 local Dropdown = __require("controls/Dropdown")
+local Input = __require("controls/Input")
 local Section = {}
 Section.__index = Section
 
@@ -756,6 +770,7 @@ function Section:AddToggle(options) return Toggle.new(self, options or {}) end
 function Section:AddSlider(options) return Slider.new(self, options or {}) end
 function Section:AddDropdown(options) return Dropdown.new(self, options or {}) end
 function Section:AddImageDropdown(options) return Dropdown.new(self, options or {}) end
+function Section:AddInput(options) return Input.new(self, options or {}) end
 
 return Section
 end
@@ -776,13 +791,17 @@ function Tab.new(window, name, options)
     local index = #window.Tabs + 1
     local self = setmetatable({Name = tostring(name), Description = options.Description or Textos.descripcionPagina,
         Window = window, Sections = {}, Controls = {}}, Tab)
-    local button = UI.button(window.Navigation, tostring(name) .. "TabButton", "", 0, 0, 160, 42)
+    local group = window:GetNavigationGroup(options.Group)
+    group.Count += 1
+    self.NavigationGroup = group
+    self.NavigationLabel = options.NavigationLabel or name
+    local button = UI.button(group.Content, tostring(name) .. "TabButton", "", 0, 0, 160, 42)
     button.Size = UDim2.new(1, 0, 0, 42)
-    button.LayoutOrder = index
+    button.LayoutOrder = group.Count
     UI.corner(button, 6)
     self.Button = button
     self.Icon, self.IconParts = UI.icon(button, options.Icon, 14, 13, T.Secondary)
-    self.Label = UI.text(button, "Label", name, 40, 0, 85, 42, 14, T.Secondary, T.Medium)
+    self.Label = UI.text(button, "Label", self.NavigationLabel, 40, 0, 85, 42, 14, T.Secondary, T.Medium)
     self.Outline = UI.stroke(button, T.AccentSoft)
     self.Outline.Transparency, self.Outline.Enabled = 0.66, false
     self.Indicator = UI.frame(button, "Selected", 1, 14, 2, 14, T.Accent, 1)
@@ -837,8 +856,18 @@ function Tab:GetContentWidth()
     return math.max(1, math.floor(page * (1 - left.Scale - right.Scale) - left.Offset - right.Offset))
 end
 
+function Tab:SetNavigation(groupName, label)
+    local group = self.Window:GetNavigationGroup(groupName)
+    group.Count += 1
+    self.NavigationGroup = group
+    self.Button.Parent, self.Button.LayoutOrder = group.Content, group.Count
+    self.NavigationLabel = label or self.Name
+    self.Label.Text = self.NavigationLabel
+    return self
+end
+
 function Tab:Relayout()
-    local rowHeight = self.Window.Mobile and 48 or 46
+    local rowHeight = self.Window.Mobile and 48 or 42
     self.Button.Size = UDim2.new(1, 0, 0, rowHeight)
     self.Icon.Position = UDim2.fromOffset(14, (rowHeight - 16) / 2)
     self.Indicator.Position = UDim2.fromOffset(1, (rowHeight - 14) / 2)
@@ -899,8 +928,10 @@ local Textos = {
         Toggle = {nombre = "Interruptor", etiqueta = "INTERRUPTOR"},
         Slider = {nombre = "Deslizador", etiqueta = "DESLIZADOR"},
         Dropdown = {nombre = "Selector", etiqueta = "SELECTOR"},
+        Input = {nombre = "Campo de texto", etiqueta = "TEXTO"},
     },
-    interfaz = "INTERFAZ LUMI", biblioteca = "BIBLIOTECA", secciones = "SECCIONES",
+    interfaz = "INTERFAZ LUMI", biblioteca = "BIBLIOTECA", secciones = "SECCIONES", principal = "PRINCIPAL",
+    configuraciones = "Configuraciones", personaliza = "Personaliza Lumi", enLinea = "En línea",
     espacio = "Espacio", espacioMayus = "ESPACIO", inicio = "Inicio", sesionLocal = "SESIÓN LOCAL",
     descripcionPagina = "Un espacio para ajustar cada detalle.", controles = "CONTROLES", ajustes = "AJUSTES",
     listo = "Listo", detalles = "Detalles", ejecutar = "Ejecutar", completado = "Completado",
@@ -915,6 +946,9 @@ local Textos = {
     opcionActual = "OPCIÓN %02d / %02d", listaVacia = "LISTA VACÍA", unaOpcion = "UNA OPCIÓN",
     pistaVacia = "Esta lista no tiene opciones.", pistaOpcion = "Elige una opción de la lista.",
     elegirOpcion = "ELIGE UNA OPCIÓN", noHayOpciones = "No hay opciones",
+    placeholderTexto = "Escribe aquí…", texto = "TEXTO", soloLectura = "SOLO LECTURA",
+    pistaTexto = "Escribe para actualizar el texto.", pistaTextoMultilinea = "Escribe y desplázate por el texto.",
+    pistaSoloLectura = "Selecciona y copia el texto.", limiteTexto = "Hasta %d caracteres", sinLimiteTexto = "Sin límite",
 }
 
 function Textos.nombreTipo(tipo)
@@ -934,6 +968,11 @@ function Textos.cantidadOpciones(cantidad)
     return tostring(cantidad) .. (cantidad == 1 and " opción" or " opciones")
 end
 
+function Textos.cantidadCaracteres(cantidad)
+    if cantidad == 0 then return Textos.vacio end
+    return tostring(cantidad) .. (cantidad == 1 and " carácter" or " caracteres")
+end
+
 return Textos
 end
 
@@ -942,22 +981,22 @@ __factories["Theme"] = function(__require)
 local Fonts = __require("Fonts")
 
 return {
-    Shell = Color3.fromRGB(67, 51, 40),
-    Shadow = Color3.fromRGB(8, 6, 5),
-    Sidebar = Color3.fromRGB(64, 49, 38),
-    Workspace = Color3.fromRGB(70, 54, 42),
-    Surface = Color3.fromRGB(78, 60, 47),
-    Raised = Color3.fromRGB(87, 67, 52),
-    Hover = Color3.fromRGB(101, 79, 61),
-    Line = Color3.fromRGB(162, 128, 96),
-    SoftLine = Color3.fromRGB(113, 88, 67),
+    Shell = Color3.fromRGB(34, 33, 31),
+    Shadow = Color3.fromRGB(8, 7, 6),
+    Sidebar = Color3.fromRGB(30, 29, 27),
+    Workspace = Color3.fromRGB(35, 33, 31),
+    Surface = Color3.fromRGB(46, 42, 37),
+    Raised = Color3.fromRGB(59, 49, 41),
+    Hover = Color3.fromRGB(75, 60, 47),
+    Line = Color3.fromRGB(139, 112, 85),
+    SoftLine = Color3.fromRGB(78, 69, 57),
     Text = Color3.fromRGB(255, 247, 233),
     Secondary = Color3.fromRGB(241, 224, 204),
     Muted = Color3.fromRGB(221, 201, 178),
     Accent = Color3.fromRGB(247, 211, 170),
     AccentHover = Color3.fromRGB(255, 229, 195),
     AccentSoft = Color3.fromRGB(198, 159, 119),
-    AccentWash = Color3.fromRGB(102, 77, 56),
+    AccentWash = Color3.fromRGB(87, 65, 46),
     Ornament = Color3.fromRGB(188, 151, 113),
     Ink = Color3.fromRGB(51, 37, 27),
     Green = Color3.fromRGB(190, 198, 163),
@@ -1074,7 +1113,52 @@ function UI.icon(parent, style, x, y, color)
         local part = UI.frame(icon, name, px, py, width, height, color or T.Secondary, 1)
         table.insert(parts, part)
     end
-    if style == "Sliders" then
+    local function edge(x1, y1, x2, y2)
+        local dx, dy = x2 - x1, y2 - y1
+        local length = math.sqrt(dx * dx + dy * dy)
+        line("Line", (x1 + x2 - length) / 2, (y1 + y2) / 2 - .5, length, 1)
+        parts[#parts].Rotation = math.deg(math.atan2(dy, dx))
+    end
+    if style == "Search" then
+        local ring = UI.frame(icon, "Lens", 1, 1, 10, 10, nil, 999)
+        table.insert(parts, UI.stroke(ring, color or T.Secondary))
+        line("Handle", 10, 11, 6, 1)
+        parts[#parts].Rotation = 45
+    elseif style == "Home" then
+        line("RoofA", 1, 4, 9, 1); parts[#parts].Rotation = -40
+        line("RoofB", 7, 4, 9, 1); parts[#parts].Rotation = 40
+        line("WallA", 3, 7, 1, 8); line("WallB", 13, 7, 1, 8)
+        line("Floor", 3, 14, 11, 1); line("Door", 8, 10, 1, 4)
+    elseif style == "Settings" then
+        local ring = UI.frame(icon, "Gear", 3, 3, 10, 10, nil, 999)
+        table.insert(parts, UI.stroke(ring, color or T.Secondary))
+        for i = 0, 7 do
+            local angle = i * math.pi / 4
+            line("Tooth", 7 + math.cos(angle) * 6, 7 + math.sin(angle) * 6, 3, 1)
+            parts[#parts].Rotation = i * 45
+        end
+    elseif style == "User" then
+        table.insert(parts, UI.stroke(UI.frame(icon, "Head", 5, 0, 6, 6, nil, 999), color or T.Secondary))
+        table.insert(parts, UI.stroke(UI.frame(icon, "Body", 2, 10, 12, 5, nil, 4), color or T.Secondary))
+    elseif style == "Cube" then
+        edge(8, 1, 15, 5); edge(15, 5, 15, 12); edge(15, 12, 8, 16)
+        edge(8, 16, 1, 12); edge(1, 12, 1, 5); edge(1, 5, 8, 1)
+        edge(1, 5, 8, 9); edge(8, 9, 15, 5); edge(8, 9, 8, 16)
+    elseif style == "Stack" then
+        edge(8, 1, 15, 5); edge(15, 5, 8, 9); edge(8, 9, 1, 5); edge(1, 5, 8, 1)
+        edge(1, 9, 8, 13); edge(8, 13, 15, 9)
+        edge(1, 12, 8, 16); edge(8, 16, 15, 12)
+    elseif style == "Document" then
+        table.insert(parts, UI.stroke(UI.frame(icon, "Sheet", 2, 1, 12, 14, nil, 2), color or T.Secondary))
+        for y = 5, 11, 3 do line("Text", 5, y, 6, 1) end
+    elseif style == "Bookmark" then
+        edge(4, 1, 12, 1); edge(12, 1, 12, 15); edge(12, 15, 8, 12)
+        edge(8, 12, 4, 15); edge(4, 15, 4, 1)
+    elseif style == "Help" then
+        table.insert(parts, UI.stroke(UI.frame(icon, "Circle", 1, 1, 14, 14, nil, 999), color or T.Secondary))
+        edge(5, 5, 7, 4); edge(7, 4, 10, 5); edge(10, 5, 10, 7)
+        edge(10, 7, 8, 9); edge(8, 9, 8, 10); line("Dot", 7.5, 12, 1, 1)
+    elseif style == "Sliders" then
         for i, offset in ipairs({4, 10, 7}) do
             line("Track", 1, (i - 1) * 6 + 2, 14, 1)
             line("Handle", offset, (i - 1) * 6, 2, 5)
@@ -1138,6 +1222,9 @@ local Profile = __require("components/Profile")
 local Textos = __require("Textos")
 local BrandArt = __require("components/BrandArt")
 local Fonts = __require("Fonts")
+local Settings = __require("components/Settings")
+local Search = __require("components/Search")
+local Navigation = __require("components/Navigation")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
@@ -1167,7 +1254,7 @@ function Window.new(options)
     self.TopEdge = UI.frame(panel, "TopEdge", 12, 0, 840, 1, T.Secondary)
     self.TopEdge.BackgroundTransparency = 0.88
 
-    local sidebar = UI.frame(main, "Sidebar", 0, 0, 184, 660, T.Sidebar, 14)
+    local sidebar = UI.frame(main, "Sidebar", 0, 0, 228, 660, T.Sidebar, 14)
     self.Sidebar = sidebar
     sidebar.Active = true
     self.SidebarShadow = Shadow.new(sidebar, 14)
@@ -1178,14 +1265,17 @@ function Window.new(options)
     UI.mark(brandTile, 5, 5, 20)
     UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 32, 27, T.Text, T.Brand)
     UI.micro(sidebar, "BrandSub", Textos.interfaz, 21, 65, 145, 14)
-    UI.micro(sidebar, "Group", Textos.secciones, 22, 122, 140, 16)
+    UI.micro(sidebar, "Group", Textos.principal, 22, 115, 140, 16)
+    sidebar.Group.Visible = false
     self.Navigation = UI.new("ScrollingFrame", sidebar, {
         Name = "Navigation", Position = UDim2.fromOffset(12, 153), Size = UDim2.new(1, -24, 1, -258),
         ScrollBarThickness = 2, ScrollBarImageColor3 = T.Muted, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
     })
-    UI.list(self.Navigation, 5)
+    self.NavigationUI = Navigation.new(self)
+    self.NavigationGroups = self.NavigationUI.Groups
     self.Profile = Profile.new(self, options)
     self.SidebarFooter = self.Profile.Frame
+    self.Settings = Settings.new(self)
     local navClose = UI.button(sidebar, "CloseNavigation", "", 0, 6, 44, 44)
     UI.frame(navClose, "A", 16, 21, 12, 1, T.Secondary).Rotation = 45
     UI.frame(navClose, "B", 16, 21, 12, 1, T.Secondary).Rotation = -45
@@ -1196,6 +1286,16 @@ function Window.new(options)
     self.Chrome = chrome
     local drag = UI.button(chrome, "TitleDrag", "", 0, 0, 862, 48)
     self.Breadcrumb = UI.text(drag, "Breadcrumb", Textos.espacio .. " / " .. Textos.inicio, 26, 0, 400, 48, 13, T.Secondary, T.Medium)
+    local home = UI.button(chrome, "Home", "", 14, 7, 30, 30)
+    home.ZIndex = 2
+    UI.corner(home, 5)
+    UI.icon(home, "Home", 7, 7, T.Secondary)
+    UI.hover(rt, home, T.Shell, T.Hover)
+    rt:Connect(home.Activated, function() self:GoHome() end)
+    self.HomeButton = home
+    UI.chevron(drag, 49, 20, T.Muted)
+    drag.ChevronA.Rotation, drag.ChevronB.Rotation = 45, -45
+    drag.ChevronB.Position = UDim2.fromOffset(49, 24)
     local close = UI.button(chrome, "Close", "", 872, 9, 30, 30)
     UI.corner(close, 5)
     local ca = UI.frame(close, "CloseA", 9, 14, 12, 1, T.Secondary)
@@ -1215,6 +1315,7 @@ function Window.new(options)
     self.MenuButton = menu
     rt:Connect(menu.Activated, function() self:ToggleNavigation() end)
     UI.line(chrome, 0, 47, 916)
+    self.Search = Search.new(self)
 
     self.Workspace = UI.frame(panel, "Workspace", 184, 48, 680, 584, T.Workspace)
     self.Workspace.BackgroundTransparency = 1
@@ -1225,7 +1326,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.16", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.18", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -1302,9 +1403,9 @@ function Window:Fit()
     local verticalMargin = self.Mobile and self.SafeTop + 8 or 32
     self.Height = math.max(280, math.min(self.Mobile and 768 or PREFERRED_HEIGHT, size.Y - verticalMargin))
     if not self.Mobile then self.NavigationOpen = false end
-    self.SidebarWidth = self.Mobile and self.Width or 184
+    self.SidebarWidth = self.Mobile and self.Width or 228
     local sideWidth = self.SidebarWidth
-    self.Inspector.Visible = not compact and not self.Mobile
+    self.Inspector.Visible = not compact and not self.Mobile and self.Preferences.Inspector
     self.PanelWidth = self.Width - (self.Inspector.Visible and INSPECTOR_WIDTH + PANEL_GAP or 0)
     self.ContentX = self.Mobile and 0 or sideWidth + PANEL_GAP
     self.Main.Size = UDim2.fromOffset(self.Width, self.Height)
@@ -1318,32 +1419,38 @@ function Window:Fit()
     self.Sidebar.BrandSub.Size = UDim2.fromOffset(sideWidth - 40, 14)
     self.Sidebar.BrandSub.Text = Fonts.tracked(sideWidth < 170 and Textos.biblioteca or Textos.interfaz)
     local short = self.Height < 480
-    local navTop = short and 112 or 169
+    local navTop = short and 88 or 106
     self.Sidebar.BrandSub.Position = UDim2.fromOffset(21, short and 60 or 65)
     self.Sidebar.BrandWaves.Visible = not short
-    self.Sidebar.Group.Position = UDim2.fromOffset(22, short and 89 or 138)
+    self.Sidebar.Group.Position = UDim2.fromOffset(22, short and 84 or 115)
     self.Navigation.Position = UDim2.fromOffset(12, navTop)
-    self.Navigation.Size = UDim2.new(1, -24, 1, -(navTop + (short and 80 or 105)))
-    self.Profile:Fit(sideWidth - 40, short)
+    local footerHeight = self.Settings:Fit(sideWidth, short)
+    self.Navigation.Size = UDim2.new(1, -24, 1, -(navTop + footerHeight))
     self.NavigationCloseButton.Position = UDim2.fromOffset(sideWidth - 52, 6)
     self.NavigationCloseButton.Visible = self.Mobile
     self.MenuButton.Visible = self.Mobile
     local chromeWidth = self.Panel.Size.X.Offset
-    local chromeHeight = self.Mobile and 56 or 48
+    local chromeHeight = self.Mobile and 56 or 44
     local buttonSize = self.Mobile and 44 or 30
     self.Chrome.Position = UDim2.fromOffset(0, 0)
     self.Chrome.Size = UDim2.fromOffset(chromeWidth, chromeHeight)
-    self.CloseButton.Position = UDim2.fromOffset(chromeWidth - (self.Mobile and 48 or 44), self.Mobile and 6 or 9)
-    self.MinimizeButton.Position = UDim2.fromOffset(chromeWidth - (self.Mobile and 96 or 80), self.Mobile and 6 or 9)
+    self.CloseButton.Position = UDim2.fromOffset(chromeWidth - (self.Mobile and 48 or 44), self.Mobile and 6 or 7)
+    self.MinimizeButton.Position = UDim2.fromOffset(chromeWidth - (self.Mobile and 96 or 80), self.Mobile and 6 or 7)
     self.CloseButton.Size = UDim2.fromOffset(buttonSize, buttonSize)
     self.MinimizeButton.Size = UDim2.fromOffset(buttonSize, buttonSize)
     self.CloseButton.CloseA.Position = UDim2.fromOffset((buttonSize - 12) / 2, buttonSize / 2 - 1)
     self.CloseButton.CloseB.Position = self.CloseButton.CloseA.Position
     self.MinimizeButton.Dash.Position = UDim2.fromOffset((buttonSize - 12) / 2, buttonSize / 2)
-    self.Chrome.TitleDrag.Position = UDim2.fromOffset(self.Mobile and 56 or 0, 0)
-    self.Chrome.TitleDrag.Size = UDim2.fromOffset(math.max(1, chromeWidth - (self.Mobile and 160 or 90)), chromeHeight)
-    self.Breadcrumb.Position = UDim2.fromOffset(self.Mobile and 8 or 26, 0)
-    self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, chromeWidth - (self.Mobile and 168 or 116)), chromeHeight)
+    local searchX = self.Search:Fit(chromeWidth, chromeHeight, self.Mobile)
+    local dragX = self.Mobile and 56 or 0
+    local dragWidth = math.max(1, searchX - dragX - 8)
+    self.Chrome.TitleDrag.Position = UDim2.fromOffset(dragX, 0)
+    self.Chrome.TitleDrag.Size = UDim2.fromOffset(dragWidth, chromeHeight)
+    self.HomeButton.Visible = not self.Mobile
+    self.Chrome.TitleDrag.ChevronA.Visible = not self.Mobile
+    self.Chrome.TitleDrag.ChevronB.Visible = not self.Mobile
+    self.Breadcrumb.Position = UDim2.fromOffset(self.Mobile and 8 or 64, 0)
+    self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, dragWidth - (self.Mobile and 12 or 76)), chromeHeight)
     self.Workspace.Position = UDim2.fromOffset(0, chromeHeight)
     self.Workspace.Size = UDim2.fromOffset(chromeWidth, self.Height - chromeHeight - (self.Mobile and 0 or 28))
     self.Inspector.Position = UDim2.fromOffset(self.PanelWidth + PANEL_GAP, 0)
@@ -1461,6 +1568,23 @@ function Window:AddTab(name, options)
     return Tab.new(self, name, options or {})
 end
 
+function Window:OpenSettings() return self.Settings:Open() end
+
+function Window:GetNavigationGroup(name) return self.NavigationUI:GetGroup(name) end
+
+function Window:ShowSettingsInNavigation(group, label) return self.Settings:ShowNavigation(group, label) end
+
+function Window:OpenProfile() return self.Profile:Open() end
+
+function Window:SetPreference(name, value) return self.Settings:Set(name, value) end
+
+function Window:GoHome()
+    for _, tab in ipairs(self.Tabs) do
+        if tab ~= self.Settings.Tab and tab ~= self.Profile.Tab then self:SelectTab(tab); return tab end
+    end
+    return self.Settings.Tab
+end
+
 function Window:SelectTab(tab)
     if self._destroyed or self._closing or not table.find(self.Tabs, tab) then return end
     self:ToggleNavigation(false)
@@ -1470,6 +1594,7 @@ function Window:SelectTab(tab)
     if self.ActiveTab == tab then return end
     local previous = self.ActiveTab
     self.ActiveTab = tab
+    self.Settings:SyncSelection(tab)
     tab:Relayout()
     for _, item in ipairs(self.Tabs) do
         item.Motion:Finish()
@@ -1486,6 +1611,7 @@ function Window:SelectTab(tab)
         tab.Motion:Fade(0.35, 0, Motion.Time.Page)
     end
     self.Breadcrumb.Text = Textos.espacio .. " / " .. tab.Name
+    self.NavigationUI:Reveal(tab)
     if self.SelectedControl and self.SelectedControl.FocusIndicator then
         self.SelectedControl.FocusIndicator.Visible = false
         self.SelectedControl.SelectionWash.Visible = false
@@ -1520,6 +1646,7 @@ function Window:ToggleNavigation(open)
     self:FinishEntrance(); self:EndPointer(); self:ClosePopup(); self:ReleaseInput()
     self.NavigationOpen = open == true
     self.Sidebar.Visible, self.Panel.Visible = self.NavigationOpen, not self.NavigationOpen
+    if self.NavigationOpen then self.NavigationUI:Reveal(self.ActiveTab) end
     return true
 end
 
@@ -1562,9 +1689,10 @@ local Art = {}
 local function picture(runtime, parent, source, transparency)
     local image = UI.new("ImageLabel", parent, {
         Name = "ArtworkImage", Image = "", Size = UDim2.fromScale(1, 1),
-        ScaleType = Enum.ScaleType.Fit, ImageTransparency = transparency,
+        ScaleType = Enum.ScaleType.Fit, ImageTransparency = 1 - (1 - transparency) * (runtime.Decoration or 1),
         Active = false, Selectable = false,
     })
+    image:SetAttribute("LumiArtworkOpacity", 1 - transparency)
     -- Use the existing cancellable cache/loader. Failed art stays transparent;
     -- no placeholder icon or error message is drawn over the workspace.
     Images.Bind(runtime, image, source)
@@ -1727,6 +1855,11 @@ function Inspector:Update(control)
     if type(value) == "boolean" then shown = value and Textos.activado or Textos.desactivado end
     if type(value) == "number" then shown = (control.Format and control:Format(value) or UI.format(value)) .. (control.Suffix or "") end
     if control.GetLabel and value ~= nil then shown = control:GetLabel() end
+    if control.Kind == "Input" then
+        local count = 0
+        for _ in utf8.graphemes(tostring(value or "")) do count += 1 end
+        shown = Textos.cantidadCaracteres(count)
+    end
     window.DetailTitle.Text, window.DetailDescription.Text = control.Name, control.Description or ""
     window.DetailKind.Text = Textos.etiquetaTipo(control.Kind)
     self:SetValue(shown)
@@ -1777,6 +1910,10 @@ function Inspector:Update(control)
             end
         end
         self.Hint.Text = count == 0 and Textos.pistaVacia or Textos.pistaOpcion
+    elseif control.Kind == "Input" then
+        self.Meta.Text = control.ReadOnly and Textos.soloLectura or Textos.texto
+        self.Hint.Text = control.ReadOnly and Textos.pistaSoloLectura
+            or (control.MultiLine and Textos.pistaTextoMultilinea or Textos.pistaTexto)
     else
         self.Meta.Text = Textos.alPulsar
         self.Hint.Text = Textos.pistaAccion
@@ -1786,11 +1923,74 @@ end
 return Inspector
 end
 
+__factories["components/Navigation"] = function(__require)
+-- src/components/Navigation.luau
+local UI = __require("UI")
+local T = __require("Theme")
+local Navigation = {}
+Navigation.__index = Navigation
+local names = {PRINCIPAL = "Principal", ESPACIO = "Espacio", HERRAMIENTAS = "Herramientas"}
+
+function Navigation.new(window)
+    local self = setmetatable({Window = window, Groups = {}, Order = {}}, Navigation)
+    UI.list(window.Navigation, 0)
+    self:GetGroup("Principal")
+    return self
+end
+
+function Navigation:GetGroup(name)
+    name = tostring(name or "Principal")
+    name = names[string.upper(name)] or name
+    if self.Groups[name] then return self.Groups[name] end
+    local first = #self.Order == 0
+    local frame = UI.frame(self.Window.Navigation, name .. "Group", 0, 0, 0, 0)
+    frame.Size, frame.AutomaticSize = UDim2.new(1, 0, 0, 0), Enum.AutomaticSize.Y
+    frame.LayoutOrder = #self.Order + 1
+    UI.list(frame, 0)
+    local header = UI.frame(frame, "Heading", 0, 0, 0, first and 24 or 42)
+    header.Size = UDim2.new(1, 0, 0, first and 24 or 42)
+    header.LayoutOrder = 0
+    local divider = UI.line(header, 8, 4, 0, T.SoftLine)
+    divider.Size, divider.Visible = UDim2.new(1, -16, 0, 1), not first
+    divider.BackgroundTransparency = .2
+    local label = UI.micro(header, "Label", string.upper(name), 10, first and 2 or 20, 180, 16, 10)
+    label.Size = UDim2.new(1, -20, 0, 16)
+    local content = UI.frame(frame, "Pages", 0, 0, 0, 0)
+    content.Size, content.AutomaticSize = UDim2.new(1, 0, 0, 0), Enum.AutomaticSize.Y
+    content.LayoutOrder = 1
+    UI.list(content, 4)
+    local group = {Name = name, Frame = frame, Content = content, Label = label, Divider = divider, Count = 0}
+    self.Groups[name] = group
+    table.insert(self.Order, group)
+    return group
+end
+
+function Navigation:Reveal(tab)
+    local w = self.Window
+    if not tab or not tab.Button.Visible or not w.Sidebar.Visible then return end
+    w.Runtime:Delay(0, function()
+        if w.ActiveTab ~= tab or not tab.Button.Parent or not w.Sidebar.Visible then return end
+        local page, button = w.Navigation, tab.Button
+        local scale = w.Scale
+        local top = (button.AbsolutePosition.Y - page.AbsolutePosition.Y) / scale + page.CanvasPosition.Y
+        local height = page.AbsoluteSize.Y / scale
+        local bottom = top + button.AbsoluteSize.Y / scale
+        local y = page.CanvasPosition.Y
+        if top < y then y = top elseif bottom > y + height then y = bottom - height end
+        page:ResetScrollVelocity()
+        page.CanvasPosition = Vector2.new(0, math.clamp(y, 0, math.max(0, page.AbsoluteCanvasSize.Y / scale - height)))
+    end)
+end
+
+return Navigation
+end
+
 __factories["components/Profile"] = function(__require)
 -- src/components/Profile.luau
 local Players = game:GetService("Players")
 local UI = __require("UI")
 local T = __require("Theme")
+local Textos = __require("Textos")
 local Profile = {}
 Profile.__index = Profile
 
@@ -1828,9 +2028,13 @@ function Profile.new(window, options)
     local last = displayName:match("%s(%S+)$")
     local initials = initial(first) .. (last and initial(last) or "")
 
-    local frame = UI.frame(window.Sidebar, "SidebarFooter", 20, 0, 144, 76)
+    local frame = UI.button(window.Sidebar, "SidebarFooter", "", 12, 0, 204, 60)
+    frame.BackgroundColor3, frame.BackgroundTransparency = T.Surface, .18
+    UI.corner(frame, 9)
+    UI.stroke(frame, T.SoftLine)
     frame.ClipsDescendants = true
     local rule = UI.line(frame, 0, 0, 144)
+    rule.Visible = false
     local avatar = UI.new("ImageLabel", frame, {
         Name = "Avatar", Image = "", Size = UDim2.fromOffset(34, 34),
         BackgroundColor3 = T.Raised, BackgroundTransparency = 0,
@@ -1843,12 +2047,19 @@ function Profile.new(window, options)
     placeholder.ZIndex = avatar.ZIndex + 1
     local nameLabel = UI.text(frame, "DisplayName", displayName, 44, 20, 100, 18, 12, T.Text, T.Medium)
     local userLabel = UI.text(frame, "Username", "@" .. username, 44, 38, 100, 16, 11, T.Muted)
+    local status = UI.text(frame, "Status", Textos.enLinea, 58, 30, 80, 15, 10, T.Muted)
+    local dot = UI.frame(frame, "StatusDot", 48, 35, 4, 4, T.Green, 999)
+    UI.chevron(frame, 184, 28, T.Secondary)
+    frame.ChevronA.Rotation, frame.ChevronB.Rotation = 45, -45
     local self = setmetatable({
         Window = window, Runtime = rt, Frame = frame, Avatar = avatar,
         NameLabel = nameLabel, UserLabel = userLabel,
+        Status = status, StatusDot = dot,
         _rule = rule, _placeholder = placeholder, _destroyed = false,
         _distinctUsername = string.lower(displayName) ~= string.lower(username),
     }, Profile)
+    UI.hover(rt, frame, T.Surface, T.Hover)
+    rt:Connect(frame.Activated, function() self:Open() end)
 
     rt:Connect(frame.Destroying, function() self._destroyed = true end)
     rt:Connect(avatar.Destroying, function() self._destroyed = true end)
@@ -1883,24 +2094,24 @@ function Profile.new(window, options)
     return self
 end
 
--- width es el ancho del pie: SidebarWidth - 40 (144 o 100).
-function Profile:Fit(width, short)
+-- width es el ancho de la tarjeta; bottom reserva el acceso inferior.
+function Profile:Fit(width, short, bottom)
     if not alive(self) then return end
     width = math.max(0, math.floor(UI.number(width, self.Frame.Size.X.Offset)))
-    local height = short and 56 or 76
+    local height = short and 50 or 60
     local compact = short or width < 124
     local avatarSize = compact and 32 or 34
     local gap = compact and 8 or 10
-    local avatarY = short and 12 or 20
-    local textX = avatarSize + gap
-    local textWidth = math.max(0, width - textX)
+    local avatarY = math.floor((height - avatarSize) / 2)
+    local textX = 8 + avatarSize + gap
+    local textWidth = math.max(0, width - textX - 28)
     local showUser = self._distinctUsername and not short and textWidth >= 80
-    local nameY = avatarY + math.floor((avatarSize - (showUser and 34 or 18)) / 2)
+    local nameY = avatarY + math.floor((avatarSize - 34) / 2)
 
-    self.Frame.Position = UDim2.new(0, 20, 1, -(height + (short and 13 or 19)))
+    self.Frame.Position = UDim2.new(0, 12, 1, -(height + (bottom or 12)))
     self.Frame.Size = UDim2.fromOffset(width, height)
     self._rule.Size = UDim2.fromOffset(width, 1)
-    self.Avatar.Position = UDim2.fromOffset(0, avatarY)
+    self.Avatar.Position = UDim2.fromOffset(8, avatarY)
     self.Avatar.Size = UDim2.fromOffset(avatarSize, avatarSize)
     self.Avatar.Visible = width >= avatarSize
     self._placeholder.Size = UDim2.fromOffset(avatarSize, avatarSize)
@@ -1910,9 +2121,463 @@ function Profile:Fit(width, short)
     self.UserLabel.Position = UDim2.fromOffset(textX, nameY + 18)
     self.UserLabel.Size = UDim2.fromOffset(textWidth, 16)
     self.UserLabel.Visible = showUser
+    self.Status.Position = UDim2.fromOffset(textX + 9, nameY + 19)
+    self.Status.Size = UDim2.fromOffset(math.max(0, textWidth - 9), 15)
+    self.Status.Visible = not showUser and textWidth >= 50
+    self.StatusDot.Position = UDim2.fromOffset(textX, nameY + 25)
+    self.StatusDot.Visible = self.Status.Visible
+    self.Frame.ChevronA.Position = UDim2.fromOffset(width - 20, height / 2 - 2)
+    self.Frame.ChevronB.Position = UDim2.fromOffset(width - 20, height / 2 + 2)
+end
+
+function Profile:Open()
+    local w = self.Window
+    if not alive(self) or w._closing or w.Minimized then return nil end
+    if not self.Tab then
+        self.Tab = w:AddTab("Perfil", {Icon = "User", Description = self.UserLabel.Text, Eyebrow = "TU CUENTA / LUMI"})
+        self.Tab.Button.Visible = false
+        local group = self.Tab:AddSection("Cuenta de Roblox", {Tag = "PERFIL LOCAL"})
+        group:AddInput({Name = "Nombre de visualización", Default = self.NameLabel.Text, ReadOnly = true})
+        group:AddInput({Name = "Nombre de usuario", Default = self.UserLabel.Text, ReadOnly = true})
+        group:AddInput({Name = "Estado", Default = Textos.enLinea, ReadOnly = true})
+    end
+    w:SelectTab(self.Tab)
+    return self.Tab
 end
 
 return Profile
+end
+
+__factories["components/Search"] = function(__require)
+-- src/components/Search.luau
+local UI = __require("UI")
+local T = __require("Theme")
+local Runtime = __require("Runtime")
+local Motion = __require("Motion")
+local Input = game:GetService("UserInputService")
+local Search = {}
+Search.__index = Search
+local liveSearches = {}
+
+local accents = {
+    ["á"] = "a", ["Á"] = "a", ["é"] = "e", ["É"] = "e",
+    ["í"] = "i", ["Í"] = "i", ["ó"] = "o", ["Ó"] = "o",
+    ["ú"] = "u", ["Ú"] = "u", ["ü"] = "u", ["Ü"] = "u",
+    ["ñ"] = "n", ["Ñ"] = "n",
+    ["\204\129"] = "", ["\204\136"] = "", ["\204\131"] = "",
+}
+
+local function normalize(value)
+    local text = tostring(value or ""):gsub("[\194-\244][\128-\191]*", accents):lower()
+    return (text:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function expanded(window)
+    return not window.Runtime.Destroyed and not window._destroyed and not window._closing
+        and not window.Minimized and window.Panel.Visible
+        and (not window.Presentation or window.Presentation.State == "expanded")
+end
+
+local function reveal(window, tab, control)
+    if window.Runtime.Destroyed or window._closing or window.ActiveTab ~= tab then return end
+    local page, row = tab.Page, control.Row
+    if not page.Parent or not row.Parent then return end
+    local scale = window.Scale
+    local height = page.AbsoluteWindowSize.Y / scale
+    if height <= 0 then return end
+    local top = (row.AbsolutePosition.Y - page.AbsolutePosition.Y) / scale + page.CanvasPosition.Y
+    local bottom = top + row.AbsoluteSize.Y / scale
+    local position = page.CanvasPosition.Y
+    if top < position or bottom - top > height then position = top - 8
+    elseif bottom > position + height then position = bottom - height + 8 end
+    local limit = math.max(0, page.AbsoluteCanvasSize.Y / scale - height)
+    page.CanvasPosition = Vector2.new(page.CanvasPosition.X, math.clamp(position, 0, limit))
+end
+
+function Search.new(window)
+    local self = setmetatable({Window = window}, Search)
+    table.insert(liveSearches, self)
+    window.Runtime:OnCleanup(function()
+        local index = table.find(liveSearches, self)
+        if index then table.remove(liveSearches, index) end
+    end)
+    local button = UI.button(window.Chrome, "Search", "", 0, 0, 220, 28)
+    button.BackgroundTransparency, button.BackgroundColor3 = 0, T.Surface
+    UI.corner(button, 6)
+    UI.stroke(button, T.SoftLine)
+    self.Button = button
+    self.Icon = UI.icon(button, "Search", 10, 6, T.Muted)
+    self.Label = UI.text(button, "Label", "Buscar en Lumi...", 34, 0, 128, 28, 11, T.Muted)
+    self.Hint = UI.text(button, "Shortcut", "Ctrl K", 170, 0, 42, 28, 9, T.Muted, T.Mono)
+    self.Hint.TextXAlignment = Enum.TextXAlignment.Center
+    UI.hover(window.Runtime, button, T.Surface, T.Raised)
+    window.Runtime:Connect(button.Activated, function()
+        if window.PopupOwner == self then self:Close(true) else self:Open() end
+    end)
+    window.Runtime:Connect(Input.InputBegan, function(input)
+        if input.KeyCode ~= Enum.KeyCode.K then return end
+        if not Input:IsKeyDown(Enum.KeyCode.LeftControl) and not Input:IsKeyDown(Enum.KeyCode.RightControl) then return end
+        local focused = Input:GetFocusedTextBox()
+        if focused and not focused:IsDescendantOf(window.Root) then return end
+        if not focused then
+            local target
+            for index = #liveSearches, 1, -1 do
+                if expanded(liveSearches[index].Window) then target = liveSearches[index]; break end
+            end
+            if target ~= self then return end
+        end
+        self:Open()
+    end)
+    return self
+end
+
+function Search:Fit(width, height, mobile)
+    local full = not mobile and width >= 560
+    local size = mobile and 44 or (full and 28 or 30)
+    local left = width - (mobile and 144 or (full and 316 or 116))
+    self.Button.Position = UDim2.fromOffset(left, mobile and 6 or (height - size) / 2)
+    self.Button.Size = UDim2.fromOffset(full and 220 or size, size)
+    self.Icon.Position = UDim2.fromOffset(full and 10 or (size - 16) / 2, (size - 16) / 2)
+    self.Label.Visible, self.Hint.Visible = full, full
+    self.Label.Size = UDim2.new(1, -92, 1, 0)
+    self.Hint.Position, self.Hint.Size = UDim2.new(1, -50, 0, 0), UDim2.new(0, 42, 1, 0)
+    return left
+end
+
+function Search:Find(query)
+    local needle, results = normalize(query), {}
+    local function matches(text)
+        return needle == "" or normalize(text):find(needle, 1, true) ~= nil
+    end
+    for _, tab in ipairs(self.Window.Tabs) do
+        if matches(tab.Name .. " " .. tostring(tab.NavigationLabel or "") .. " " .. tostring(tab.Description or "")) then
+            table.insert(results, {Tab = tab, Label = tab.Name, Description = tostring(tab.Description or "")})
+        end
+        if needle ~= "" then
+            for _, control in ipairs(tab.Controls) do
+                local section = control.Section and control.Section.Name or ""
+                local description = tostring(control.Description or "")
+                if matches(control.Name .. " " .. description .. " " .. section .. " " .. tab.Name) then
+                    local context = tab.Name .. (section ~= "" and " / " .. section or "")
+                    table.insert(results, {Tab = tab, Control = control, Label = control.Name,
+                        Description = context .. (description ~= "" and " · " .. description or "")})
+                end
+            end
+        end
+    end
+    if not (self.Window.Settings and self.Window.Settings.Tab) then
+        local description = "Ajustes de la interfaz de Lumi."
+        if matches("Configuraciones " .. description) then
+            table.insert(results, {Settings = true, Label = "Configuraciones", Description = description})
+        end
+    end
+    return results
+end
+
+function Search:Close(animated)
+    local window = self.Window
+    if window.PopupOwner ~= self then return end
+    local focused = Input:GetFocusedTextBox()
+    if focused and focused:IsDescendantOf(window.OpenDropdown) then focused:ReleaseFocus(false) end
+    window:ClosePopup(animated)
+end
+
+function Search:Choose(entry)
+    local window = self.Window
+    if window.Runtime.Destroyed or window._destroyed or window._closing or type(entry) ~= "table" then return end
+    if entry.Settings then
+        self:Close()
+        window:OpenSettings()
+        return
+    end
+    local tab, control = entry.Tab, entry.Control
+    if not table.find(window.Tabs, tab) then return end
+    if control and not table.find(tab.Controls, control) then return end
+    self:Close()
+    window:SelectTab(tab)
+    if control then
+        control:Focus()
+        window.Runtime:Delay(0, function() reveal(window, tab, control) end)
+    end
+end
+
+function Search:Open(initialQuery)
+    local window = self.Window
+    if not expanded(window) then return end
+    if window.PopupOwner == self and window.OpenDropdown then
+        local query = window.OpenDropdown:FindFirstChild("Query")
+        if query then
+            if initialQuery ~= nil then query.Text = tostring(initialQuery) end
+            query:CaptureFocus()
+            query.CursorPosition = #query.Text + 1
+            return window.OpenDropdown
+        end
+    end
+    window:FinishEntrance()
+    window:ClosePopup()
+    local width = math.min(420, window.Panel.Size.X.Offset - 16)
+    local y = (window.ChromeHeight or window.Chrome.Size.Y.Offset) + 6
+    local height = math.min(350, window.Height - y - 12)
+    if width <= 0 or height <= 0 then return end
+    local relative = (self.Button.AbsolutePosition - window.Main.AbsolutePosition) / window.Scale
+    local x = math.clamp(relative.X, window.ContentX + 8, window.PanelWidth - width - 8)
+    local popupRuntime = Runtime.new()
+    popupRuntime.Animations = window.Runtime.Animations
+    local menu = UI.frame(window.Main, "SearchPopover", x, y, width, height, T.Raised, 7)
+    menu.ZIndex = 101
+    UI.stroke(menu, T.Line)
+    local motion = Motion.new(popupRuntime, menu)
+    local queryHeight = window.Mobile and 44 or 36
+    local query = UI.new("TextBox", menu, {Name = "Query", Position = UDim2.fromOffset(10, 8),
+        Size = UDim2.new(1, -20, 0, queryHeight), BackgroundColor3 = T.Surface, BackgroundTransparency = 0,
+        Text = tostring(initialQuery or ""), PlaceholderText = "Buscar en Lumi...", PlaceholderColor3 = T.Muted,
+        TextColor3 = T.Text, Font = T.Font, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left,
+        ClearTextOnFocus = false, MultiLine = false, ZIndex = 102})
+    UI.corner(query, 5)
+    UI.stroke(query, T.SoftLine)
+    UI.new("UIPadding", query, {PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10)})
+    local resultTop = queryHeight + 16
+    local scroller = UI.new("ScrollingFrame", menu, {Name = "Results", Position = UDim2.fromOffset(6, resultTop),
+        Size = UDim2.new(1, -12, 1, -(resultTop + 6)), CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 2,
+        ScrollBarImageColor3 = T.Muted, ZIndex = 102})
+    UI.list(scroller, 2)
+    local empty = UI.text(scroller, "Empty", "No se encontraron resultados.", 10, 0, width - 32, 44, 12, T.Muted)
+    empty.Size = UDim2.new(1, -20, 0, 44)
+    empty.TextWrapped = true
+    local results, items, selected = {}, {}, 1
+    local rowHeight = window.Mobile and 56 or 48
+    local function ownsPopup()
+        return not popupRuntime.Destroyed and window.PopupOwner == self and window.OpenDropdown == menu
+    end
+    local function releaseFocus()
+        if Input:GetFocusedTextBox() == query then query:ReleaseFocus(false) end
+    end
+    window.OpenDropdown, window.PopupOwner = menu, self
+    window.Blocker.Visible = true
+    window._popupMotion = motion
+    window._popupCleanup = function() popupRuntime:Destroy() end
+    popupRuntime:OnCleanup(releaseFocus)
+    popupRuntime:Connect(menu.Destroying, releaseFocus)
+
+    local function highlight(scroll)
+        for index, item in ipairs(items) do
+            item.Mark.Visible = index == selected and index <= #results
+            item.Label.TextColor3 = index == selected and T.Accent or T.Text
+        end
+        if scroll and #results > 0 then
+            local viewport = scroller.AbsoluteWindowSize.Y / window.Scale
+            local top = (selected - 1) * (rowHeight + 2)
+            local position = scroller.CanvasPosition.Y
+            if top < position then position = top
+            elseif top + rowHeight > position + viewport then position = top + rowHeight - viewport end
+            scroller.CanvasPosition = Vector2.new(0, math.max(0, position))
+        end
+    end
+    local function update()
+        if not ownsPopup() then return end
+        motion:Finish()
+        results = self:Find(query.Text)
+        while #results > 60 do table.remove(results) end
+        selected = 1
+        empty.Visible = #results == 0
+        scroller.CanvasPosition = Vector2.zero
+        for index, entry in ipairs(results) do
+            local item = items[index]
+            if not item then
+                local button = UI.button(scroller, "Result" .. index, "", 0, 0, 0, rowHeight)
+                button.Size, button.LayoutOrder = UDim2.new(1, -3, 0, rowHeight), index
+                button.BackgroundColor3, button.BackgroundTransparency, button.ZIndex = T.Raised, 0, 103
+                UI.corner(button, 4)
+                local mark = UI.frame(button, "Selected", 2, 10, 2, rowHeight - 20, T.Accent, 1)
+                local label = UI.text(button, "Label", "", 10, 4, width - 44, 21, 13, T.Text)
+                label.Size = UDim2.new(1, -20, 0, 21)
+                local description = UI.text(button, "Description", "", 10, 26, width - 44, rowHeight - 28, 10, T.Muted)
+                description.Size = UDim2.new(1, -20, 0, rowHeight - 28)
+                item = {Button = button, Label = label, Description = description, Mark = mark}
+                items[index] = item
+                UI.hover(popupRuntime, button, T.Raised, T.Hover)
+                popupRuntime:Connect(button.Activated, function()
+                    if ownsPopup() and results[index] then self:Choose(results[index]) end
+                end)
+            end
+            item.Button.Visible = true
+            item.Label.Text, item.Description.Text = entry.Label, entry.Description
+        end
+        for index = #results + 1, #items do items[index].Button.Visible = false end
+        highlight(false)
+    end
+    popupRuntime:Connect(query:GetPropertyChangedSignal("Text"), update)
+    popupRuntime:Connect(query.FocusLost, function(enterPressed)
+        if enterPressed and ownsPopup() and results[selected] then self:Choose(results[selected]) end
+    end)
+    popupRuntime:Connect(Input.InputBegan, function(input)
+        if not ownsPopup() or Input:GetFocusedTextBox() ~= query then return end
+        if input.KeyCode == Enum.KeyCode.Up or input.KeyCode == Enum.KeyCode.Down then
+            if #results == 0 then return end
+            selected = math.clamp(selected + (input.KeyCode == Enum.KeyCode.Up and -1 or 1), 1, #results)
+            highlight(true)
+        elseif input.KeyCode == Enum.KeyCode.Return or input.KeyCode == Enum.KeyCode.KeypadEnter then
+            if results[selected] then self:Choose(results[selected]) end
+        end
+    end)
+    update()
+    menu.Position = UDim2.fromOffset(x, y + 4)
+    popupRuntime:Tween(menu, {Position = UDim2.fromOffset(x, y)}, Motion.Time.Menu, "position")
+    motion:Fade(0.45, 0, Motion.Time.Menu)
+    query:CaptureFocus()
+    query.CursorPosition = #query.Text + 1
+    return menu
+end
+
+return Search
+end
+
+__factories["components/Settings"] = function(__require)
+-- src/components/Settings.luau
+local UI = __require("UI")
+local T = __require("Theme")
+local Textos = __require("Textos")
+local Settings = {}
+Settings.__index = Settings
+
+function Settings.new(window)
+    local self = setmetatable({Window = window, Controls = {}}, Settings)
+    self.Defaults = {Animations = window.Runtime.Animations, Inspector = true, Decoration = 100}
+    window.Preferences = table.clone(self.Defaults)
+    window.Runtime.Decoration = 1
+    local button = UI.button(window.Sidebar, "SettingsShortcut", "", 12, 0, 204, 56)
+    button.BackgroundColor3, button.BackgroundTransparency = T.Raised, .25
+    UI.corner(button, 9)
+    self.Border = UI.stroke(button, T.SoftLine)
+    self.Tile = UI.frame(button, "Tile", 10, 13, 30, 30, T.AccentWash, 7)
+    UI.stroke(self.Tile, T.AccentSoft).Transparency = .55
+    self.Icon = UI.icon(self.Tile, "Stack", 7, 7, T.Accent)
+    self.Label = UI.text(button, "Label", Textos.configuraciones, 50, 9, 104, 19, 12, T.Text, T.Medium)
+    self.Hint = UI.text(button, "Hint", Textos.personaliza, 50, 28, 98, 15, 10, T.Muted)
+    self.Hint.Visible = false
+    self.Value = UI.text(button, "Value", "100%", 157, 10, 36, 18, 11, T.Secondary, T.Mono)
+    self.Value.TextXAlignment = Enum.TextXAlignment.Right
+    self.Track = UI.frame(button, "Meter", 50, 36, 142, 4, T.SoftLine, 2)
+    self.Fill = UI.frame(self.Track, "Fill", 0, 0, 0, 4, T.Accent, 2)
+    self.Fill.Size = UDim2.fromScale(1, 1)
+    UI.chevron(button, 144, 25, T.Accent)
+    button.ChevronA.Rotation, button.ChevronB.Rotation = 45, -45
+    button.ChevronA.Visible, button.ChevronB.Visible = false, false
+    self.Button, window.SettingsButton = button, button
+    UI.hover(window.Runtime, button, T.Raised, T.Hover)
+    window.Runtime:Connect(button.Activated, function() self:Open() end)
+    return self
+end
+
+function Settings:Fit(width, short)
+    local button = self.Button
+    local height = short and 52 or 56
+    local cardWidth = width - 24
+    button.Position = UDim2.new(0, 12, 1, -(height + 12))
+    button.Size = UDim2.fromOffset(cardWidth, height)
+    self.Tile.Position = UDim2.fromOffset(10, (height - 30) / 2)
+    self.Label.Position = UDim2.fromOffset(50, 9)
+    self.Label.Size = UDim2.fromOffset(cardWidth - 100, 19)
+    self.Hint.Visible = false
+    self.Value.Position = UDim2.fromOffset(cardWidth - 47, 10)
+    self.Track.Position = UDim2.fromOffset(50, short and 34 or 36)
+    self.Track.Size = UDim2.fromOffset(cardWidth - 62, 4)
+    button.ChevronA.Position = UDim2.fromOffset(cardWidth - 16, height / 2 - 2)
+    button.ChevronB.Position = UDim2.fromOffset(cardWidth - 16, height / 2 + 2)
+    self.Window.Profile:Fit(cardWidth, short, height + 20)
+    return height + 20 + (short and 50 or 60) + 8
+end
+
+function Settings:UpdateMeter()
+    local value = self.Window.Preferences.Decoration
+    self.Value.Text = tostring(math.floor(value + .5)) .. "%"
+    self.Fill.Size = UDim2.fromScale(value / 100, 1)
+end
+
+function Settings:SyncSelection(tab)
+    local active = self.Tab ~= nil and tab == self.Tab
+    self.Button.BackgroundColor3 = active and T.AccentWash or T.Raised
+    self.Border.Color = active and T.AccentSoft or T.SoftLine
+end
+
+function Settings:Set(name, value)
+    local w = self.Window
+    if w._destroyed or w._closing or self.Defaults[name] == nil then return false end
+    if name == "Decoration" then value = math.clamp(UI.number(value, 100), 0, 100)
+    else value = value == true end
+    if w.Preferences[name] == value then return false end
+    w:FinishEntrance(); w:FinishPages()
+    w.Presentation:FinishTransition()
+    w.Preferences[name] = value
+    if name == "Animations" then
+        w.Runtime.Animations = value
+        w.Presentation:StopFollow()
+    elseif name == "Inspector" then
+        w._lastViewport = nil
+        w:Fit()
+    elseif name == "Decoration" then
+        w.Runtime.Decoration = value / 100
+        for _, image in ipairs(w.Root:GetDescendants()) do
+            if image:IsA("ImageLabel") then
+                local opacity = image:GetAttribute("LumiArtworkOpacity")
+                if opacity then image.ImageTransparency = 1 - opacity * w.Runtime.Decoration end
+            end
+        end
+    end
+    if self.Controls[name] then self.Controls[name]:Set(value, true) end
+    self:UpdateMeter()
+    return true
+end
+
+function Settings:Reset()
+    for _, name in ipairs({"Animations", "Inspector", "Decoration"}) do self:Set(name, self.Defaults[name]) end
+end
+
+function Settings:Ensure()
+    local w = self.Window
+    if w._destroyed or w._closing then return nil end
+    if not self.Tab then
+        local tab = w:AddTab(Textos.configuraciones, {Icon = "Settings",
+            Description = "Personaliza tu espacio de Lumi.", Eyebrow = "LUMI / TU ESPACIO"})
+        self.Tab = tab
+        tab.Button.Visible = false
+        local group = tab:AddSection("Interfaz", {Tag = "A TU MEDIDA"})
+        self.Controls.Animations = group:AddToggle({Name = "Animaciones",
+            Description = "Aperturas, transiciones y seguimiento suave.", Default = w.Preferences.Animations,
+            Callback = function(value) self:Set("Animations", value) end})
+        self.Controls.Decoration = group:AddSlider({Name = "Intensidad de la decoración",
+            Description = "Mantén las imágenes como un fondo sutil.", Min = 0, Max = 100,
+            Default = w.Preferences.Decoration, Suffix = "%",
+            Callback = function(value) self:Set("Decoration", value) end})
+        self.Controls.Inspector = group:AddToggle({Name = "Mostrar inspector",
+            Description = "Presenta los detalles del control seleccionado.", Default = w.Preferences.Inspector,
+            Callback = function(value) self:Set("Inspector", value) end})
+        tab:AddSection("Preferencias", {Tag = "ESTA VENTANA"}):AddButton({Name = "Restablecer apariencia",
+            Description = "Recupera los ajustes iniciales de esta ventana.", Action = "Restablecer", Variant = "Secondary",
+            Callback = function() self:Reset() end})
+    end
+    return self.Tab
+end
+
+function Settings:ShowNavigation(group, label)
+    local tab = self:Ensure()
+    if not tab then return nil end
+    tab:SetNavigation(group or "Espacio", label or "Ajustes")
+    tab.Button.Visible = true
+    return tab
+end
+
+function Settings:Open()
+    local w = self.Window
+    if w._destroyed or w._closing or w.Minimized then return nil end
+    local tab = self:Ensure()
+    w:SelectTab(tab)
+    self:SyncSelection(tab)
+    return tab
+end
+
+return Settings
 end
 
 __factories["components/Shadow"] = function(__require)
@@ -2399,6 +3064,144 @@ end
 return Dropdown
 end
 
+__factories["controls/Input"] = function(__require)
+-- src/controls/Input.luau
+local UI = __require("UI")
+local T = __require("Theme")
+local Textos = __require("Textos")
+local Fonts = __require("Fonts")
+local Input = {}
+
+function Input.new(section, options)
+    local c = section:Row(options, "Input", 64)
+    local rt, window = c.Runtime, section.Tab.Window
+    c.MultiLine, c.ReadOnly = options.MultiLine == true, options.ReadOnly == true
+    c.ControlWidth = 220
+    c.FieldHeight = math.clamp(UI.number(options.Height, 112), 80, 240)
+    local maximum = UI.number(options.MaxLength, nil)
+    if maximum then maximum = math.max(0, math.floor(maximum)) end
+    c.MaxLength = maximum
+    c.Range = maximum and string.format(Textos.limiteTexto, maximum) or Textos.sinLimiteTexto
+
+    local function normalize(nextValue)
+        local text = nextValue == nil and "" or tostring(nextValue)
+        if maximum then
+            local count = 0
+            -- Cut only at grapheme boundaries, including composed accents and emoji.
+            for first in utf8.graphemes(text) do
+                count += 1
+                if count > maximum then return text:sub(1, first - 1) end
+            end
+        end
+        return text
+    end
+    local value = normalize(options.Default)
+    local field = UI.new(c.MultiLine and "ScrollingFrame" or "Frame", c.Row, {
+        Name = "TextField", Size = UDim2.fromOffset(220, c.MultiLine and c.FieldHeight or 36),
+        BackgroundColor3 = T.Raised, BackgroundTransparency = 0, ClipsDescendants = true, ZIndex = 2,
+    })
+    UI.corner(field, 8)
+    local border = UI.stroke(field, T.Line)
+    if c.MultiLine then
+        field.CanvasSize = UDim2.new()
+        field.AutomaticCanvasSize = Enum.AutomaticSize.None
+        field.ScrollingDirection = Enum.ScrollingDirection.Y
+        field.ScrollBarThickness = 3
+        field.ScrollBarImageColor3 = T.Line
+        field.Active = true
+    end
+    local box = UI.new("TextBox", field, {
+        Name = "ValueInput", Position = UDim2.fromOffset(10, c.MultiLine and 10 or 0),
+        Size = UDim2.new(1, -20, 0, c.MultiLine and c.FieldHeight - 10 or 36),
+        AutomaticSize = Enum.AutomaticSize.None,
+        Text = value, PlaceholderText = options.Placeholder or Textos.placeholderTexto,
+        TextColor3 = T.Text, PlaceholderColor3 = T.Muted, Font = T.Font, TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = c.MultiLine and Enum.TextYAlignment.Top or Enum.TextYAlignment.Center,
+        TextWrapped = c.MultiLine, TextTruncate = Enum.TextTruncate.None,
+        MultiLine = c.MultiLine, TextEditable = not c.ReadOnly, ClearTextOnFocus = false,
+        Active = true, Selectable = true, ZIndex = 2,
+    })
+    if c.MultiLine then
+        -- Include the bottom inset in the growing textbox and therefore its canvas.
+        UI.new("UIPadding", box, {PaddingBottom = UDim.new(0, 10)})
+    end
+    c.Input, c.ValueInput, c.Field = box, box, field
+    c.Get = function() return value end
+    local textWidth, pending, revision = 200, nil, 0
+    local function scheduleTextLayout()
+        if not c.MultiLine or rt.Destroyed or window._closing then return end
+        revision += 1
+        local version = revision
+        rt:CancelDelay(pending)
+        pending = rt:Delay(0, function()
+            local text, cursor = box.Text, box.CursorPosition
+            -- TextBox clips its native TextBounds to its height. Measure the full
+            -- text with its real font so read-only logs can also scroll to the end.
+            local full = Fonts.bounds(text .. " ", box.TextSize, box.FontFace, textWidth)
+            local caret = cursor > 0 and Fonts.bounds(text:sub(1, cursor - 1) .. " ",
+                box.TextSize, box.FontFace, textWidth) or nil
+            local line = Fonts.bounds("Ag", box.TextSize, box.FontFace, textWidth).Y
+            if version ~= revision or rt.Destroyed or window._closing then return end
+            local height = math.max(c.FieldHeight - 10, math.ceil(full.Y) + 10)
+            box.Size = UDim2.fromOffset(textWidth, height)
+            field.CanvasSize = UDim2.fromOffset(0, height + 10)
+            if caret and box:IsFocused() then
+                local view = field.AbsoluteSize.Y / window.Scale
+                local top, bottom = math.max(0, caret.Y - line), 12 + caret.Y
+                local y = field.CanvasPosition.Y
+                if top < y then y = top elseif bottom > y + view then y = bottom - view end
+                field.CanvasPosition = Vector2.new(0, math.clamp(y, 0, math.max(0, height + 10 - view)))
+            end
+            pending = nil
+        end)
+    end
+    c.Layout = function(place)
+        if rt.Destroyed or window._closing then return end
+        field.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
+        field.Size = UDim2.fromOffset(place.ControlWidth, place.ControlHeight)
+        box.Size = UDim2.fromOffset(math.max(1, place.ControlWidth - 20),
+            math.max(1, place.ControlHeight - (c.MultiLine and 10 or 0)))
+        textWidth = math.max(1, place.ControlWidth - 20)
+        scheduleTextLayout()
+    end
+    function c:Set(nextValue, silent)
+        if rt.Destroyed or window._closing then return false end
+        nextValue = normalize(nextValue)
+        local changed = nextValue ~= value
+        -- Store first so the Text signal cannot turn a silent render into an edit.
+        value = nextValue
+        if box.Text ~= value then box.Text = value end
+        if changed then
+            self:Refresh()
+            if not silent then rt:Callback(options.Callback, value) end
+        end
+        return changed
+    end
+    rt:Connect(box:GetPropertyChangedSignal("Text"), function() c:Set(box.Text); scheduleTextLayout() end)
+    if c.MultiLine then
+        rt:Connect(box:GetPropertyChangedSignal("CursorPosition"), scheduleTextLayout)
+        rt:Connect(field:GetPropertyChangedSignal("AbsoluteSize"), scheduleTextLayout)
+    end
+    rt:Connect(box.Focused, function()
+        if window._closing then return end
+        c:Focus()
+        rt:Tween(border, {Color = T.Accent})
+        scheduleTextLayout()
+    end)
+    rt:Connect(box.FocusLost, function()
+        if not window._closing then rt:Tween(border, {Color = T.Line}) end
+    end)
+    rt:Connect(box.SelectionGained, function()
+        if not window._closing then c:Focus() end
+    end)
+    c:Relayout()
+    return c
+end
+
+return Input
+end
+
 __factories["controls/Slider"] = function(__require)
 -- src/controls/Slider.luau
 local UI = __require("UI")
@@ -2634,7 +3437,7 @@ local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
 if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
 
-local Lumi = {Version = "0.4.16", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.4.18", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] La biblioteca está cerrada; vuelve a cargarla para continuar")
@@ -3063,10 +3866,16 @@ return __require("init")
 end)()
 
 -- Demostración: las acciones modifican esta interfaz y sus valores de ejemplo.
-local window = Lumi:CreateWindow({Title = "lumi"})
-local overview = window:AddTab("Inicio", {Icon = "Grid", Description = "Ajustes claros, con todo a mano.", Eyebrow = "ESTUDIO / INTRODUCCIÓN"})
-local player = window:AddTab("Jugador", {Icon = "Sliders", Description = "Prueba controles de estado y valores numéricos."})
-local visuals = window:AddTab("Aspecto", {Icon = "Layers", Description = "Prueba los ajustes visuales de la interfaz."})
+local window = Lumi:CreateWindow({Title = "Lumi"})
+local overview = window:AddTab("Inicio", {Group = "Principal", Icon = "Grid", Description = "Ajustes claros, con todo a mano.", Eyebrow = "ESTUDIO / INTRODUCCIÓN"})
+local player = window:AddTab("Jugador", {Group = "Principal", Icon = "User", Description = "Prueba controles de estado y valores numéricos."})
+local visuals = window:AddTab("Aspecto", {Group = "Principal", Icon = "Cube", Description = "Prueba los ajustes visuales de la interfaz."})
+local spaces = window:AddTab("Espacios", {Group = "Espacio", Icon = "Stack", Description = "Organiza tu espacio de trabajo."})
+local behaviour = window:AddTab("Interacción", {Group = "Espacio", Icon = "Sliders", Description = "Elige cómo se mueve y responde Lumi."})
+window:ShowSettingsInNavigation("Espacio", "Ajustes")
+local records = window:AddTab("Registros", {Group = "Herramientas", Icon = "Document", Description = "Actividad de la interfaz durante esta sesión."})
+local notes = window:AddTab("Notas", {Group = "Herramientas", Icon = "Bookmark", Description = "Un lugar para lo que quieres recordar."})
+local help = window:AddTab("Ayuda", {Group = "Herramientas", Icon = "Help", Description = "Encuentra tu camino por Lumi."})
 
 local interaction = overview:AddSection("Interacción", {Tag = "VISTA PREVIA"})
 local enabled = interaction:AddToggle({Name = "Activar espacio", Description = "Conserva activa esta sesión.", Default = true,
@@ -3105,6 +3914,63 @@ skies:AddImageDropdown({Name = "Tipo de cielo", Description = "Compara las minia
         {Value = "noche", Label = "Noche", Description = "Luna y cielo estrellado.", Image = {Name = "noche.png", Data = "iVBORw0KGgoAAAANSUhEUgAAAKAAAABgCAIAAAAVRe7OAAAEMklEQVR42u2WSVPbMBiGv0splBD2AC37EpJQoECBsrTQQvv/Tz302FNneuhfqGwninEc27Ika/E78wzDCOnbHtmGXk1vAI8hjACCgdOCG5u5/Pr9r8g2TceBDFRET0RpuzLHgazgicZWLkxP7orQcVAZNDGzJQp/KJVvBsphgrdLEArTshmohSaa28Bj6HVzB3iM/4LZB6Legmd3PYb/i+d3mxmQ9x0atGvDxaLJuT2gA/7yMFsGBKe7sSqOpOB9+wknVV2uwZOnLObfPz8ZRkZHk/P7ljOceIUZVYWK1DKqrD8OTc0f2A+bjhN1JuB2I8HyXZSIQFMLB0ATCcGS0fibTOgUE9yWJEyZs1JD4nZVxSwxWJJPObhWY1cgWKFjYcFvFg8lYS5zV2pIQrCpMggmvBfcUUL41HYAJyE4dGygDHqz1JGHf3eVRNNExeWNCg4cV94gTS91lcCiqwqlA34FKys+VTCj4gZperlbE4Lmx6z3R6M64zjHfdODDVobZIJ7koRxe05TsAXRTrMFx0xrbI0k24hd/57flOvUrN1AcKN1FIe3kVjPQGiz05TuNFVtNTWTi8LsqdD+WVFj5b1bDN8xqKQA7gmOJutNJZIRco8zwcfAFLF3QM620sdpZvUYGITpyV7hFgseT8AEnwB7iOk8iX7GfykBzaydmCKo21x2a2uLUg9Ny0Vjgk+NEGvg1DaK16Zqj9qDcai5dmoK1oDB7PK18XsguUcr1Hz7AZQmMKdijz4gWJdXS2CCz4AQw7euC9XS7LszIAqz60qpTPA5cJHwkuVvo9n1c+Ac/DORu5MJvhAiDHpRByzvNOY4axvNrV8UhwcVOqUD3TXY06nkEGhu46MQQVDBI8oZTl9zFuOdykOO1u3H9CsRvHkJShPcM7srpPnNS1AO/qWwuUgm+EorYf9XvmJ/dzS/daWP4R3XmQVkwARfayW0ew1MQQvb10IwYaJHFGI2u4swwZ+Kw1+5QqdUUTq7qYJtgNwaVjm7yi+l1iGoDU4LOzfeE4xMabT+jdFTqtrgtLhzA0RhAlwJzgTfAo+hxd3bUYJLlLYOnIMJvkvAPwOjf9JBZYnqCS3t3Y3Chp66rhx+mapJV0OY4HuzhHbvgSYII/Bd8P5n4DEQ7Lvg5YMvwGMg2H/BD6AgzVY7gf0103L7AYxj1GgGdrZArfYjGEVI7Sj2NEKtw0fAkfSaYtp0R0zwV8BQrvalZmN9QbB2u2Zl00rnW52pUm0qyitMHCeo9ZhI8FPdqINaDvVVd5/qQK3UvhAcsdp99pUaqk0R3Nfce66G1IKqyVJrwYNBf1eLZKEVp/NfsBLNmK/tgjlrRz8Kgpk6KRhAMIBgAMHFmWyuqgWCvdLpt3VeP8GoB74zCiZLerBTp7W+i1dIRtpwVKcp6zLFkN+zBhAMwQCCgbX8B5pxSSbAUJOjAAAAAElFTkSuQmCC"}},
     }, Callback = function(value) print("[Lumi] cielo seleccionado", value) end})
 
+local arrangement = spaces:AddSection("Distribución", {Tag = "TU ESPACIO"})
+arrangement:AddButton({Name = "Centrar ventana", Description = "Devuelve el conjunto al centro de la pantalla.", Action = "Centrar",
+    Callback = function() window:SetCenter(window.Viewport.AbsoluteSize / 2) end})
+arrangement:AddButton({Name = "Mostrar inspector", Description = "Recupera los detalles cuando hay espacio disponible.", Action = "Mostrar", Variant = "Secondary",
+    Callback = function() window:SetPreference("Inspector", true) end})
+arrangement:AddButton({Name = "Ocultar inspector", Description = "Da más espacio al panel principal.", Action = "Ocultar", Variant = "Secondary",
+    Callback = function() window:SetPreference("Inspector", false) end})
+
+local movement = behaviour:AddSection("Movimiento", {Tag = "ACCESIBILIDAD"})
+movement:AddButton({Name = "Movimiento suave", Description = "Activa transiciones y seguimiento de los paneles.", Action = "Activar",
+    Callback = function() window:SetPreference("Animations", true) end})
+movement:AddButton({Name = "Reducir movimiento", Description = "Aplica los cambios de posición de forma inmediata.", Action = "Reducir", Variant = "Secondary",
+    Callback = function() window:SetPreference("Animations", false) end})
+movement:AddButton({Name = "Preferencias de interacción", Description = "Abre todos los ajustes de la interfaz.", Action = "Abrir", Variant = "Secondary",
+    Callback = function() window:OpenSettings() end})
+
+local logGroup = records:AddSection("Actividad", {Tag = "SESIÓN LOCAL"})
+local logInput = logGroup:AddInput({Name = "Registro de navegación", Description = "Puedes desplazarte, seleccionar y copiar este texto.", MultiLine = true, ReadOnly = true, Height = 180})
+local messages, sequence = {}, 0
+local function record(message)
+    sequence += 1
+    table.insert(messages, string.format("%02d · %s", sequence, message))
+    if #messages > 40 then table.remove(messages, 1) end
+    logInput:Set(table.concat(messages, "\n"), true)
+end
+logGroup:AddButton({Name = "Vaciar registro", Description = "Limpia la actividad mostrada en esta sesión.", Action = "Vaciar", Variant = "Secondary",
+    Callback = function() table.clear(messages); sequence = 0; record("Registro vaciado.") end})
+for _, tab in ipairs(window.Tabs) do
+    local page = tab
+    window.Runtime:Connect(page.Page:GetPropertyChangedSignal("Visible"), function()
+        if page.Page.Visible then record("Página abierta: " .. (page.NavigationLabel or page.Name)) end
+    end)
+end
+record("Sesión de Lumi iniciada.")
+window.Runtime:Connect(window.Profile.Frame.Activated, function()
+    record("Página abierta: Perfil")
+end)
+
+local noteGroup = notes:AddSection("Bloc de notas", {Tag = "ESTA SESIÓN"})
+local noteInput = noteGroup:AddInput({Name = "Notas personales", Description = "Se conservan al cambiar de página y minimizar.",
+    MultiLine = true, Height = 180, Placeholder = "Escribe aquí tus notas..."})
+noteGroup:AddButton({Name = "Vaciar notas", Description = "Borra el texto de este bloc.", Action = "Vaciar", Variant = "Secondary",
+    Callback = function() noteInput:Set(""); record("Notas vaciadas.") end})
+window.Runtime:Connect(noteInput.Input.FocusLost, function()
+    if noteInput:Get() ~= "" then record("Notas conservadas en la sesión.") end
+end)
+
+local guide = help:AddSection("Guía rápida", {Tag = "LUMI"})
+guide:AddInput({Name = "Cómo moverte", ReadOnly = true, MultiLine = true, Height = 180,
+    Default = "Principal reúne las páginas de inicio y pruebas.\nEspacio contiene la organización y los ajustes.\nHerramientas incluye registros, notas y ayuda.\n\nCtrl+K busca páginas y controles. Escape cierra los menús.\nEl perfil y Configuraciones permanecen abajo."})
+guide:AddButton({Name = "Abrir configuraciones", Description = "Personaliza el movimiento y la decoración.", Action = "Abrir", Variant = "Secondary",
+    Callback = function() window:OpenSettings() end})
+guide:AddButton({Name = "Volver a Inicio", Description = "Regresa a los controles principales.", Action = "Volver", Variant = "Secondary",
+    Callback = function() window:GoHome() end})
+
+window:GoHome()
+window:FinishPages()
 intensity:Focus()
 print("[Lumi UI] Demostración en español v" .. Lumi.Version .. " cargada")
 return Lumi

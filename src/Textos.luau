@@ -5,8 +5,10 @@ local Textos = {
         Toggle = {nombre = "Interruptor", etiqueta = "INTERRUPTOR"},
         Slider = {nombre = "Deslizador", etiqueta = "DESLIZADOR"},
         Dropdown = {nombre = "Selector", etiqueta = "SELECTOR"},
+        Input = {nombre = "Campo de texto", etiqueta = "TEXTO"},
     },
-    interfaz = "INTERFAZ LUMI", biblioteca = "BIBLIOTECA", secciones = "SECCIONES",
+    interfaz = "INTERFAZ LUMI", biblioteca = "BIBLIOTECA", secciones = "SECCIONES", principal = "PRINCIPAL",
+    configuraciones = "Configuraciones", personaliza = "Personaliza Lumi", enLinea = "En línea",
     espacio = "Espacio", espacioMayus = "ESPACIO", inicio = "Inicio", sesionLocal = "SESIÓN LOCAL",
     descripcionPagina = "Un espacio para ajustar cada detalle.", controles = "CONTROLES", ajustes = "AJUSTES",
     listo = "Listo", detalles = "Detalles", ejecutar = "Ejecutar", completado = "Completado",
@@ -21,6 +23,9 @@ local Textos = {
     opcionActual = "OPCIÓN %02d / %02d", listaVacia = "LISTA VACÍA", unaOpcion = "UNA OPCIÓN",
     pistaVacia = "Esta lista no tiene opciones.", pistaOpcion = "Elige una opción de la lista.",
     elegirOpcion = "ELIGE UNA OPCIÓN", noHayOpciones = "No hay opciones",
+    placeholderTexto = "Escribe aquí…", texto = "TEXTO", soloLectura = "SOLO LECTURA",
+    pistaTexto = "Escribe para actualizar el texto.", pistaTextoMultilinea = "Escribe y desplázate por el texto.",
+    pistaSoloLectura = "Selecciona y copia el texto.", limiteTexto = "Hasta %d caracteres", sinLimiteTexto = "Sin límite",
 }
 
 function Textos.nombreTipo(tipo)
@@ -38,6 +43,11 @@ end
 
 function Textos.cantidadOpciones(cantidad)
     return tostring(cantidad) .. (cantidad == 1 and " opción" or " opciones")
+end
+
+function Textos.cantidadCaracteres(cantidad)
+    if cantidad == 0 then return Textos.vacio end
+    return tostring(cantidad) .. (cantidad == 1 and " carácter" or " caracteres")
 end
 
 return Textos

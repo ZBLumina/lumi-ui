@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local UI = require("UI")
 local T = require("Theme")
+local Textos = require("Textos")
 local Profile = {}
 Profile.__index = Profile
 
@@ -38,9 +39,13 @@ function Profile.new(window, options)
     local last = displayName:match("%s(%S+)$")
     local initials = initial(first) .. (last and initial(last) or "")
 
-    local frame = UI.frame(window.Sidebar, "SidebarFooter", 20, 0, 144, 76)
+    local frame = UI.button(window.Sidebar, "SidebarFooter", "", 12, 0, 204, 60)
+    frame.BackgroundColor3, frame.BackgroundTransparency = T.Surface, .18
+    UI.corner(frame, 9)
+    UI.stroke(frame, T.SoftLine)
     frame.ClipsDescendants = true
     local rule = UI.line(frame, 0, 0, 144)
+    rule.Visible = false
     local avatar = UI.new("ImageLabel", frame, {
         Name = "Avatar", Image = "", Size = UDim2.fromOffset(34, 34),
         BackgroundColor3 = T.Raised, BackgroundTransparency = 0,
@@ -53,12 +58,19 @@ function Profile.new(window, options)
     placeholder.ZIndex = avatar.ZIndex + 1
     local nameLabel = UI.text(frame, "DisplayName", displayName, 44, 20, 100, 18, 12, T.Text, T.Medium)
     local userLabel = UI.text(frame, "Username", "@" .. username, 44, 38, 100, 16, 11, T.Muted)
+    local status = UI.text(frame, "Status", Textos.enLinea, 58, 30, 80, 15, 10, T.Muted)
+    local dot = UI.frame(frame, "StatusDot", 48, 35, 4, 4, T.Green, 999)
+    UI.chevron(frame, 184, 28, T.Secondary)
+    frame.ChevronA.Rotation, frame.ChevronB.Rotation = 45, -45
     local self = setmetatable({
         Window = window, Runtime = rt, Frame = frame, Avatar = avatar,
         NameLabel = nameLabel, UserLabel = userLabel,
+        Status = status, StatusDot = dot,
         _rule = rule, _placeholder = placeholder, _destroyed = false,
         _distinctUsername = string.lower(displayName) ~= string.lower(username),
     }, Profile)
+    UI.hover(rt, frame, T.Surface, T.Hover)
+    rt:Connect(frame.Activated, function() self:Open() end)
 
     rt:Connect(frame.Destroying, function() self._destroyed = true end)
     rt:Connect(avatar.Destroying, function() self._destroyed = true end)
@@ -93,24 +105,24 @@ function Profile.new(window, options)
     return self
 end
 
--- width es el ancho del pie: SidebarWidth - 40 (144 o 100).
-function Profile:Fit(width, short)
+-- width es el ancho de la tarjeta; bottom reserva el acceso inferior.
+function Profile:Fit(width, short, bottom)
     if not alive(self) then return end
     width = math.max(0, math.floor(UI.number(width, self.Frame.Size.X.Offset)))
-    local height = short and 56 or 76
+    local height = short and 50 or 60
     local compact = short or width < 124
     local avatarSize = compact and 32 or 34
     local gap = compact and 8 or 10
-    local avatarY = short and 12 or 20
-    local textX = avatarSize + gap
-    local textWidth = math.max(0, width - textX)
+    local avatarY = math.floor((height - avatarSize) / 2)
+    local textX = 8 + avatarSize + gap
+    local textWidth = math.max(0, width - textX - 28)
     local showUser = self._distinctUsername and not short and textWidth >= 80
-    local nameY = avatarY + math.floor((avatarSize - (showUser and 34 or 18)) / 2)
+    local nameY = avatarY + math.floor((avatarSize - 34) / 2)
 
-    self.Frame.Position = UDim2.new(0, 20, 1, -(height + (short and 13 or 19)))
+    self.Frame.Position = UDim2.new(0, 12, 1, -(height + (bottom or 12)))
     self.Frame.Size = UDim2.fromOffset(width, height)
     self._rule.Size = UDim2.fromOffset(width, 1)
-    self.Avatar.Position = UDim2.fromOffset(0, avatarY)
+    self.Avatar.Position = UDim2.fromOffset(8, avatarY)
     self.Avatar.Size = UDim2.fromOffset(avatarSize, avatarSize)
     self.Avatar.Visible = width >= avatarSize
     self._placeholder.Size = UDim2.fromOffset(avatarSize, avatarSize)
@@ -120,6 +132,28 @@ function Profile:Fit(width, short)
     self.UserLabel.Position = UDim2.fromOffset(textX, nameY + 18)
     self.UserLabel.Size = UDim2.fromOffset(textWidth, 16)
     self.UserLabel.Visible = showUser
+    self.Status.Position = UDim2.fromOffset(textX + 9, nameY + 19)
+    self.Status.Size = UDim2.fromOffset(math.max(0, textWidth - 9), 15)
+    self.Status.Visible = not showUser and textWidth >= 50
+    self.StatusDot.Position = UDim2.fromOffset(textX, nameY + 25)
+    self.StatusDot.Visible = self.Status.Visible
+    self.Frame.ChevronA.Position = UDim2.fromOffset(width - 20, height / 2 - 2)
+    self.Frame.ChevronB.Position = UDim2.fromOffset(width - 20, height / 2 + 2)
+end
+
+function Profile:Open()
+    local w = self.Window
+    if not alive(self) or w._closing or w.Minimized then return nil end
+    if not self.Tab then
+        self.Tab = w:AddTab("Perfil", {Icon = "User", Description = self.UserLabel.Text, Eyebrow = "TU CUENTA / LUMI"})
+        self.Tab.Button.Visible = false
+        local group = self.Tab:AddSection("Cuenta de Roblox", {Tag = "PERFIL LOCAL"})
+        group:AddInput({Name = "Nombre de visualización", Default = self.NameLabel.Text, ReadOnly = true})
+        group:AddInput({Name = "Nombre de usuario", Default = self.UserLabel.Text, ReadOnly = true})
+        group:AddInput({Name = "Estado", Default = Textos.enLinea, ReadOnly = true})
+    end
+    w:SelectTab(self.Tab)
+    return self.Tab
 end
 
 return Profile

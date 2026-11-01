@@ -1,8 +1,14 @@
 -- Demostración: las acciones modifican esta interfaz y sus valores de ejemplo.
-local window = Lumi:CreateWindow({Title = "lumi"})
-local overview = window:AddTab("Inicio", {Icon = "Grid", Description = "Ajustes claros, con todo a mano.", Eyebrow = "ESTUDIO / INTRODUCCIÓN"})
-local player = window:AddTab("Jugador", {Icon = "Sliders", Description = "Prueba controles de estado y valores numéricos."})
-local visuals = window:AddTab("Aspecto", {Icon = "Layers", Description = "Prueba los ajustes visuales de la interfaz."})
+local window = Lumi:CreateWindow({Title = "Lumi"})
+local overview = window:AddTab("Inicio", {Group = "Principal", Icon = "Grid", Description = "Ajustes claros, con todo a mano.", Eyebrow = "ESTUDIO / INTRODUCCIÓN"})
+local player = window:AddTab("Jugador", {Group = "Principal", Icon = "User", Description = "Prueba controles de estado y valores numéricos."})
+local visuals = window:AddTab("Aspecto", {Group = "Principal", Icon = "Cube", Description = "Prueba los ajustes visuales de la interfaz."})
+local spaces = window:AddTab("Espacios", {Group = "Espacio", Icon = "Stack", Description = "Organiza tu espacio de trabajo."})
+local behaviour = window:AddTab("Interacción", {Group = "Espacio", Icon = "Sliders", Description = "Elige cómo se mueve y responde Lumi."})
+window:ShowSettingsInNavigation("Espacio", "Ajustes")
+local records = window:AddTab("Registros", {Group = "Herramientas", Icon = "Document", Description = "Actividad de la interfaz durante esta sesión."})
+local notes = window:AddTab("Notas", {Group = "Herramientas", Icon = "Bookmark", Description = "Un lugar para lo que quieres recordar."})
+local help = window:AddTab("Ayuda", {Group = "Herramientas", Icon = "Help", Description = "Encuentra tu camino por Lumi."})
 
 local interaction = overview:AddSection("Interacción", {Tag = "VISTA PREVIA"})
 local enabled = interaction:AddToggle({Name = "Activar espacio", Description = "Conserva activa esta sesión.", Default = true,
@@ -41,6 +47,63 @@ skies:AddImageDropdown({Name = "Tipo de cielo", Description = "Compara las minia
         {Value = "noche", Label = "Noche", Description = "Luna y cielo estrellado.", Image = {Name = "noche.png", Data = "iVBORw0KGgoAAAANSUhEUgAAAKAAAABgCAIAAAAVRe7OAAAEMklEQVR42u2WSVPbMBiGv0splBD2AC37EpJQoECBsrTQQvv/Tz302FNneuhfqGwninEc27Ika/E78wzDCOnbHtmGXk1vAI8hjACCgdOCG5u5/Pr9r8g2TceBDFRET0RpuzLHgazgicZWLkxP7orQcVAZNDGzJQp/KJVvBsphgrdLEArTshmohSaa28Bj6HVzB3iM/4LZB6Legmd3PYb/i+d3mxmQ9x0atGvDxaLJuT2gA/7yMFsGBKe7sSqOpOB9+wknVV2uwZOnLObfPz8ZRkZHk/P7ljOceIUZVYWK1DKqrD8OTc0f2A+bjhN1JuB2I8HyXZSIQFMLB0ATCcGS0fibTOgUE9yWJEyZs1JD4nZVxSwxWJJPObhWY1cgWKFjYcFvFg8lYS5zV2pIQrCpMggmvBfcUUL41HYAJyE4dGygDHqz1JGHf3eVRNNExeWNCg4cV94gTS91lcCiqwqlA34FKys+VTCj4gZperlbE4Lmx6z3R6M64zjHfdODDVobZIJ7koRxe05TsAXRTrMFx0xrbI0k24hd/57flOvUrN1AcKN1FIe3kVjPQGiz05TuNFVtNTWTi8LsqdD+WVFj5b1bDN8xqKQA7gmOJutNJZIRco8zwcfAFLF3QM620sdpZvUYGITpyV7hFgseT8AEnwB7iOk8iX7GfykBzaydmCKo21x2a2uLUg9Ny0Vjgk+NEGvg1DaK16Zqj9qDcai5dmoK1oDB7PK18XsguUcr1Hz7AZQmMKdijz4gWJdXS2CCz4AQw7euC9XS7LszIAqz60qpTPA5cJHwkuVvo9n1c+Ac/DORu5MJvhAiDHpRByzvNOY4axvNrV8UhwcVOqUD3TXY06nkEGhu46MQQVDBI8oZTl9zFuOdykOO1u3H9CsRvHkJShPcM7srpPnNS1AO/qWwuUgm+EorYf9XvmJ/dzS/daWP4R3XmQVkwARfayW0ew1MQQvb10IwYaJHFGI2u4swwZ+Kw1+5QqdUUTq7qYJtgNwaVjm7yi+l1iGoDU4LOzfeE4xMabT+jdFTqtrgtLhzA0RhAlwJzgTfAo+hxd3bUYJLlLYOnIMJvkvAPwOjf9JBZYnqCS3t3Y3Chp66rhx+mapJV0OY4HuzhHbvgSYII/Bd8P5n4DEQ7Lvg5YMvwGMg2H/BD6AgzVY7gf0103L7AYxj1GgGdrZArfYjGEVI7Sj2NEKtw0fAkfSaYtp0R0zwV8BQrvalZmN9QbB2u2Zl00rnW52pUm0qyitMHCeo9ZhI8FPdqINaDvVVd5/qQK3UvhAcsdp99pUaqk0R3Nfce66G1IKqyVJrwYNBf1eLZKEVp/NfsBLNmK/tgjlrRz8Kgpk6KRhAMIBgAMHFmWyuqgWCvdLpt3VeP8GoB74zCiZLerBTp7W+i1dIRtpwVKcp6zLFkN+zBhAMwQCCgbX8B5pxSSbAUJOjAAAAAElFTkSuQmCC"}},
     }, Callback = function(value) print("[Lumi] cielo seleccionado", value) end})
 
+local arrangement = spaces:AddSection("Distribución", {Tag = "TU ESPACIO"})
+arrangement:AddButton({Name = "Centrar ventana", Description = "Devuelve el conjunto al centro de la pantalla.", Action = "Centrar",
+    Callback = function() window:SetCenter(window.Viewport.AbsoluteSize / 2) end})
+arrangement:AddButton({Name = "Mostrar inspector", Description = "Recupera los detalles cuando hay espacio disponible.", Action = "Mostrar", Variant = "Secondary",
+    Callback = function() window:SetPreference("Inspector", true) end})
+arrangement:AddButton({Name = "Ocultar inspector", Description = "Da más espacio al panel principal.", Action = "Ocultar", Variant = "Secondary",
+    Callback = function() window:SetPreference("Inspector", false) end})
+
+local movement = behaviour:AddSection("Movimiento", {Tag = "ACCESIBILIDAD"})
+movement:AddButton({Name = "Movimiento suave", Description = "Activa transiciones y seguimiento de los paneles.", Action = "Activar",
+    Callback = function() window:SetPreference("Animations", true) end})
+movement:AddButton({Name = "Reducir movimiento", Description = "Aplica los cambios de posición de forma inmediata.", Action = "Reducir", Variant = "Secondary",
+    Callback = function() window:SetPreference("Animations", false) end})
+movement:AddButton({Name = "Preferencias de interacción", Description = "Abre todos los ajustes de la interfaz.", Action = "Abrir", Variant = "Secondary",
+    Callback = function() window:OpenSettings() end})
+
+local logGroup = records:AddSection("Actividad", {Tag = "SESIÓN LOCAL"})
+local logInput = logGroup:AddInput({Name = "Registro de navegación", Description = "Puedes desplazarte, seleccionar y copiar este texto.", MultiLine = true, ReadOnly = true, Height = 180})
+local messages, sequence = {}, 0
+local function record(message)
+    sequence += 1
+    table.insert(messages, string.format("%02d · %s", sequence, message))
+    if #messages > 40 then table.remove(messages, 1) end
+    logInput:Set(table.concat(messages, "\n"), true)
+end
+logGroup:AddButton({Name = "Vaciar registro", Description = "Limpia la actividad mostrada en esta sesión.", Action = "Vaciar", Variant = "Secondary",
+    Callback = function() table.clear(messages); sequence = 0; record("Registro vaciado.") end})
+for _, tab in ipairs(window.Tabs) do
+    local page = tab
+    window.Runtime:Connect(page.Page:GetPropertyChangedSignal("Visible"), function()
+        if page.Page.Visible then record("Página abierta: " .. (page.NavigationLabel or page.Name)) end
+    end)
+end
+record("Sesión de Lumi iniciada.")
+window.Runtime:Connect(window.Profile.Frame.Activated, function()
+    record("Página abierta: Perfil")
+end)
+
+local noteGroup = notes:AddSection("Bloc de notas", {Tag = "ESTA SESIÓN"})
+local noteInput = noteGroup:AddInput({Name = "Notas personales", Description = "Se conservan al cambiar de página y minimizar.",
+    MultiLine = true, Height = 180, Placeholder = "Escribe aquí tus notas..."})
+noteGroup:AddButton({Name = "Vaciar notas", Description = "Borra el texto de este bloc.", Action = "Vaciar", Variant = "Secondary",
+    Callback = function() noteInput:Set(""); record("Notas vaciadas.") end})
+window.Runtime:Connect(noteInput.Input.FocusLost, function()
+    if noteInput:Get() ~= "" then record("Notas conservadas en la sesión.") end
+end)
+
+local guide = help:AddSection("Guía rápida", {Tag = "LUMI"})
+guide:AddInput({Name = "Cómo moverte", ReadOnly = true, MultiLine = true, Height = 180,
+    Default = "Principal reúne las páginas de inicio y pruebas.\nEspacio contiene la organización y los ajustes.\nHerramientas incluye registros, notas y ayuda.\n\nCtrl+K busca páginas y controles. Escape cierra los menús.\nEl perfil y Configuraciones permanecen abajo."})
+guide:AddButton({Name = "Abrir configuraciones", Description = "Personaliza el movimiento y la decoración.", Action = "Abrir", Variant = "Secondary",
+    Callback = function() window:OpenSettings() end})
+guide:AddButton({Name = "Volver a Inicio", Description = "Regresa a los controles principales.", Action = "Volver", Variant = "Secondary",
+    Callback = function() window:GoHome() end})
+
+window:GoHome()
+window:FinishPages()
 intensity:Focus()
 print("[Lumi UI] Demostración en español v" .. Lumi.Version .. " cargada")
 return Lumi

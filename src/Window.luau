@@ -10,6 +10,9 @@ local Profile = require("components/Profile")
 local Textos = require("Textos")
 local BrandArt = require("components/BrandArt")
 local Fonts = require("Fonts")
+local Settings = require("components/Settings")
+local Search = require("components/Search")
+local Navigation = require("components/Navigation")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
@@ -39,7 +42,7 @@ function Window.new(options)
     self.TopEdge = UI.frame(panel, "TopEdge", 12, 0, 840, 1, T.Secondary)
     self.TopEdge.BackgroundTransparency = 0.88
 
-    local sidebar = UI.frame(main, "Sidebar", 0, 0, 184, 660, T.Sidebar, 14)
+    local sidebar = UI.frame(main, "Sidebar", 0, 0, 228, 660, T.Sidebar, 14)
     self.Sidebar = sidebar
     sidebar.Active = true
     self.SidebarShadow = Shadow.new(sidebar, 14)
@@ -50,14 +53,17 @@ function Window.new(options)
     UI.mark(brandTile, 5, 5, 20)
     UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 32, 27, T.Text, T.Brand)
     UI.micro(sidebar, "BrandSub", Textos.interfaz, 21, 65, 145, 14)
-    UI.micro(sidebar, "Group", Textos.secciones, 22, 122, 140, 16)
+    UI.micro(sidebar, "Group", Textos.principal, 22, 115, 140, 16)
+    sidebar.Group.Visible = false
     self.Navigation = UI.new("ScrollingFrame", sidebar, {
         Name = "Navigation", Position = UDim2.fromOffset(12, 153), Size = UDim2.new(1, -24, 1, -258),
         ScrollBarThickness = 2, ScrollBarImageColor3 = T.Muted, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
     })
-    UI.list(self.Navigation, 5)
+    self.NavigationUI = Navigation.new(self)
+    self.NavigationGroups = self.NavigationUI.Groups
     self.Profile = Profile.new(self, options)
     self.SidebarFooter = self.Profile.Frame
+    self.Settings = Settings.new(self)
     local navClose = UI.button(sidebar, "CloseNavigation", "", 0, 6, 44, 44)
     UI.frame(navClose, "A", 16, 21, 12, 1, T.Secondary).Rotation = 45
     UI.frame(navClose, "B", 16, 21, 12, 1, T.Secondary).Rotation = -45
@@ -68,6 +74,16 @@ function Window.new(options)
     self.Chrome = chrome
     local drag = UI.button(chrome, "TitleDrag", "", 0, 0, 862, 48)
     self.Breadcrumb = UI.text(drag, "Breadcrumb", Textos.espacio .. " / " .. Textos.inicio, 26, 0, 400, 48, 13, T.Secondary, T.Medium)
+    local home = UI.button(chrome, "Home", "", 14, 7, 30, 30)
+    home.ZIndex = 2
+    UI.corner(home, 5)
+    UI.icon(home, "Home", 7, 7, T.Secondary)
+    UI.hover(rt, home, T.Shell, T.Hover)
+    rt:Connect(home.Activated, function() self:GoHome() end)
+    self.HomeButton = home
+    UI.chevron(drag, 49, 20, T.Muted)
+    drag.ChevronA.Rotation, drag.ChevronB.Rotation = 45, -45
+    drag.ChevronB.Position = UDim2.fromOffset(49, 24)
     local close = UI.button(chrome, "Close", "", 872, 9, 30, 30)
     UI.corner(close, 5)
     local ca = UI.frame(close, "CloseA", 9, 14, 12, 1, T.Secondary)
@@ -87,6 +103,7 @@ function Window.new(options)
     self.MenuButton = menu
     rt:Connect(menu.Activated, function() self:ToggleNavigation() end)
     UI.line(chrome, 0, 47, 916)
+    self.Search = Search.new(self)
 
     self.Workspace = UI.frame(panel, "Workspace", 184, 48, 680, 584, T.Workspace)
     self.Workspace.BackgroundTransparency = 1
@@ -97,7 +114,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.16", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.18", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -174,9 +191,9 @@ function Window:Fit()
     local verticalMargin = self.Mobile and self.SafeTop + 8 or 32
     self.Height = math.max(280, math.min(self.Mobile and 768 or PREFERRED_HEIGHT, size.Y - verticalMargin))
     if not self.Mobile then self.NavigationOpen = false end
-    self.SidebarWidth = self.Mobile and self.Width or 184
+    self.SidebarWidth = self.Mobile and self.Width or 228
     local sideWidth = self.SidebarWidth
-    self.Inspector.Visible = not compact and not self.Mobile
+    self.Inspector.Visible = not compact and not self.Mobile and self.Preferences.Inspector
     self.PanelWidth = self.Width - (self.Inspector.Visible and INSPECTOR_WIDTH + PANEL_GAP or 0)
     self.ContentX = self.Mobile and 0 or sideWidth + PANEL_GAP
     self.Main.Size = UDim2.fromOffset(self.Width, self.Height)
@@ -190,32 +207,38 @@ function Window:Fit()
     self.Sidebar.BrandSub.Size = UDim2.fromOffset(sideWidth - 40, 14)
     self.Sidebar.BrandSub.Text = Fonts.tracked(sideWidth < 170 and Textos.biblioteca or Textos.interfaz)
     local short = self.Height < 480
-    local navTop = short and 112 or 169
+    local navTop = short and 88 or 106
     self.Sidebar.BrandSub.Position = UDim2.fromOffset(21, short and 60 or 65)
     self.Sidebar.BrandWaves.Visible = not short
-    self.Sidebar.Group.Position = UDim2.fromOffset(22, short and 89 or 138)
+    self.Sidebar.Group.Position = UDim2.fromOffset(22, short and 84 or 115)
     self.Navigation.Position = UDim2.fromOffset(12, navTop)
-    self.Navigation.Size = UDim2.new(1, -24, 1, -(navTop + (short and 80 or 105)))
-    self.Profile:Fit(sideWidth - 40, short)
+    local footerHeight = self.Settings:Fit(sideWidth, short)
+    self.Navigation.Size = UDim2.new(1, -24, 1, -(navTop + footerHeight))
     self.NavigationCloseButton.Position = UDim2.fromOffset(sideWidth - 52, 6)
     self.NavigationCloseButton.Visible = self.Mobile
     self.MenuButton.Visible = self.Mobile
     local chromeWidth = self.Panel.Size.X.Offset
-    local chromeHeight = self.Mobile and 56 or 48
+    local chromeHeight = self.Mobile and 56 or 44
     local buttonSize = self.Mobile and 44 or 30
     self.Chrome.Position = UDim2.fromOffset(0, 0)
     self.Chrome.Size = UDim2.fromOffset(chromeWidth, chromeHeight)
-    self.CloseButton.Position = UDim2.fromOffset(chromeWidth - (self.Mobile and 48 or 44), self.Mobile and 6 or 9)
-    self.MinimizeButton.Position = UDim2.fromOffset(chromeWidth - (self.Mobile and 96 or 80), self.Mobile and 6 or 9)
+    self.CloseButton.Position = UDim2.fromOffset(chromeWidth - (self.Mobile and 48 or 44), self.Mobile and 6 or 7)
+    self.MinimizeButton.Position = UDim2.fromOffset(chromeWidth - (self.Mobile and 96 or 80), self.Mobile and 6 or 7)
     self.CloseButton.Size = UDim2.fromOffset(buttonSize, buttonSize)
     self.MinimizeButton.Size = UDim2.fromOffset(buttonSize, buttonSize)
     self.CloseButton.CloseA.Position = UDim2.fromOffset((buttonSize - 12) / 2, buttonSize / 2 - 1)
     self.CloseButton.CloseB.Position = self.CloseButton.CloseA.Position
     self.MinimizeButton.Dash.Position = UDim2.fromOffset((buttonSize - 12) / 2, buttonSize / 2)
-    self.Chrome.TitleDrag.Position = UDim2.fromOffset(self.Mobile and 56 or 0, 0)
-    self.Chrome.TitleDrag.Size = UDim2.fromOffset(math.max(1, chromeWidth - (self.Mobile and 160 or 90)), chromeHeight)
-    self.Breadcrumb.Position = UDim2.fromOffset(self.Mobile and 8 or 26, 0)
-    self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, chromeWidth - (self.Mobile and 168 or 116)), chromeHeight)
+    local searchX = self.Search:Fit(chromeWidth, chromeHeight, self.Mobile)
+    local dragX = self.Mobile and 56 or 0
+    local dragWidth = math.max(1, searchX - dragX - 8)
+    self.Chrome.TitleDrag.Position = UDim2.fromOffset(dragX, 0)
+    self.Chrome.TitleDrag.Size = UDim2.fromOffset(dragWidth, chromeHeight)
+    self.HomeButton.Visible = not self.Mobile
+    self.Chrome.TitleDrag.ChevronA.Visible = not self.Mobile
+    self.Chrome.TitleDrag.ChevronB.Visible = not self.Mobile
+    self.Breadcrumb.Position = UDim2.fromOffset(self.Mobile and 8 or 64, 0)
+    self.Breadcrumb.Size = UDim2.fromOffset(math.max(1, dragWidth - (self.Mobile and 12 or 76)), chromeHeight)
     self.Workspace.Position = UDim2.fromOffset(0, chromeHeight)
     self.Workspace.Size = UDim2.fromOffset(chromeWidth, self.Height - chromeHeight - (self.Mobile and 0 or 28))
     self.Inspector.Position = UDim2.fromOffset(self.PanelWidth + PANEL_GAP, 0)
@@ -333,6 +356,23 @@ function Window:AddTab(name, options)
     return Tab.new(self, name, options or {})
 end
 
+function Window:OpenSettings() return self.Settings:Open() end
+
+function Window:GetNavigationGroup(name) return self.NavigationUI:GetGroup(name) end
+
+function Window:ShowSettingsInNavigation(group, label) return self.Settings:ShowNavigation(group, label) end
+
+function Window:OpenProfile() return self.Profile:Open() end
+
+function Window:SetPreference(name, value) return self.Settings:Set(name, value) end
+
+function Window:GoHome()
+    for _, tab in ipairs(self.Tabs) do
+        if tab ~= self.Settings.Tab and tab ~= self.Profile.Tab then self:SelectTab(tab); return tab end
+    end
+    return self.Settings.Tab
+end
+
 function Window:SelectTab(tab)
     if self._destroyed or self._closing or not table.find(self.Tabs, tab) then return end
     self:ToggleNavigation(false)
@@ -342,6 +382,7 @@ function Window:SelectTab(tab)
     if self.ActiveTab == tab then return end
     local previous = self.ActiveTab
     self.ActiveTab = tab
+    self.Settings:SyncSelection(tab)
     tab:Relayout()
     for _, item in ipairs(self.Tabs) do
         item.Motion:Finish()
@@ -358,6 +399,7 @@ function Window:SelectTab(tab)
         tab.Motion:Fade(0.35, 0, Motion.Time.Page)
     end
     self.Breadcrumb.Text = Textos.espacio .. " / " .. tab.Name
+    self.NavigationUI:Reveal(tab)
     if self.SelectedControl and self.SelectedControl.FocusIndicator then
         self.SelectedControl.FocusIndicator.Visible = false
         self.SelectedControl.SelectionWash.Visible = false
@@ -392,6 +434,7 @@ function Window:ToggleNavigation(open)
     self:FinishEntrance(); self:EndPointer(); self:ClosePopup(); self:ReleaseInput()
     self.NavigationOpen = open == true
     self.Sidebar.Visible, self.Panel.Visible = self.NavigationOpen, not self.NavigationOpen
+    if self.NavigationOpen then self.NavigationUI:Reveal(self.ActiveTab) end
     return true
 end
 
