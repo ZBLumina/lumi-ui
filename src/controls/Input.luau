@@ -59,6 +59,7 @@ function Input.new(section, options)
         UI.new("UIPadding", box, {PaddingBottom = UDim.new(0, 10)})
     end
     c.Input, c.ValueInput, c.Field = box, box, field
+    box:SetAttribute("LumiTranslateText", options.Translate == true and c.ReadOnly)
     c.Get = function() return value end
     local textWidth, pending, revision = 200, nil, 0
     local function scheduleTextLayout()
@@ -110,7 +111,12 @@ function Input.new(section, options)
         end
         return changed
     end
-    rt:Connect(box:GetPropertyChangedSignal("Text"), function() c:Set(box.Text); scheduleTextLayout() end)
+    rt:Connect(box:GetPropertyChangedSignal("Text"), function()
+        -- Localized read-only text is presentation. Keep the original value,
+        -- its length limit and callbacks independent of the displayed language.
+        if not (c.ReadOnly and options.Translate == true) then c:Set(box.Text) end
+        scheduleTextLayout()
+    end)
     if c.MultiLine then
         rt:Connect(box:GetPropertyChangedSignal("CursorPosition"), scheduleTextLayout)
         rt:Connect(field:GetPropertyChangedSignal("AbsoluteSize"), scheduleTextLayout)

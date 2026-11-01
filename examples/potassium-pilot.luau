@@ -95,7 +95,7 @@ window.Runtime:Connect(noteInput.Input.FocusLost, function()
 end)
 
 local guide = help:AddSection("Guía rápida", {Tag = "LUMI"})
-guide:AddInput({Name = "Cómo moverte", ReadOnly = true, MultiLine = true, Height = 180,
+guide:AddInput({Name = "Cómo moverte", ReadOnly = true, Translate = true, MultiLine = true, Height = 180,
     Default = "Principal reúne las páginas de inicio y pruebas.\nEspacio contiene la organización y los ajustes.\nHerramientas incluye registros, notas y ayuda.\n\nCtrl+K busca páginas y controles. Escape cierra los menús.\nEl perfil y Configuraciones permanecen abajo."})
 guide:AddButton({Name = "Abrir configuraciones", Description = "Personaliza el movimiento y la decoración.", Action = "Abrir", Variant = "Secondary",
     Callback = function() window:OpenSettings() end})

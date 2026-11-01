@@ -6,7 +6,7 @@ Settings.__index = Settings
 
 function Settings.new(window)
     local self = setmetatable({Window = window, Controls = {}}, Settings)
-    self.Defaults = {Animations = window.Runtime.Animations, Inspector = true, Decoration = 100}
+    self.Defaults = {Animations = window.Runtime.Animations, Inspector = true, Decoration = 100, Language = window.Language}
     window.Preferences = table.clone(self.Defaults)
     window.Runtime.Decoration = 1
     local button = UI.button(window.Sidebar, "SettingsShortcut", "", 12, 0, 204, 56)
@@ -62,6 +62,7 @@ end
 function Settings:Set(name, value)
     local w = self.Window
     if w._destroyed or w._closing or self.Defaults[name] == nil then return false end
+    if name == "Language" then return w:SetLanguage(value) end
     if name == "Decoration" then value = math.clamp(UI.number(value, 100), 0, 100)
     else value = value == true end
     if w.Preferences[name] == value then return false end
@@ -89,7 +90,7 @@ function Settings:Set(name, value)
 end
 
 function Settings:Reset()
-    for _, name in ipairs({"Animations", "Inspector", "Decoration"}) do self:Set(name, self.Defaults[name]) end
+    for _, name in ipairs({"Animations", "Inspector", "Decoration", "Language"}) do self:Set(name, self.Defaults[name]) end
 end
 
 function Settings:Ensure()
@@ -101,6 +102,9 @@ function Settings:Ensure()
         self.Tab = tab
         tab.Button.Visible = false
         local group = tab:AddSection("Interfaz", {Tag = "A TU MEDIDA"})
+        self.Controls.Language = group:AddDropdown({Name = "Idioma", Description = "Elige el idioma de la interfaz.",
+            Values = {{Value = "es", Label = "Español"}, {Value = "pt", Label = "Português"}}, Default = w.Language,
+            Callback = function(value) w:SetLanguage(value) end})
         self.Controls.Animations = group:AddToggle({Name = "Animaciones",
             Description = "Aperturas, transiciones y seguimiento suave.", Default = w.Preferences.Animations,
             Callback = function(value) self:Set("Animations", value) end})
@@ -114,6 +118,9 @@ function Settings:Ensure()
         tab:AddSection("Preferencias", {Tag = "ESTA VENTANA"}):AddButton({Name = "Restablecer apariencia",
             Description = "Recupera los ajustes iniciales de esta ventana.", Action = "Restablecer", Variant = "Secondary",
             Callback = function() self:Reset() end})
+        tab:AddSection("Ayuda y atajos", {Tag = "ACCESIBILIDAD"}):AddInput({Name = "Atajo de ventana",
+            Description = "Minimiza o restaura sin interrumpir la escritura.", ReadOnly = true, Translate = true,
+            Default = w.ToggleKey == Enum.KeyCode.RightShift and "Mayús derecha" or (w.ToggleKey and w.ToggleKey.Name or "Desactivado")})
     end
     return self.Tab
 end

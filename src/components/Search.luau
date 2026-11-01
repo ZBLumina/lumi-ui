@@ -94,18 +94,23 @@ end
 
 function Search:Find(query)
     local needle, results = normalize(query), {}
+    local function translated(text)
+        return self.Window.Locale and self.Window.Locale:Translate(tostring(text or "")) or tostring(text or "")
+    end
     local function matches(text)
         return needle == "" or normalize(text):find(needle, 1, true) ~= nil
     end
     for _, tab in ipairs(self.Window.Tabs) do
-        if matches(tab.Name .. " " .. tostring(tab.NavigationLabel or "") .. " " .. tostring(tab.Description or "")) then
+        if matches(tab.Name .. " " .. tostring(tab.NavigationLabel or "") .. " " .. tostring(tab.Description or "")
+            .. " " .. translated(tab.Name) .. " " .. translated(tab.NavigationLabel) .. " " .. translated(tab.Description)) then
             table.insert(results, {Tab = tab, Label = tab.Name, Description = tostring(tab.Description or "")})
         end
         if needle ~= "" then
             for _, control in ipairs(tab.Controls) do
                 local section = control.Section and control.Section.Name or ""
                 local description = tostring(control.Description or "")
-                if matches(control.Name .. " " .. description .. " " .. section .. " " .. tab.Name) then
+                if matches(control.Name .. " " .. description .. " " .. section .. " " .. tab.Name
+                    .. " " .. translated(control.Name) .. " " .. translated(description) .. " " .. translated(section)) then
                     local context = tab.Name .. (section ~= "" and " / " .. section or "")
                     table.insert(results, {Tab = tab, Control = control, Label = control.Name,
                         Description = context .. (description ~= "" and " · " .. description or "")})

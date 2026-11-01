@@ -1,4 +1,4 @@
--- Textos propios de Lumi. El idioma de la interfaz es siempre español.
+-- Textos fuente de Lumi. Español es el idioma inicial; Locale traduce la presentación.
 local Textos = {
     tipos = {
         Button = {nombre = "Botón", etiqueta = "BOTÓN"},

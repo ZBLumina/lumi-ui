@@ -14,6 +14,7 @@ local Settings = require("components/Settings")
 local Search = require("components/Search")
 local Navigation = require("components/Navigation")
 local Icons = require("Icons")
+local Locale = require("Locale")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
@@ -21,6 +22,7 @@ Window.__index = Window
 local DESKTOP_HEIGHT = 688
 local PREFERRED_HEIGHT = 808
 local INSPECTOR_WIDTH, PANEL_GAP = 224, 12
+local liveWindows = {}
 
 function Window.new(options)
     local rt = Runtime.new()
@@ -29,6 +31,11 @@ function Window.new(options)
     Icons.mount(rt, root)
     local self = setmetatable({Runtime = rt, Root = root, Tabs = {}, _destroyed = false,
         Width = 1100, Height = DESKTOP_HEIGHT, Scale = 1, OpenDropdown = nil, Minimized = false}, Window)
+    self.Language = options.Language == "pt" and "pt" or "es"
+    self.ToggleKey = options.ToggleKey == nil and Enum.KeyCode.RightShift or options.ToggleKey
+    if self.ToggleKey ~= false and (typeof(self.ToggleKey) ~= "EnumItem" or self.ToggleKey.EnumType ~= Enum.KeyCode) then
+        self.ToggleKey = Enum.KeyCode.RightShift
+    end
     -- A transparent assembly anchors the three independently painted surfaces.
     local main = UI.frame(root, "Main", 0, 0, 1100, DESKTOP_HEIGHT)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -54,6 +61,7 @@ function Window.new(options)
     UI.stroke(brandTile, T.AccentSoft).Transparency = 0.65
     UI.mark(brandTile, 5, 5, 20)
     UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 32, 27, T.Text, T.Brand)
+    sidebar.Brand:SetAttribute("LumiUserText", true)
     UI.micro(sidebar, "BrandSub", Textos.interfaz, 21, 65, 145, 14)
     UI.micro(sidebar, "Group", Textos.principal, 22, 115, 140, 16)
     sidebar.Group.Visible = false
@@ -111,7 +119,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.19", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.20", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -139,8 +147,18 @@ function Window.new(options)
         if input == self._pointer or (input.UserInputType == Enum.UserInputType.MouseButton1 and self._pointer and self._pointer.UserInputType == Enum.UserInputType.MouseButton1) then self:EndPointer() end
     end)
     rt:Connect(Input.WindowFocusReleased, function() self:EndPointer(); self:ClosePopup() end)
-    rt:Connect(Input.InputBegan, function(input)
+    rt:Connect(Input.InputBegan, function(input, processed)
         if input.KeyCode == Enum.KeyCode.Escape then self:ClosePopup(true); self:EndPointer() end
+        if processed or Input:GetFocusedTextBox() or input.KeyCode ~= self.ToggleKey then return end
+        for index = #liveWindows, 1, -1 do
+            local target = liveWindows[index]
+            if not target._closing and not target._destroyed and target.ToggleKey == self.ToggleKey then
+                if target == self then
+                    if self.Minimized then self:Restore() else self:Minimize() end
+                end
+                break
+            end
+        end
     end)
     local viewport = UI.new("Frame", root, {Name = "Viewport", Size = UDim2.fromScale(1, 1)})
     self.Viewport = viewport
@@ -149,10 +167,14 @@ function Window.new(options)
     rt:Connect(viewport:GetPropertyChangedSignal("AbsoluteSize"), function() self:Fit() end)
     rt:OnCleanup(function()
         self._destroyed = true
+        local index = table.find(liveWindows, self)
+        if index then table.remove(liveWindows, index) end
         self:EndPointer()
         self:ClosePopup()
     end)
     self:Fit()
+    table.insert(liveWindows, self)
+    self.Locale = Locale.new(self, self.Language)
     task.defer(function()
         if self._destroyed or self._closing or self._entranceInterrupted or rt.Animations == false then return end
         self.UIScale.Scale = self.Scale * 0.99
@@ -352,6 +374,15 @@ function Window:AddTab(name, options)
 end
 
 function Window:OpenSettings() return self.Settings:Open() end
+
+function Window:SetLanguage(language)
+    if not self.Locale:Set(language) then return false end
+    self.Language, self.Preferences.Language = language, language
+    if self.Settings.Controls.Language then self.Settings.Controls.Language:Set(language, true) end
+    return true
+end
+
+function Window:GetLanguage() return self.Language end
 
 function Window:GetNavigationGroup(name) return self.NavigationUI:GetGroup(name) end
 

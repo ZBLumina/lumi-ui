@@ -1,14 +1,14 @@
 # Lumi UI
 
-Biblioteca modular de interfaces en Luau para Potassium. **v0.4.19 retira la planta central e integra iconos reales de MingCute como PNG transparentes incluidos en el script.** La barra izquierda de 228 px organiza nueve accesos en Principal, Espacio y Herramientas; el perfil y Configuraciones permanecen al pie. La barra superior incluye Inicio, ruta y búsqueda funcional. Los títulos usan Fredoka SemiBold; el texto, Nunito Sans Regular/Medium; los rótulos pequeños espaciados, Montserrat Medium; la marca, Comfortaa SemiBold. Combina bases de carbón cálido con superficies café y acentos crema. Conserva los tres paneles separados, los fondos suaves, el seguimiento lateral, los selectores con miniaturas y la cápsula superior. Toda la interfaz y la demostración están en español. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
+Biblioteca modular de interfaces en Luau para Potassium. **v0.4.20 incorpora traducción local entre español y portugués y un atajo para minimizar/restaurar, con iconos de MingCute y cabecera despejada.** La barra izquierda de 228 px organiza nueve accesos en Principal, Espacio y Herramientas; el perfil y Configuraciones permanecen al pie. La barra superior incluye Inicio, ruta y búsqueda funcional. Los títulos usan Fredoka SemiBold; el texto, Nunito Sans Regular/Medium; los rótulos pequeños espaciados, Montserrat Medium; la marca, Comfortaa SemiBold. Combina bases de carbón cálido con superficies café y acentos crema. Conserva los tres paneles separados, los fondos suaves, el seguimiento lateral, los selectores con miniaturas y la cápsula superior. La interfaz y la demostración inician en español; Configuraciones permite elegir portugués. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
 
 Las cinco variantes TTF y sus licencias OFL están en `assets/fonts`. El generador incorpora sus bytes en el script: no se descargan fuentes al abrirlo. Potassium las registra en su carpeta local `lumi-ui/fonts`; otros entornos sin registro de archivos usan fuentes nativas de respaldo. El ajuste de textos utiliza la FontFace real.
 
 Los fondos decorativos son PNG en `assets/decor`, con sus prompts de generación. `src/Artwork.luau` centraliza los fondos suaves de navegación, panel principal e inspector: `Sidebar`, `Panel` e `Inspector`. Se descargan de una revisión fija del repositorio y se guardan en `lumi-ui/assets`. Las imágenes no capturan entrada y mantienen la superficie de carbón si fallan. La planta central se retiró: títulos y descripciones disponen del ancho completo y la cabecera ya no reserva espacio para una ilustración. Las imágenes de referencia del usuario no forman parte del paquete.
 
-Los textos propios de la biblioteca se concentran en `src/Textos.luau`: navegación, etiquetas, estados, ayudas, tipos de control, listas vacías y confirmaciones. La demostración también traduce todos sus títulos, descripciones y opciones. Se conservan los nombres de producto Lumi UI, Potassium y Luau, junto con los identificadores técnicos de la API. Los textos personalizados que proporciona quien usa la biblioteca se muestran tal como se reciben.
+Los textos fuente se concentran en `src/Textos.luau` y el catálogo portugués en `src/translations/Portuguese.luau`: navegación, etiquetas, estados, ayudas, tipos de control, listas vacías y confirmaciones. La demostración también traduce todos sus títulos, descripciones y opciones. Se conservan los nombres de producto Lumi UI, Potassium y Luau, junto con los identificadores técnicos de la API. Los textos personalizados que no figuran en el catálogo se muestran tal como se reciben. Las notas, nombres de cuenta y consultas no se traducen.
 
-Los iconos y la cabecera se registran en [las notas de v0.4.19](docs/design/studio-v0419-mingcute.md). La barra completa se registra en [las notas de v0.4.18](docs/design/studio-v0418-barra-completa.md). La navegación superior se registra en [las notas de v0.4.17](docs/design/studio-v0417-navegacion.md). Los fondos y el seguimiento lateral se registran en [las notas de v0.4.16](docs/design/studio-v0416-fondos-seguimiento.md). La cabecera completa y su comprobación se registran en [las notas de v0.4.15](docs/design/studio-v0415-cabecera.md). La corrección de claridad y marca se registra en [las notas de v0.4.14](docs/design/studio-v0414-claridad.md). La decoración botánica y su comprobación se registran en [las notas de v0.4.13](docs/design/studio-v0413-imagenes.md).
+Idiomas y atajo se registran en [las notas de v0.4.20](docs/design/studio-v0420-idiomas-atajo.md). Los iconos y la cabecera se registran en [las notas de v0.4.19](docs/design/studio-v0419-mingcute.md). La barra completa se registra en [las notas de v0.4.18](docs/design/studio-v0418-barra-completa.md). La navegación superior se registra en [las notas de v0.4.17](docs/design/studio-v0417-navegacion.md). Los fondos y el seguimiento lateral se registran en [las notas de v0.4.16](docs/design/studio-v0416-fondos-seguimiento.md). La cabecera completa y su comprobación se registran en [las notas de v0.4.15](docs/design/studio-v0415-cabecera.md). La corrección de claridad y marca se registra en [las notas de v0.4.14](docs/design/studio-v0414-claridad.md). La decoración botánica y su comprobación se registran en [las notas de v0.4.13](docs/design/studio-v0413-imagenes.md).
 
 ## Probar la versión actual en Potassium
 
@@ -77,6 +77,20 @@ window:GoHome()
 
 Pulsa la búsqueda o Ctrl+K para localizar páginas y controles por nombre y descripción, con o sin tildes. Elegir un control abre su página, lo desplaza a la vista y lo selecciona sin cambiar su valor. Las flechas recorren resultados; Intro abre el seleccionado y Escape cierra. En teléfono y paneles estrechos la búsqueda usa un botón compacto. La ruta y los botones de ventana conservan su propio espacio.
 
+## Idiomas y atajo de ventana
+
+Configuraciones ofrece solo español y portugués. El catálogo se incluye en el script, conserva el texto fuente y traduce la presentación sin enviar datos. La búsqueda encuentra los nombres traducidos. No es un traductor automático de notas o texto libre. Las preferencias pertenecen a la sesión y a cada ventana.
+
+```luau
+local ventana = Lumi:CreateWindow({Title = "Lumi", Language = "es"})
+ventana:SetLanguage("pt")
+ventana:SetLanguage("es")
+print(ventana:GetLanguage())
+-- También: ventana:SetPreference("Language", "pt")
+```
+
+Mayús derecha minimiza o restaura la última ventana de Lumi; se ignora mientras escribes o si Roblox ya procesó la tecla. Puedes sustituirla con `CreateWindow({ToggleKey = Enum.KeyCode.F8})` o desactivarla con `ToggleKey = false`. En teléfono se conservan los botones de menú y la cápsula superior.
+
 ## Campos de texto y herramientas
 
 `AddInput` permite campos de una línea o multilínea, con texto de solo lectura cuando corresponde. El texto largo tiene un área desplazable y el cursor permanece visible al escribir. Los valores pertenecen a la sesión: no se guardan en disco.
@@ -91,7 +105,7 @@ ventana:ShowSettingsInNavigation("Espacio", "Ajustes")
 ventana:OpenProfile()
 ```
 
-La demostración incluye herramientas de distribución, controles de movimiento, registros locales de navegación, un bloc de notas y ayuda. Registros no recopila datos del juego ni transmite información. Las notas se conservan al navegar y minimizar hasta cerrar o recargar la demostración.
+La demostración incluye herramientas de distribución, controles de movimiento, registros locales de navegación, un bloc de notas y ayuda. Registros no recopila datos del juego ni transmite información. Las notas se conservan al navegar, cambiar de idioma y minimizar hasta cerrar o recargar la demostración.
 
 ## Perfil y selectores con imágenes
 

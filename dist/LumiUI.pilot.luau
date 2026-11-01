@@ -407,6 +407,109 @@ end
 return ImageSource
 end
 
+__factories["Locale"] = function(__require)
+-- src/Locale.luau
+local Portuguese = __require("translations/Portuguese")
+local Fonts = __require("Fonts")
+local Locale = {}
+Locale.__index = Locale
+local thin = utf8.char(0x2009)
+
+function Locale:Translate(source)
+    if self.Language ~= "pt" or type(source) ~= "string" then return source end
+    local tracked = source:find(thin, 1, true) ~= nil
+    local plain = tracked and source:gsub(thin, "") or source
+    local function phrase(text)
+        if Portuguese[text] then return Portuguese[text] end
+        local n = text:match("^(%d+) ejecución$") or text:match("^(%d+) ejecuciones$")
+        if n then return n .. (n == "1" and " execução" or " execuções") end
+        n = text:match("^(%d+) carácter$") or text:match("^(%d+) caracteres$")
+        if n then return n .. (n == "1" and " caractere" or " caracteres") end
+        n = text:match("^(%d+) opción$") or text:match("^(%d+) opciones$")
+        if n then return n .. (n == "1" and " opção" or " opções") end
+        n = text:match("^Hasta (%d+) caracteres$")
+        if n then return "Até " .. n .. " caracteres" end
+        local a,b = text:match("^OPCIÓN (%d+) / (%d+)$")
+        if a then return "OPÇÃO " .. a .. " / " .. b end
+        return text
+    end
+    local translated = phrase(plain)
+    if translated == plain then
+        translated = plain:gsub("[^/\n·]+", function(piece)
+            local lead, body, trail = piece:match("^(%s*)(.-)(%s*)$")
+            return lead .. phrase(body) .. trail
+        end)
+    end
+    return tracked and Fonts.tracked(translated) or translated
+end
+
+function Locale:Layout()
+    if self.Pending or self.Runtime.Destroyed then return end
+    self.Pending = self.Runtime:Delay(0, function()
+        self.Pending = nil
+        local w = self.Window
+        if w._destroyed or w._closing then return end
+        for _,tab in ipairs(w.Tabs) do tab:Relayout() end
+    end)
+end
+
+function Locale:Render(record, changed)
+    local object, property = record.Object, record.Property
+    if not object.Parent then return end
+    local current = object[property]
+    if changed then
+        if current == record.Output then return end
+        record.Source = current
+    end
+    local skip = object:GetAttribute("LumiUserText") == true
+        or (object:IsA("TextBox") and property == "Text" and object:GetAttribute("LumiTranslateText") ~= true)
+    local output = skip and record.Source or self:Translate(record.Source)
+    record.Output = output
+    if current ~= output then object[property] = output; self:Layout() end
+end
+
+function Locale:Bind(object)
+    if self.Records[object] or not (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then return end
+    local records = {}
+    self.Records[object] = records
+    for _,property in ipairs(object:IsA("TextBox") and {"Text", "PlaceholderText"} or {"Text"}) do
+        local record = {Object = object, Property = property, Source = object[property], Output = object[property]}
+        table.insert(records, record)
+        self.Runtime:Connect(object:GetPropertyChangedSignal(property), function() self:Render(record, true) end)
+        self:Render(record, false)
+    end
+    self.Runtime:Connect(object:GetAttributeChangedSignal("LumiTranslateText"), function()
+        for _,record in ipairs(records) do self:Render(record, false) end
+    end)
+    self.Runtime:Connect(object:GetAttributeChangedSignal("LumiUserText"), function()
+        for _,record in ipairs(records) do self:Render(record, false) end
+    end)
+    self.Runtime:Connect(object.Destroying, function() self.Records[object] = nil end)
+end
+
+function Locale.new(window, language)
+    local self = setmetatable({Window = window, Runtime = window.Runtime, Language = language, Records = {}}, Locale)
+    for _,object in ipairs(window.Root:GetDescendants()) do self:Bind(object) end
+    self.Runtime:Connect(window.Root.DescendantAdded, function(object) self:Bind(object) end)
+    self.Runtime:OnCleanup(function() table.clear(self.Records) end)
+    return self
+end
+
+function Locale:Set(language)
+    if language ~= "es" and language ~= "pt" then return false end
+    if self.Runtime.Destroyed or self.Window._closing or language == self.Language then return false end
+    self.Window:FinishEntrance(); self.Window:FinishPages()
+    self.Language = language
+    for _,records in pairs(self.Records) do
+        for _,record in ipairs(records) do self:Render(record, false) end
+    end
+    self:Layout()
+    return true
+end
+
+return Locale
+end
+
 __factories["Motion"] = function(__require)
 -- src/Motion.luau
 -- Short, interruptible transitions. Original opacity is restored on interruption.
@@ -936,7 +1039,7 @@ end
 
 __factories["Textos"] = function(__require)
 -- src/Textos.luau
--- Textos propios de Lumi. El idioma de la interfaz es siempre español.
+-- Textos fuente de Lumi. Español es el idioma inicial; Locale traduce la presentación.
 local Textos = {
     tipos = {
         Button = {nombre = "Botón", etiqueta = "BOTÓN"},
@@ -1183,6 +1286,7 @@ local Settings = __require("components/Settings")
 local Search = __require("components/Search")
 local Navigation = __require("components/Navigation")
 local Icons = __require("Icons")
+local Locale = __require("Locale")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
@@ -1190,6 +1294,7 @@ Window.__index = Window
 local DESKTOP_HEIGHT = 688
 local PREFERRED_HEIGHT = 808
 local INSPECTOR_WIDTH, PANEL_GAP = 224, 12
+local liveWindows = {}
 
 function Window.new(options)
     local rt = Runtime.new()
@@ -1198,6 +1303,11 @@ function Window.new(options)
     Icons.mount(rt, root)
     local self = setmetatable({Runtime = rt, Root = root, Tabs = {}, _destroyed = false,
         Width = 1100, Height = DESKTOP_HEIGHT, Scale = 1, OpenDropdown = nil, Minimized = false}, Window)
+    self.Language = options.Language == "pt" and "pt" or "es"
+    self.ToggleKey = options.ToggleKey == nil and Enum.KeyCode.RightShift or options.ToggleKey
+    if self.ToggleKey ~= false and (typeof(self.ToggleKey) ~= "EnumItem" or self.ToggleKey.EnumType ~= Enum.KeyCode) then
+        self.ToggleKey = Enum.KeyCode.RightShift
+    end
     -- A transparent assembly anchors the three independently painted surfaces.
     local main = UI.frame(root, "Main", 0, 0, 1100, DESKTOP_HEIGHT)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1223,6 +1333,7 @@ function Window.new(options)
     UI.stroke(brandTile, T.AccentSoft).Transparency = 0.65
     UI.mark(brandTile, 5, 5, 20)
     UI.text(sidebar, "Brand", options.Title or "lumi", 60, 21, 110, 32, 27, T.Text, T.Brand)
+    sidebar.Brand:SetAttribute("LumiUserText", true)
     UI.micro(sidebar, "BrandSub", Textos.interfaz, 21, 65, 145, 14)
     UI.micro(sidebar, "Group", Textos.principal, 22, 115, 140, 16)
     sidebar.Group.Visible = false
@@ -1280,7 +1391,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.19", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.20", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -1308,8 +1419,18 @@ function Window.new(options)
         if input == self._pointer or (input.UserInputType == Enum.UserInputType.MouseButton1 and self._pointer and self._pointer.UserInputType == Enum.UserInputType.MouseButton1) then self:EndPointer() end
     end)
     rt:Connect(Input.WindowFocusReleased, function() self:EndPointer(); self:ClosePopup() end)
-    rt:Connect(Input.InputBegan, function(input)
+    rt:Connect(Input.InputBegan, function(input, processed)
         if input.KeyCode == Enum.KeyCode.Escape then self:ClosePopup(true); self:EndPointer() end
+        if processed or Input:GetFocusedTextBox() or input.KeyCode ~= self.ToggleKey then return end
+        for index = #liveWindows, 1, -1 do
+            local target = liveWindows[index]
+            if not target._closing and not target._destroyed and target.ToggleKey == self.ToggleKey then
+                if target == self then
+                    if self.Minimized then self:Restore() else self:Minimize() end
+                end
+                break
+            end
+        end
     end)
     local viewport = UI.new("Frame", root, {Name = "Viewport", Size = UDim2.fromScale(1, 1)})
     self.Viewport = viewport
@@ -1318,10 +1439,14 @@ function Window.new(options)
     rt:Connect(viewport:GetPropertyChangedSignal("AbsoluteSize"), function() self:Fit() end)
     rt:OnCleanup(function()
         self._destroyed = true
+        local index = table.find(liveWindows, self)
+        if index then table.remove(liveWindows, index) end
         self:EndPointer()
         self:ClosePopup()
     end)
     self:Fit()
+    table.insert(liveWindows, self)
+    self.Locale = Locale.new(self, self.Language)
     task.defer(function()
         if self._destroyed or self._closing or self._entranceInterrupted or rt.Animations == false then return end
         self.UIScale.Scale = self.Scale * 0.99
@@ -1521,6 +1646,15 @@ function Window:AddTab(name, options)
 end
 
 function Window:OpenSettings() return self.Settings:Open() end
+
+function Window:SetLanguage(language)
+    if not self.Locale:Set(language) then return false end
+    self.Language, self.Preferences.Language = language, language
+    if self.Settings.Controls.Language then self.Settings.Controls.Language:Set(language, true) end
+    return true
+end
+
+function Window:GetLanguage() return self.Language end
 
 function Window:GetNavigationGroup(name) return self.NavigationUI:GetGroup(name) end
 
@@ -1988,6 +2122,8 @@ function Profile.new(window, options)
     placeholder.ZIndex = avatar.ZIndex + 1
     local nameLabel = UI.text(frame, "DisplayName", displayName, 44, 20, 100, 18, 12, T.Text, T.Medium)
     local userLabel = UI.text(frame, "Username", "@" .. username, 44, 38, 100, 16, 11, T.Muted)
+    nameLabel:SetAttribute("LumiUserText", true)
+    userLabel:SetAttribute("LumiUserText", true)
     local status = UI.text(frame, "Status", Textos.enLinea, 58, 30, 80, 15, 10, T.Muted)
     local dot = UI.frame(frame, "StatusDot", 48, 35, 4, 4, T.Green, 999)
     UI.chevron(frame, 184, 28, T.Secondary, true)
@@ -2185,18 +2321,23 @@ end
 
 function Search:Find(query)
     local needle, results = normalize(query), {}
+    local function translated(text)
+        return self.Window.Locale and self.Window.Locale:Translate(tostring(text or "")) or tostring(text or "")
+    end
     local function matches(text)
         return needle == "" or normalize(text):find(needle, 1, true) ~= nil
     end
     for _, tab in ipairs(self.Window.Tabs) do
-        if matches(tab.Name .. " " .. tostring(tab.NavigationLabel or "") .. " " .. tostring(tab.Description or "")) then
+        if matches(tab.Name .. " " .. tostring(tab.NavigationLabel or "") .. " " .. tostring(tab.Description or "")
+            .. " " .. translated(tab.Name) .. " " .. translated(tab.NavigationLabel) .. " " .. translated(tab.Description)) then
             table.insert(results, {Tab = tab, Label = tab.Name, Description = tostring(tab.Description or "")})
         end
         if needle ~= "" then
             for _, control in ipairs(tab.Controls) do
                 local section = control.Section and control.Section.Name or ""
                 local description = tostring(control.Description or "")
-                if matches(control.Name .. " " .. description .. " " .. section .. " " .. tab.Name) then
+                if matches(control.Name .. " " .. description .. " " .. section .. " " .. tab.Name
+                    .. " " .. translated(control.Name) .. " " .. translated(description) .. " " .. translated(section)) then
                     local context = tab.Name .. (section ~= "" and " / " .. section or "")
                     table.insert(results, {Tab = tab, Control = control, Label = control.Name,
                         Description = context .. (description ~= "" and " · " .. description or "")})
@@ -2382,7 +2523,7 @@ Settings.__index = Settings
 
 function Settings.new(window)
     local self = setmetatable({Window = window, Controls = {}}, Settings)
-    self.Defaults = {Animations = window.Runtime.Animations, Inspector = true, Decoration = 100}
+    self.Defaults = {Animations = window.Runtime.Animations, Inspector = true, Decoration = 100, Language = window.Language}
     window.Preferences = table.clone(self.Defaults)
     window.Runtime.Decoration = 1
     local button = UI.button(window.Sidebar, "SettingsShortcut", "", 12, 0, 204, 56)
@@ -2438,6 +2579,7 @@ end
 function Settings:Set(name, value)
     local w = self.Window
     if w._destroyed or w._closing or self.Defaults[name] == nil then return false end
+    if name == "Language" then return w:SetLanguage(value) end
     if name == "Decoration" then value = math.clamp(UI.number(value, 100), 0, 100)
     else value = value == true end
     if w.Preferences[name] == value then return false end
@@ -2465,7 +2607,7 @@ function Settings:Set(name, value)
 end
 
 function Settings:Reset()
-    for _, name in ipairs({"Animations", "Inspector", "Decoration"}) do self:Set(name, self.Defaults[name]) end
+    for _, name in ipairs({"Animations", "Inspector", "Decoration", "Language"}) do self:Set(name, self.Defaults[name]) end
 end
 
 function Settings:Ensure()
@@ -2477,6 +2619,9 @@ function Settings:Ensure()
         self.Tab = tab
         tab.Button.Visible = false
         local group = tab:AddSection("Interfaz", {Tag = "A TU MEDIDA"})
+        self.Controls.Language = group:AddDropdown({Name = "Idioma", Description = "Elige el idioma de la interfaz.",
+            Values = {{Value = "es", Label = "Español"}, {Value = "pt", Label = "Português"}}, Default = w.Language,
+            Callback = function(value) w:SetLanguage(value) end})
         self.Controls.Animations = group:AddToggle({Name = "Animaciones",
             Description = "Aperturas, transiciones y seguimiento suave.", Default = w.Preferences.Animations,
             Callback = function(value) self:Set("Animations", value) end})
@@ -2490,6 +2635,9 @@ function Settings:Ensure()
         tab:AddSection("Preferencias", {Tag = "ESTA VENTANA"}):AddButton({Name = "Restablecer apariencia",
             Description = "Recupera los ajustes iniciales de esta ventana.", Action = "Restablecer", Variant = "Secondary",
             Callback = function() self:Reset() end})
+        tab:AddSection("Ayuda y atajos", {Tag = "ACCESIBILIDAD"}):AddInput({Name = "Atajo de ventana",
+            Description = "Minimiza o restaura sin interrumpir la escritura.", ReadOnly = true, Translate = true,
+            Default = w.ToggleKey == Enum.KeyCode.RightShift and "Mayús derecha" or (w.ToggleKey and w.ToggleKey.Name or "Desactivado")})
     end
     return self.Tab
 end
@@ -2600,6 +2748,7 @@ function Presentation.new(window)
     Shadow.new(capsule, 19)
     UI.mark(capsule, 13, 9, 20)
     UI.text(capsule, "Label", window.Sidebar.Brand.Text, 42, 0, 70, 38, 15, T.Text, T.Brand)
+    capsule.Label:SetAttribute("LumiUserText", true)
     UI.chevron(capsule, 125, 18)
     self.CapsuleScale = UI.new("UIScale", capsule, {Scale = 1})
     self.CapsuleMotion = Motion.new(rt, capsule)
@@ -3057,6 +3206,7 @@ function Input.new(section, options)
         UI.new("UIPadding", box, {PaddingBottom = UDim.new(0, 10)})
     end
     c.Input, c.ValueInput, c.Field = box, box, field
+    box:SetAttribute("LumiTranslateText", options.Translate == true and c.ReadOnly)
     c.Get = function() return value end
     local textWidth, pending, revision = 200, nil, 0
     local function scheduleTextLayout()
@@ -3108,7 +3258,12 @@ function Input.new(section, options)
         end
         return changed
     end
-    rt:Connect(box:GetPropertyChangedSignal("Text"), function() c:Set(box.Text); scheduleTextLayout() end)
+    rt:Connect(box:GetPropertyChangedSignal("Text"), function()
+        -- Localized read-only text is presentation. Keep the original value,
+        -- its length limit and callbacks independent of the displayed language.
+        if not (c.ReadOnly and options.Translate == true) then c:Set(box.Text) end
+        scheduleTextLayout()
+    end)
     if c.MultiLine then
         rt:Connect(box:GetPropertyChangedSignal("CursorPosition"), scheduleTextLayout)
         rt:Connect(field:GetPropertyChangedSignal("AbsoluteSize"), scheduleTextLayout)
@@ -3367,7 +3522,7 @@ local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
 if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
 
-local Lumi = {Version = "0.4.19", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.4.20", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] La biblioteca está cerrada; vuelve a cargarla para continuar")
@@ -3388,6 +3543,317 @@ function Lumi:ResolveImage(source) return Images.Resolve(source) end
 
 environment.__LumiUI = Lumi
 return Lumi
+end
+
+__factories["translations/Portuguese"] = function(__require)
+-- src/translations/Portuguese.luau
+-- Traduções da interface; o texto digitado nas notas não faz parte do catálogo.
+local Portuguese = {
+    -- Controles, inspetor e estados compartilhados (Textos).
+    ["Botón"] = "Botão",
+    ["BOTÓN"] = "BOTÃO",
+    ["Interruptor"] = "Interruptor",
+    ["INTERRUPTOR"] = "INTERRUPTOR",
+    ["Deslizador"] = "Controle deslizante",
+    ["DESLIZADOR"] = "CONTROLE DESLIZANTE",
+    ["Selector"] = "Seletor",
+    ["SELECTOR"] = "SELETOR",
+    ["Campo de texto"] = "Campo de texto",
+    ["TEXTO"] = "TEXTO",
+    ["Control"] = "Controle",
+    ["CONTROL"] = "CONTROLE",
+    ["INTERFAZ LUMI"] = "INTERFACE LUMI",
+    ["BIBLIOTECA"] = "BIBLIOTECA",
+    ["SECCIONES"] = "SEÇÕES",
+    ["PRINCIPAL"] = "PRINCIPAL",
+    ["Principal"] = "Principal",
+    ["Configuraciones"] = "Configurações",
+    ["Personaliza Lumi"] = "Personalize o Lumi",
+    ["En línea"] = "Conectado",
+    ["Espacio"] = "Espaço",
+    ["ESPACIO"] = "ESPAÇO",
+    ["Inicio"] = "Início",
+    ["SESIÓN LOCAL"] = "SESSÃO LOCAL",
+    ["Un espacio para ajustar cada detalle."] = "Um espaço para ajustar cada detalhe.",
+    ["CONTROLES"] = "CONTROLES",
+    ["AJUSTES"] = "AJUSTES",
+    ["Ajustes"] = "Ajustes",
+    ["Listo"] = "Pronto",
+    ["Detalles"] = "Detalhes",
+    ["Ejecutar"] = "Executar",
+    ["Completado"] = "Concluído",
+    ["SÍ"] = "SIM",
+    ["NO"] = "NÃO",
+    ["Activado"] = "Ativado",
+    ["Desactivado"] = "Desativado",
+    ["SELECCIÓN"] = "SELEÇÃO",
+    ["Sin selección"] = "Sem seleção",
+    ["SIN OPCIONES"] = "SEM OPÇÕES",
+    ["Vacío"] = "Vazio",
+    ["Tu espacio"] = "Seu espaço",
+    ["Selecciona un control para ver sus detalles."] = "Selecione um controle para ver seus detalhes.",
+    ["Selecciona un ajuste."] = "Selecione uma configuração.",
+    ["PROPIEDADES"] = "PROPRIEDADES",
+    ["Página"] = "Página",
+    ["Sección"] = "Seção",
+    ["Tipo"] = "Tipo",
+    ["Rango"] = "Intervalo",
+    ["EJECUCIÓN"] = "EXECUÇÃO",
+    ["AL PULSAR"] = "AO CLICAR",
+    ["ESTADO"] = "ESTADO",
+    ["FIJO"] = "FIXO",
+    ["Este valor es fijo."] = "Este valor é fixo.",
+    ["Arrastra o escribe un valor."] = "Arraste ou digite um valor.",
+    ["Pulsa para cambiar el estado."] = "Clique para alterar o estado.",
+    ["Pulsa para ejecutar la acción."] = "Clique para executar a ação.",
+    ["OPCIÓN %02d / %02d"] = "OPÇÃO %02d / %02d",
+    ["LISTA VACÍA"] = "LISTA VAZIA",
+    ["UNA OPCIÓN"] = "UMA OPÇÃO",
+    ["Esta lista no tiene opciones."] = "Esta lista não tem opções.",
+    ["Elige una opción de la lista."] = "Escolha uma opção da lista.",
+    ["ELIGE UNA OPCIÓN"] = "ESCOLHA UMA OPÇÃO",
+    ["No hay opciones"] = "Nenhuma opção",
+    ["Escribe aquí…"] = "Digite aqui…",
+    ["SOLO LECTURA"] = "SOMENTE LEITURA",
+    ["Escribe para actualizar el texto."] = "Digite para atualizar o texto.",
+    ["Escribe y desplázate por el texto."] = "Digite e role pelo texto.",
+    ["Selecciona y copia el texto."] = "Selecione e copie o texto.",
+    ["Hasta %d caracteres"] = "Até %d caracteres",
+    ["Sin límite"] = "Sem limite",
+    [" ejecución"] = " execução",
+    [" ejecuciones"] = " execuções",
+    [" opción"] = " opção",
+    [" opciones"] = " opções",
+    [" carácter"] = " caractere",
+    [" caracteres"] = " caracteres",
+
+    -- Perfil, configurações, busca e preferências de idioma e atalho.
+    ["Perfil"] = "Perfil",
+    ["TU CUENTA / LUMI"] = "SUA CONTA / LUMI",
+    ["TU CUENTA"] = "SUA CONTA",
+    ["LUMI"] = "LUMI",
+    ["Cuenta de Roblox"] = "Conta do Roblox",
+    ["PERFIL LOCAL"] = "PERFIL LOCAL",
+    ["Nombre de visualización"] = "Nome de exibição",
+    ["Nombre de usuario"] = "Nome de usuário",
+    ["Estado"] = "Estado",
+    ["Personaliza tu espacio de Lumi."] = "Personalize seu espaço no Lumi.",
+    ["LUMI / TU ESPACIO"] = "LUMI / SEU ESPAÇO",
+    ["Interfaz"] = "Interface",
+    ["A TU MEDIDA"] = "DO SEU JEITO",
+    ["Animaciones"] = "Animações",
+    ["Aperturas, transiciones y seguimiento suave."] = "Aberturas, transições e acompanhamento suave.",
+    ["Intensidad de la decoración"] = "Intensidade da decoração",
+    ["Mantén las imágenes como un fondo sutil."] = "Mantenha as imagens como um fundo sutil.",
+    ["Mostrar inspector"] = "Mostrar inspetor",
+    ["Presenta los detalles del control seleccionado."] = "Exiba os detalhes do controle selecionado.",
+    ["Preferencias"] = "Preferências",
+    ["ESTA VENTANA"] = "ESTA JANELA",
+    ["Restablecer apariencia"] = "Restaurar aparência",
+    ["Recupera los ajustes iniciales de esta ventana."] = "Restaure as configurações iniciais desta janela.",
+    ["Restablecer"] = "Restaurar",
+    ["Buscar en Lumi..."] = "Buscar no Lumi...",
+    ["Ctrl K"] = "Ctrl K",
+    ["Ajustes de la interfaz de Lumi."] = "Configurações da interface do Lumi.",
+    ["No se encontraron resultados."] = "Nenhum resultado encontrado.",
+    ["Idioma"] = "Idioma",
+    ["Elige el idioma de la interfaz."] = "Escolha o idioma da interface.",
+    ["Español"] = "Espanhol",
+    ["Portugués"] = "Português",
+    ["Português"] = "Português",
+    ["Atajo de ventana"] = "Atalho da janela",
+    ["Mayús derecha"] = "Shift direito",
+    ["Minimiza o restaura sin interrumpir la escritura."] = "Minimize ou restaure sem interromper a digitação.",
+    ["Ayuda y atajos"] = "Ajuda e atalhos",
+
+    -- Navegação e títulos das seções da demonstração.
+    ["ESTUDIO / INTRODUCCIÓN"] = "ESTÚDIO / INTRODUÇÃO",
+    ["ESTUDIO"] = "ESTÚDIO",
+    ["INTRODUCCIÓN"] = "INTRODUÇÃO",
+    ["Jugador"] = "Jogador",
+    ["Aspecto"] = "Aparência",
+    ["Espacios"] = "Espaços",
+    ["Interacción"] = "Interação",
+    ["Registros"] = "Registros",
+    ["Herramientas"] = "Ferramentas",
+    ["Notas"] = "Notas",
+    ["Ayuda"] = "Ajuda",
+    ["VISTA PREVIA"] = "PRÉVIA",
+    ["Sesión"] = "Sessão",
+    ["Controles de entrada"] = "Controles de entrada",
+    ["PRUEBAS"] = "TESTES",
+    ["Límites"] = "Limites",
+    ["VALOR FIJO"] = "VALOR FIXO",
+    ["Presentación"] = "Apresentação",
+    ["Opciones"] = "Opções",
+    ["MENÚS"] = "MENUS",
+    ["Cielos"] = "Céus",
+    ["MINIATURAS"] = "MINIATURAS",
+    ["Distribución"] = "Disposição",
+    ["Movimiento"] = "Movimento",
+    ["ACCESIBILIDAD"] = "ACESSIBILIDADE",
+    ["Actividad"] = "Atividade",
+    ["Bloc de notas"] = "Bloco de notas",
+    ["ESTA SESIÓN"] = "ESTA SESSÃO",
+    ["Guía rápida"] = "Guia rápido",
+
+    -- Descrições, ações e opções visíveis dos seletores da demonstração.
+    ["Ajustes claros, con todo a mano."] = "Ajustes claros, com tudo à mão.",
+    ["Prueba controles de estado y valores numéricos."] = "Teste controles de estado e valores numéricos.",
+    ["Prueba los ajustes visuales de la interfaz."] = "Teste as configurações visuais da interface.",
+    ["Organiza tu espacio de trabajo."] = "Organize seu espaço de trabalho.",
+    ["Elige cómo se mueve y responde Lumi."] = "Escolha como o Lumi se move e responde.",
+    ["Actividad de la interfaz durante esta sesión."] = "Atividade da interface durante esta sessão.",
+    ["Un lugar para lo que quieres recordar."] = "Um lugar para o que você quer lembrar.",
+    ["Encuentra tu camino por Lumi."] = "Encontre seu caminho pelo Lumi.",
+    ["Activar espacio"] = "Ativar espaço",
+    ["Conserva activa esta sesión."] = "Mantenha esta sessão ativa.",
+    ["Intensidad"] = "Intensidade",
+    ["Ajusta la intensidad de la vista previa."] = "Ajuste a intensidade da prévia.",
+    ["Modo de interacción"] = "Modo de interação",
+    ["Elige cómo prefieres trabajar."] = "Escolha como prefere trabalhar.",
+    ["Equilibrado"] = "Equilibrado",
+    ["Suave"] = "Suave",
+    ["Preciso"] = "Preciso",
+    ["Acción de prueba"] = "Ação de teste",
+    ["Ejecuta una acción de demostración."] = "Execute uma ação de demonstração.",
+    ["Probar"] = "Testar",
+    ["Restablecer valores"] = "Restaurar valores",
+    ["Recupera los tres valores iniciales."] = "Restaure os três valores iniciais.",
+    ["Entrada activa"] = "Entrada ativa",
+    ["Un estado de ejemplo para probar el interruptor."] = "Um estado de exemplo para testar o interruptor.",
+    ["Respuesta"] = "Resposta",
+    ["Ajusta este valor numérico."] = "Ajuste este valor numérico.",
+    ["Una lista con una sola opción."] = "Uma lista com apenas uma opção.",
+    ["Vista local"] = "Visualização local",
+    ["Rango fijo"] = "Intervalo fixo",
+    ["Los límites iguales conservan un único valor."] = "Limites iguais mantêm um único valor.",
+    ["Probar entrada"] = "Testar entrada",
+    ["Ejecuta una acción de ejemplo."] = "Execute uma ação de exemplo.",
+    ["Capa de prueba"] = "Camada de teste",
+    ["Cambia este estado para ver su aspecto."] = "Altere este estado para ver sua aparência.",
+    ["Estilo"] = "Estilo",
+    ["Compara las opciones disponibles."] = "Compare as opções disponíveis.",
+    ["Lumi"] = "Lumi",
+    ["Mínimo"] = "Mínimo",
+    ["Compacto"] = "Compacto",
+    ["Detalle"] = "Detalhe",
+    ["Arrastra o escribe un valor exacto."] = "Arraste ou digite um valor exato.",
+    ["Lista vacía"] = "Lista vazia",
+    ["Una colección sin opciones."] = "Uma coleção sem opções.",
+    ["Material"] = "Material",
+    ["Una lista de opciones con desplazamiento."] = "Uma lista de opções com rolagem.",
+    ["Lino"] = "Linho",
+    ["Arena"] = "Areia",
+    ["Pergamino"] = "Pergaminho",
+    ["Arcilla"] = "Argila",
+    ["Topo"] = "Taupe",
+    ["Nogal"] = "Nogueira",
+    ["Carbón"] = "Carvão",
+    ["Grafito"] = "Grafite",
+    ["Ceniza"] = "Cinza",
+    ["Crema"] = "Creme",
+    ["Marfil"] = "Marfim",
+    ["Avena"] = "Aveia",
+    ["Tipo de cielo"] = "Tipo de céu",
+    ["Compara las miniaturas antes de elegir."] = "Compare as miniaturas antes de escolher.",
+    ["Despejado"] = "Limpo",
+    ["Luz clara y nubes suaves."] = "Luz clara e nuvens suaves.",
+    ["Atardecer"] = "Pôr do sol",
+    ["Tonos cálidos al final del día."] = "Tons quentes no fim do dia.",
+    ["Noche"] = "Noite",
+    ["Luna y cielo estrellado."] = "Lua e céu estrelado.",
+    ["Centrar ventana"] = "Centralizar janela",
+    ["Devuelve el conjunto al centro de la pantalla."] = "Devolva a janela e os painéis ao centro da tela.",
+    ["Centrar"] = "Centralizar",
+    ["Recupera los detalles cuando hay espacio disponible."] = "Recupere os detalhes quando houver espaço disponível.",
+    ["Mostrar"] = "Mostrar",
+    ["Ocultar inspector"] = "Ocultar inspetor",
+    ["Da más espacio al panel principal."] = "Dê mais espaço ao painel principal.",
+    ["Ocultar"] = "Ocultar",
+    ["Movimiento suave"] = "Movimento suave",
+    ["Activa transiciones y seguimiento de los paneles."] = "Ative as transições e o acompanhamento dos painéis.",
+    ["Activar"] = "Ativar",
+    ["Reducir movimiento"] = "Reduzir movimento",
+    ["Aplica los cambios de posición de forma inmediata."] = "Aplique as mudanças de posição imediatamente.",
+    ["Reducir"] = "Reduzir",
+    ["Preferencias de interacción"] = "Preferências de interação",
+    ["Abre todos los ajustes de la interfaz."] = "Abra todas as configurações da interface.",
+    ["Abrir"] = "Abrir",
+    ["Registro de navegación"] = "Registro de navegação",
+    ["Puedes desplazarte, seleccionar y copiar este texto."] = "Você pode rolar, selecionar e copiar este texto.",
+    ["Vaciar registro"] = "Limpar registro",
+    ["Limpia la actividad mostrada en esta sesión."] = "Limpe a atividade exibida nesta sessão.",
+    ["Vaciar"] = "Limpar",
+    ["Notas personales"] = "Notas pessoais",
+    ["Se conservan al cambiar de página y minimizar."] = "São mantidas ao mudar de página e minimizar.",
+    ["Escribe aquí tus notas..."] = "Digite suas notas aqui...",
+    ["Vaciar notas"] = "Limpar notas",
+    ["Borra el texto de este bloc."] = "Apague o texto deste bloco.",
+    ["Cómo moverte"] = "Como navegar",
+    ["Abrir configuraciones"] = "Abrir configurações",
+    ["Personaliza el movimiento y la decoración."] = "Personalize o movimento e a decoração.",
+    ["Volver a Inicio"] = "Voltar ao Início",
+    ["Regresa a los controles principales."] = "Volte aos controles principais.",
+    ["Volver"] = "Voltar",
+
+    -- Atividade e guia de leitura: cada linha pode ser traduzida separadamente.
+    ["Registro vaciado."] = "Registro limpo.",
+    ["Página abierta: "] = "Página aberta: ",
+    ["Página abierta: Inicio"] = "Página aberta: Início",
+    ["Página abierta: Jugador"] = "Página aberta: Jogador",
+    ["Página abierta: Aspecto"] = "Página aberta: Aparência",
+    ["Página abierta: Espacios"] = "Página aberta: Espaços",
+    ["Página abierta: Interacción"] = "Página aberta: Interação",
+    ["Página abierta: Ajustes"] = "Página aberta: Ajustes",
+    ["Página abierta: Configuraciones"] = "Página aberta: Configurações",
+    ["Página abierta: Registros"] = "Página aberta: Registros",
+    ["Página abierta: Notas"] = "Página aberta: Notas",
+    ["Página abierta: Ayuda"] = "Página aberta: Ajuda",
+    ["Página abierta: Perfil"] = "Página aberta: Perfil",
+    ["Sesión de Lumi iniciada."] = "Sessão do Lumi iniciada.",
+    ["Notas vaciadas."] = "Notas apagadas.",
+    ["Notas conservadas en la sesión."] = "Notas mantidas na sessão.",
+    ["Principal reúne las páginas de inicio y pruebas."] = "Principal reúne as páginas de início e testes.",
+    ["Espacio contiene la organización y los ajustes."] = "Espaço contém a organização e as configurações.",
+    ["Herramientas incluye registros, notas y ayuda."] = "Em Ferramentas, você encontra registros, notas e ajuda.",
+    ["Ctrl+K busca páginas y controles. Escape cierra los menús."] = "Ctrl+K busca páginas e controles. Escape fecha os menus.",
+    ["El perfil y Configuraciones permanecen abajo."] = "O perfil e as Configurações ficam na parte inferior.",
+}
+
+-- string.upper/lower só convertem ASCII; trate os acentos dos dois idiomas.
+local lowerAccents = {
+    ["Á"] = "á", ["É"] = "é", ["Í"] = "í", ["Ó"] = "ó",
+    ["Ú"] = "ú", ["Ü"] = "ü", ["Ñ"] = "ñ", ["À"] = "à",
+    ["Â"] = "â", ["Ã"] = "ã", ["Ê"] = "ê", ["Ô"] = "ô",
+    ["Õ"] = "õ", ["Ç"] = "ç",
+}
+local upperAccents = {
+    ["á"] = "Á", ["é"] = "É", ["í"] = "Í", ["ó"] = "Ó",
+    ["ú"] = "Ú", ["ü"] = "Ü", ["ñ"] = "Ñ", ["à"] = "À",
+    ["â"] = "Â", ["ã"] = "Ã", ["ê"] = "Ê", ["ô"] = "Ô",
+    ["õ"] = "Õ", ["ç"] = "Ç",
+}
+
+local function changeCase(value, upper)
+    local converted = value:gsub("[\194-\244][\128-\191]*", upper and upperAccents or lowerAccents)
+    return upper and string.upper(converted) or string.lower(converted)
+end
+
+-- Preserve as chaves exatas e crie variantes sem alterar a tabela durante pairs().
+local variants = {}
+for source, translation in pairs(Portuguese) do
+    -- Especificadores de formato diferenciam maiúsculas de minúsculas.
+    if not source:find("%", 1, true) then
+        variants[changeCase(source, false)] = changeCase(translation, false)
+        variants[changeCase(source, true)] = changeCase(translation, true)
+    end
+end
+for source, translation in pairs(variants) do
+    if Portuguese[source] == nil then Portuguese[source] = translation end
+end
+
+return Portuguese
 end
 
 __factories["FontsData"] = function(__require)
@@ -4130,7 +4596,7 @@ window.Runtime:Connect(noteInput.Input.FocusLost, function()
 end)
 
 local guide = help:AddSection("Guía rápida", {Tag = "LUMI"})
-guide:AddInput({Name = "Cómo moverte", ReadOnly = true, MultiLine = true, Height = 180,
+guide:AddInput({Name = "Cómo moverte", ReadOnly = true, Translate = true, MultiLine = true, Height = 180,
     Default = "Principal reúne las páginas de inicio y pruebas.\nEspacio contiene la organización y los ajustes.\nHerramientas incluye registros, notas y ayuda.\n\nCtrl+K busca páginas y controles. Escape cierra los menús.\nEl perfil y Configuraciones permanecen abajo."})
 guide:AddButton({Name = "Abrir configuraciones", Description = "Personaliza el movimiento y la decoración.", Action = "Abrir", Variant = "Secondary",
     Callback = function() window:OpenSettings() end})

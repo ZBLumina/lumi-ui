@@ -58,6 +58,8 @@ function Profile.new(window, options)
     placeholder.ZIndex = avatar.ZIndex + 1
     local nameLabel = UI.text(frame, "DisplayName", displayName, 44, 20, 100, 18, 12, T.Text, T.Medium)
     local userLabel = UI.text(frame, "Username", "@" .. username, 44, 38, 100, 16, 11, T.Muted)
+    nameLabel:SetAttribute("LumiUserText", true)
+    userLabel:SetAttribute("LumiUserText", true)
     local status = UI.text(frame, "Status", Textos.enLinea, 58, 30, 80, 15, 10, T.Muted)
     local dot = UI.frame(frame, "StatusDot", 48, 35, 4, 4, T.Green, 999)
     UI.chevron(frame, 184, 28, T.Secondary, true)
