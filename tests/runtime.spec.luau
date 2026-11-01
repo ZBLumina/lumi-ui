@@ -1,0 +1,1487 @@
+-- Appended to the real library by scripts/build.mjs. Run runtime.bundle.luau
+-- in a Roblox client; this suite intentionally has no Instance/service mocks.
+local RunService = game:GetService("RunService")
+assert(RunService:IsClient(), "[LUMI TEST] Run this bundle in a Roblox client")
+
+local cases = {}
+local failures = {}
+local passed = 0
+local windows = {}
+local cleanups = {}
+
+local function equal(actual, expected, message)
+    assert(actual == expected, (message or "value") .. ": expected " .. tostring(expected) .. ", got " .. tostring(actual))
+end
+
+local function eventually(predicate, message)
+    local deadline = os.clock() + 3
+    repeat
+        if predicate() then return end
+        task.wait()
+    until os.clock() >= deadline
+    error(message or "timed out waiting for runtime", 2)
+end
+
+local function settle()
+    -- Flush spawned callbacks and deferred destruction without synthesizing input.
+    for _ = 1, 3 do task.wait() end
+end
+
+local function test(name, body)
+    table.insert(cases, {Name = name, Body = body})
+end
+
+local function window()
+    local result = Lumi:CreateWindow({Title = "Lumi runtime tests"})
+    table.insert(windows, result)
+    return result
+end
+
+local function section()
+    local owner = window()
+    local tab = owner:AddTab("Tests")
+    return tab:AddSection("Runtime assertions"), owner, tab
+end
+
+local function visible(object)
+    if typeof(object) ~= "Instance" or object.Parent == nil then return false end
+    local current = object
+    while current do
+        if current:IsA("GuiObject") and not current.Visible then return false end
+        if current:IsA("ScreenGui") and not current.Enabled then return false end
+        current = current.Parent
+    end
+    return true
+end
+
+local function finite(value, message)
+    assert(type(value) == "number" and value == value and math.abs(value) < math.huge, message or "expected finite number")
+end
+
+local function trackedConnections(owner)
+    assert(type(owner.Runtime) == "table", "window.Runtime must expose its scope")
+    equal(owner.Runtime.Destroyed, false, "new scope Destroyed")
+    assert(type(owner.Runtime.Connections) == "table", "Runtime.Connections must be a table")
+    local snapshot = {}
+    for _, connection in pairs(owner.Runtime.Connections) do
+        equal(typeof(connection), "RBXScriptConnection", "tracked connection type")
+        table.insert(snapshot, connection)
+    end
+    assert(#snapshot > 0, "window must track its live engine connections")
+    local connected = false
+    for _, connection in ipairs(snapshot) do connected = connected or connection.Connected end
+    assert(connected, "window must have live tracked connections before destruction")
+    return snapshot
+end
+
+local function disconnected(owner, snapshot)
+    eventually(function() return owner.Runtime.Destroyed == true end, "scope did not become Destroyed")
+    for _, connection in ipairs(snapshot) do equal(connection.Connected, false, "leaked connection") end
+    equal(owner.Root.Parent, nil, "destroyed root parent")
+end
+
+test("public windows, tabs, sections and control handles mount real GUI", function()
+    local group, owner, tab = section()
+    equal(typeof(owner.Root), "Instance", "Root type")
+    assert(owner.Root:IsA("ScreenGui") and owner.Root.Parent ~= nil, "Root must be a mounted ScreenGui")
+    assert(typeof(owner.Main) == "Instance" and owner.Main:IsA("GuiObject"), "Main must be a GuiObject")
+    assert(owner.Main:IsDescendantOf(owner.Root), "Main must belong to Root")
+    equal(owner.Tabs[1], tab, "public Tabs entry")
+    local controls = {
+        group:AddButton({Name = "Action", Action = "Run"}),
+        group:AddToggle({Name = "Enabled", Default = false}),
+        group:AddSlider({Name = "Level", Min = 0, Max = 10, Default = 4}),
+        group:AddDropdown({Name = "Mode", Values = {"Alpha", "Beta"}, Default = "Alpha"}),
+    }
+    for index, control in ipairs(controls) do
+        assert(typeof(control.Row) == "Instance" and control.Row:IsA("GuiObject"), "control.Row must be real GUI")
+        assert(control.Row:IsDescendantOf(owner.Root), "control Row must belong to the window")
+        for _, method in ipairs({"Get", "Focus"}) do
+            equal(type(control[method]), "function", "control." .. method)
+        end
+        equal(type(control[index == 1 and "Press" or "Set"]), "function", "control action/setter")
+        control:Focus()
+        assert(visible(control.Row), "focused control must be on the visible page")
+    end
+end)
+
+test("equal slider bounds remain a fixed value", function()
+    local group = section()
+    local slider = group:AddSlider({Name = "Fixed", Min = 10, Max = 10, Default = 100})
+    equal(slider:Get(), 10, "fixed default")
+    slider:Set(-50, true)
+    equal(slider:Get(), 10, "fixed Set below range")
+    slider:Set(500, true)
+    equal(slider:Get(), 10, "fixed Set above range")
+end)
+
+test("reversed slider bounds normalize and setters clamp", function()
+    local group = section()
+    local slider = group:AddSlider({Name = "Reversed", Min = 20, Max = -5, Default = 6})
+    equal(slider:Get(), 6, "reversed default")
+    slider:Set(100, true)
+    equal(slider:Get(), 20, "normalized upper bound")
+    slider:Set(-100, true)
+    equal(slider:Get(), -5, "normalized lower bound")
+end)
+
+test("slider defaults clamp at both endpoints", function()
+    local group = section()
+    equal(group:AddSlider({Name = "Low", Min = 0, Max = 10, Default = -50}):Get(), 0, "low default")
+    equal(group:AddSlider({Name = "High", Min = 0, Max = 10, Default = 50}):Get(), 10, "high default")
+end)
+
+test("nonfinite slider defaults and setters fall back to finite bounded values", function()
+    local group = section()
+    for index, invalid in ipairs({0 / 0, math.huge, -math.huge}) do
+        local slider = group:AddSlider({Name = "Nonfinite " .. index, Min = 3, Max = 9, Default = invalid})
+        finite(slider:Get(), "nonfinite default escaped sanitization")
+        assert(slider:Get() >= 3 and slider:Get() <= 9, "default fallback must remain bounded")
+        slider:Set(7, true)
+        slider:Set(invalid, true)
+        finite(slider:Get(), "nonfinite Set escaped sanitization")
+        assert(slider:Get() >= 3 and slider:Get() <= 9, "Set fallback must remain bounded")
+    end
+    for index, bounds in ipairs({{0 / 0, 9}, {3, math.huge}, {-math.huge, math.huge}}) do
+        local slider = group:AddSlider({Name = "Invalid bounds " .. index, Min = bounds[1], Max = bounds[2], Default = 4})
+        finite(slider:Get(), "nonfinite bounds must have a safe fallback")
+        slider:Set(5, true)
+        finite(slider:Get(), "Set after invalid bounds must stay finite")
+    end
+end)
+
+test("dropdown invalid defaults select the first option and singletons work", function()
+    local group = section()
+    local dropdown = group:AddDropdown({Name = "Invalid default", Values = {"Alpha", "Beta"}, Default = "Missing"})
+    equal(dropdown:Get(), "Alpha", "invalid default fallback")
+    dropdown:Set("Beta", true)
+    equal(dropdown:Get(), "Beta", "valid dropdown Set")
+    equal(group:AddDropdown({Name = "Single", Values = {"Only"}, Default = "Missing"}):Get(), "Only", "singleton default")
+end)
+
+test("empty dropdown stays nil and can open and close safely", function()
+    local group = section()
+    local dropdown = group:AddDropdown({Name = "Empty", Values = {}, Default = "Missing"})
+    equal(dropdown:Get(), nil, "empty default")
+    pcall(function() dropdown:Set("Missing") end)
+    equal(dropdown:Get(), nil, "empty invalid Set")
+    dropdown:Open()
+    dropdown:Close()
+    equal(dropdown:Get(), nil, "empty menu operations")
+end)
+
+test("invalid dropdown setters preserve state and do not invoke callbacks", function()
+    local group = section()
+    local calls = 0
+    local dropdown = group:AddDropdown({Name = "Reject", Values = {"Alpha", "Beta"}, Default = "Alpha",
+        Callback = function() calls += 1 end})
+    settle()
+    local before = calls
+    -- Either false/no-op or an explicit validation error is a valid rejection.
+    pcall(function() dropdown:Set("Missing") end)
+    equal(dropdown:Get(), "Alpha", "invalid Set changed selection")
+    pcall(function() dropdown:Set(nil) end)
+    equal(dropdown:Get(), "Alpha", "nil Set changed selection")
+    settle()
+    equal(calls, before, "invalid Set fired a callback")
+end)
+
+local setterCases = {
+    {Name = "toggle", Add = "AddToggle", Options = {Name = "Toggle callbacks", Default = false}, Initial = false, Value = true},
+    {Name = "slider", Add = "AddSlider", Options = {Name = "Slider callbacks", Min = 0, Max = 10, Default = 2}, Initial = 2, Value = 8},
+    {Name = "dropdown", Add = "AddDropdown", Options = {Name = "Dropdown callbacks", Values = {"Alpha", "Beta"}, Default = "Alpha"}, Initial = "Alpha", Value = "Beta"},
+}
+
+for _, definition in ipairs(setterCases) do
+    test(definition.Name .. " updates state before callback and supports silent Set", function()
+        local group = section()
+        local calls = {}
+        local control
+        local options = table.clone(definition.Options)
+        options.Callback = function(value)
+            table.insert(calls, {Argument = value, State = control and control:Get()})
+        end
+        control = group[definition.Add](group, options)
+        equal(control:Get(), definition.Initial, "initial state")
+        settle()
+        local before = #calls
+        control:Set(definition.Value)
+        equal(control:Get(), definition.Value, "Set must update state immediately")
+        eventually(function() return #calls > before end, "setter callback was not delivered")
+        equal(#calls, before + 1, "one callback per changed value")
+        equal(calls[before + 1].Argument, definition.Value, "callback argument")
+        equal(calls[before + 1].State, definition.Value, "state visible inside callback")
+        control:Set(definition.Initial, true)
+        equal(control:Get(), definition.Initial, "silent state update")
+        settle()
+        equal(#calls, before + 1, "silent Set must suppress callback")
+    end)
+end
+
+test("callback errors are isolated and later actions still work", function()
+    local group = section()
+    local calls = 0
+    local toggle = group:AddToggle({Name = "Error callback", Default = false, Callback = function()
+        calls += 1
+        error("[LUMI TEST] intentional callback failure")
+    end})
+    settle()
+    local before = calls
+    toggle:Set(true)
+    equal(toggle:Get(), true, "state survives callback error")
+    eventually(function() return calls == before + 1 end, "failing callback did not run")
+    toggle:Set(false)
+    eventually(function() return calls == before + 2 end, "callbacks stopped after an error")
+    equal(toggle:Get(), false, "later setter still works")
+    local presses = 0
+    local button = group:AddButton({Name = "Working action", Callback = function() presses += 1 end})
+    equal(type(button.Press), "function", "button.Press")
+    button:Press()
+    eventually(function() return presses == 1 end, "action did not run after another callback failed")
+end)
+
+test("yielding callbacks do not block the setter", function()
+    local group = section()
+    local gate = Instance.new("BindableEvent")
+    local release = false
+    table.insert(cleanups, function() release = true; gate:Fire() end)
+    table.insert(cleanups, function() gate:Destroy() end)
+    local entered, finished, returned = false, false, false
+    local toggle = group:AddToggle({Name = "Yielding callback", Default = false, Callback = function()
+        entered = true
+        if not release then gate.Event:Wait() end
+        finished = true
+    end})
+    local setter = task.spawn(function() toggle:Set(true); returned = true end)
+    table.insert(cleanups, function()
+        if coroutine.status(setter) ~= "dead" then task.cancel(setter) end
+    end)
+    eventually(function() return entered end, "yielding callback did not enter")
+    eventually(function() return returned end, "Set blocked on its yielding callback")
+    equal(toggle:Get(), true, "yielding callback state")
+    equal(finished, false, "callback should wait at the real BindableEvent")
+    release = true
+    gate:Fire()
+    eventually(function() return finished end, "callback did not resume")
+end)
+
+test("active tab changes close the actual popup and change visible content", function()
+    local group, owner, first = section()
+    local dropdown = group:AddDropdown({Name = "Popup", Values = {"Alpha", "Beta"}})
+    local second = owner:AddTab("Other")
+    local other = second:AddSection("Other section"):AddToggle({Name = "Other toggle"})
+    owner:SelectTab(first)
+    assert(visible(dropdown.Row), "first tab must be visible")
+    assert(not visible(other.Row), "inactive tab must be hidden")
+    settle()
+    dropdown:Open()
+    local popup = owner.OpenDropdown
+    assert(typeof(popup) == "Instance" and popup:IsA("GuiObject"), "Open must expose the actual menu Instance")
+    assert(popup:IsDescendantOf(owner.Root) and visible(popup), "Open must show a menu in this window")
+    equal(owner.PopupOwner, dropdown, "popup owner")
+    settle()
+    assert(popup.AbsoluteSize.X > 0 and popup.AbsoluteSize.Y > 0, "popup must have real layout bounds")
+    local blocker = owner.Blocker
+    if typeof(blocker) == "Instance" then
+        assert(popup.ZIndex > blocker.ZIndex, "popup must render above its dismiss blocker")
+    end
+    dropdown:Close()
+    assert(not visible(popup), "Close left the menu visible")
+    equal(owner.OpenDropdown, nil, "Close retained active menu")
+    equal(owner.PopupOwner, nil, "Close retained owner")
+    dropdown:Open()
+    popup = owner.OpenDropdown
+    assert(typeof(popup) == "Instance" and visible(popup), "dropdown did not reopen")
+    owner:SelectTab(second)
+    assert(not visible(popup), "tab switch left the actual menu visible")
+    equal(owner.OpenDropdown, nil, "tab switch retained active menu")
+    equal(owner.PopupOwner, nil, "tab switch retained popup owner")
+    assert(not visible(dropdown.Row), "previous page remained visible")
+    assert(visible(other.Row), "selected page must become visible")
+end)
+
+for _, external in ipairs({false, true}) do
+    test(external and "external Root destruction cleans global connections" or "Destroy is idempotent and disconnects global scopes", function()
+        local _, owner = section()
+        local ticks = 0
+        equal(type(owner.Runtime.Connect), "function", "Runtime.Connect")
+        local heartbeat = owner.Runtime:Connect(RunService.Heartbeat, function() ticks += 1 end)
+        equal(typeof(heartbeat), "RBXScriptConnection", "real global service connection")
+        eventually(function() return ticks > 0 end, "tracked Heartbeat connection never fired")
+        local snapshot = trackedConnections(owner)
+        if external then owner.Root:Destroy() else owner:Destroy() end
+        disconnected(owner, snapshot)
+        local stopped = ticks
+        owner:Destroy()
+        owner:Destroy()
+        settle()
+        equal(ticks, stopped, "global callback survived window destruction")
+        disconnected(owner, snapshot)
+    end)
+end
+
+test("destroying one window preserves another window scope", function()
+    local _, first = section()
+    local secondGroup, second = section()
+    local toggle = secondGroup:AddToggle({Name = "Survivor", Default = false})
+    local firstConnections = trackedConnections(first)
+    local secondConnections = trackedConnections(second)
+    first:Destroy()
+    disconnected(first, firstConnections)
+    equal(second.Runtime.Destroyed, false, "another scope was destroyed")
+    equal(second.Root.Parent ~= nil, true, "another window was unmounted")
+    local live = false
+    for _, connection in ipairs(secondConnections) do live = live or connection.Connected end
+    assert(live, "another window's connections were disconnected")
+    toggle:Set(true, true)
+    equal(toggle:Get(), true, "another window stopped responding")
+end)
+
+test("false toggle remains Desactivado in the inspector", function()
+    local group, owner = section()
+    local toggle = group:AddToggle({Name = "Disabled control", Default = false})
+    toggle:Focus()
+    equal(owner.DetailValue.Text, "Desactivado", "false is a value, not missing state")
+    toggle:Set(true, true)
+    equal(owner.DetailValue.Text, "Activado", "selected inspector stays synchronized")
+end)
+
+test("initial centering uses root-local coordinates even under gethui insets", function()
+    local owner = window()
+    settle()
+    local center = owner.Main.AbsolutePosition + owner.Main.AbsoluteSize / 2 - owner.Viewport.AbsolutePosition
+    local viewport = owner.Viewport.AbsoluteSize
+    assert(math.abs(center.X - viewport.X / 2) < 2, "window is not horizontally centered")
+    assert(math.abs(center.Y - viewport.Y / 2) < 2, "window is not vertically centered")
+end)
+
+test("explicit focus is not overwritten by deferred first-control selection", function()
+    local group, owner = section()
+    group:AddToggle({Name = "First"})
+    local slider = group:AddSlider({Name = "Selected", Default = 65})
+    slider:Focus()
+    settle()
+    equal(owner.DetailTitle.Text, "Selected", "deferred focus replaced explicit focus")
+end)
+
+test("slider endpoints remain reachable when step does not divide the range", function()
+    local group = section()
+    local slider = group:AddSlider({Name = "Endpoints", Min = 0, Max = 1, Step = 0.3, Default = 1})
+    equal(slider:Get(), 1, "maximum default")
+    slider:Set(0, true)
+    equal(slider:Get(), 0, "minimum")
+    slider:Set(1, true)
+    equal(slider:Get(), 1, "maximum Set")
+end)
+
+test("reloading the complete library destroys old windows and connections", function()
+    local group, old = section()
+    group:AddToggle({Name = "Before reload"})
+    local snapshot = trackedConnections(old)
+    local parent = old.Root.Parent
+    Lumi = ReloadLumi()
+    disconnected(old, snapshot)
+    local current = window()
+    local count = 0
+    for _, child in ipairs(parent:GetChildren()) do
+        if child.Name == "LumiUI" then count += 1 end
+    end
+    equal(count, 1, "reinjection must leave one new root")
+    local toggle = current:AddTab("Reloaded"):AddSection("Fresh state"):AddToggle({Default = false})
+    toggle:Set(true, true)
+    equal(toggle:Get(), true, "new library controls still respond")
+end)
+
+test("compact fit remains bounded and leaves the workspace accessible", function()
+    local owner = window()
+    owner.Viewport.Size = UDim2.fromOffset(800, 600)
+    settle()
+    owner:Fit()
+    settle()
+    equal(owner.Inspector.Visible, false, "compact inspector must collapse")
+    assert(owner.Main.AbsoluteSize.X <= 784 and owner.Main.AbsoluteSize.Y <= 584, "compact window overflows available viewport")
+    assert(owner.Workspace.AbsoluteSize.X > 500, "compact workspace is too narrow")
+    assert(owner.Chrome.Rule.AbsoluteSize.X <= owner.Chrome.AbsoluteSize.X + 1, "chrome divider overflows compact width")
+end)
+
+test("precise slider focus and blur without editing preserve state and callback count", function()
+    local group = section()
+    local calls = 0
+    local slider = group:AddSlider({Name = "Precision", Min = -1, Max = 1, Step = 0.001, Default = 0.123,
+        Callback = function() calls += 1 end})
+    settle()
+    local original = slider:Get()
+    slider.ValueInput:CaptureFocus()
+    settle()
+    slider.ValueInput:ReleaseFocus()
+    settle()
+    equal(slider:Get(), original, "focus rounded a precise slider")
+    equal(calls, 0, "focus must not invoke a change callback")
+end)
+
+test("destroy cancels suspended library-owned callbacks", function()
+    local group, owner = section()
+    local gate = Instance.new("BindableEvent")
+    table.insert(cleanups, function() gate:Destroy() end)
+    local entered, resumed = false, false
+    local toggle = group:AddToggle({Callback = function()
+        entered = true
+        gate.Event:Wait()
+        resumed = true
+    end})
+    toggle:Set(true)
+    eventually(function() return entered end)
+    owner:Destroy()
+    gate:Fire()
+    settle()
+    equal(resumed, false, "callback resumed after destruction")
+end)
+
+test("obsolete library handles cannot create orphan windows", function()
+    local old = Lumi
+    Lumi = ReloadLumi()
+    local ok, orphan = pcall(function() return old:CreateWindow({Title = "Obsolete"}) end)
+    if ok and orphan then table.insert(windows, orphan) end
+    equal(ok, false, "destroyed library allowed construction")
+end)
+
+test("short compact viewports retain usable text and scroll the workspace", function()
+    local group, owner = section()
+    local toggle = group:AddToggle({Name = "Readable control", Description = "Readable description"})
+    owner.Viewport.Size = UDim2.fromOffset(640, 360)
+    settle()
+    owner:Fit()
+    settle()
+    assert(toggle.Label.TextSize * owner.Scale >= 11, "compact body text shrinks below 11 pixels")
+    assert(owner.Main.AbsoluteSize.X <= 624 and owner.Main.AbsoluteSize.Y <= 344, "small viewport overflow")
+    assert(owner.Workspace.AbsoluteSize.Y > 180, "workspace has no usable scrolling region")
+end)
+
+test("independent tween channels do not cancel each other", function()
+    local owner = window()
+    local frame = Instance.new("Frame")
+    frame.BackgroundTransparency = 0
+    frame.Position = UDim2.fromOffset(0, 0)
+    -- Isolate the channel fixture from the window's independent entrance fade.
+    frame.Parent = owner.Root
+    owner.Runtime:Tween(frame, {BackgroundTransparency = 0.5}, 0.08, "opacity")
+    owner.Runtime:Tween(frame, {Position = UDim2.fromOffset(24, 16)}, 0.08, "position")
+    task.wait(0.16)
+    assert(math.abs(frame.BackgroundTransparency - 0.5) < 0.01, "position cancelled opacity channel")
+    equal(frame.Position, UDim2.fromOffset(24, 16), "position channel final state")
+end)
+
+test("owned delayed work is cancelled by destruction", function()
+    local owner = window()
+    local ran = false
+    assert(type(owner.Runtime.Delay) == "function", "Runtime.Delay must own completion work")
+    owner.Runtime:Delay(0.08, function() ran = true end)
+    owner:Destroy()
+    task.wait(0.16)
+    equal(ran, false, "delayed completion survived destruction")
+end)
+
+test("animated Close is idempotent and eventually releases its scope", function()
+    local owner = window()
+    local snapshot = trackedConnections(owner)
+    assert(type(owner.Close) == "function", "Window.Close must provide animated dismissal")
+    owner:Close()
+    owner:Close()
+    assert(owner.Root.Parent ~= nil, "enabled Close skipped its visual exit")
+    task.wait(0.04)
+    local surface = owner.Panel or owner.Main
+    assert(surface.BackgroundTransparency > 0 and surface.BackgroundTransparency < 1,
+        "close has no intermediate fade")
+    eventually(function() return owner.Root.Parent == nil end, "animated close never destroyed its root")
+    disconnected(owner, snapshot)
+end)
+
+test("reinjection during animated close cannot destroy the replacement", function()
+    local owner = window()
+    assert(type(owner.Close) == "function", "Window.Close must exist")
+    owner:Close()
+    Lumi = ReloadLumi()
+    local current = window()
+    task.wait(0.35)
+    equal(owner.Root.Parent, nil, "old close root survived reload")
+    assert(current.Root.Parent ~= nil and not current.Runtime.Destroyed, "old completion destroyed current window")
+end)
+
+test("rapid tab changes settle only the latest page", function()
+    local group, owner, first = section()
+    group:AddToggle({Name = "First value"})
+    local second = owner:AddTab("Second")
+    local current = second:AddSection("Current"):AddToggle({Name = "Current value"})
+    for _ = 1, 4 do owner:SelectTab(second); owner:SelectTab(first) end
+    owner:SelectTab(second)
+    task.wait(0.3)
+    equal(owner.ActiveTab, second, "obsolete transition replaced active tab")
+    equal(first.Page.Visible, false, "old page remained visible")
+    equal(second.Page.Visible, true, "latest page was hidden")
+    equal(second.Page.Position, UDim2.fromOffset(0, 0), "latest page never reached its resting position")
+    equal(current.Label.TextTransparency, 0, "latest text remained faded")
+end)
+
+test("animation opt-out preserves immediate close and final geometry", function()
+    local owner = Lumi:CreateWindow({Title = "No motion", Animations = false})
+    table.insert(windows, owner)
+    local group = owner:AddTab("Static"):AddSection("Controls")
+    local slider = group:AddSlider({Min = 0, Max = 100, Default = 20})
+    slider:Set(80, true)
+    equal(slider:Get(), 80, "motion opt-out changed the setter")
+    assert(type(owner.Close) == "function", "Window.Close must exist")
+    owner:Close()
+    equal(owner.Root.Parent, nil, "motion opt-out deferred close")
+end)
+
+test("slider setters commit immediately while the presentation settles", function()
+    local group, owner = section()
+    local slider = group:AddSlider({Min = 0, Max = 100, Default = 20})
+    task.wait(0.3)
+    slider:Set(80, true)
+    equal(slider:Get(), 80, "animation delayed committed value")
+    assert(slider.Track.Fill.Size.X.Scale < 0.8, "enabled slider skipped its visual settle")
+    task.wait(0.04)
+    assert(slider.Track.Fill.Size.X.Scale > 0.2 and slider.Track.Fill.Size.X.Scale < 0.8, "slider has no intermediate position")
+    task.wait(0.15)
+    assert(math.abs(slider.Track.Fill.Size.X.Scale - 0.8) < 0.001, "slider never reached its committed value")
+end)
+
+test("reopening a fading popup cannot lose the current menu", function()
+    local group, owner = section()
+    local dropdown = group:AddDropdown({Values = {"Alpha", "Beta"}})
+    dropdown:Open()
+    local old = owner.OpenDropdown
+    dropdown:Close(true)
+    equal(owner.OpenDropdown, nil, "dismissed popup kept logical ownership")
+    equal(owner.Blocker.Visible, false, "dismissed popup kept its global hitbox")
+    dropdown:Open()
+    local current = owner.OpenDropdown
+    assert(current ~= old, "reopen reused the dismissing menu")
+    task.wait(0.25)
+    equal(old.Parent, nil, "retired popup remained mounted")
+    assert(current.Parent ~= nil and owner.OpenDropdown == current, "obsolete completion removed the replacement popup")
+end)
+
+test("window entrance preserves the active navigation selection", function()
+    local _, owner, tab = section()
+    equal(tab.Button.BackgroundTransparency, 0, "initial active selection was not established before entrance")
+    task.wait(0.3)
+    equal(owner.ActiveTab, tab, "initial active tab changed")
+    equal(tab.Button.BackgroundTransparency, 0, "entrance weakened the active navigation surface")
+end)
+
+test("dismissing a popup immediately releases GUI selection and option eligibility", function()
+    local group, owner = section()
+    local gui = game:GetService("GuiService")
+    local previous = gui.SelectedObject
+    table.insert(cleanups, function() gui.SelectedObject = previous and previous.Parent and previous or nil end)
+    local dropdown = group:AddDropdown({Values = {"Alpha", "Beta"}})
+    dropdown:Open()
+    local option = owner.OpenDropdown.Options.Option2
+    gui.SelectedObject = option
+    dropdown:Close(true)
+    equal(gui.SelectedObject, nil, "retiring popup kept GUI selection")
+    equal(option.Selectable, false, "retiring option stayed eligible for navigation")
+    equal(dropdown:Get(), "Alpha", "dismissal changed the selected value")
+end)
+
+test("animation opt-out skips the programmatic button pulse", function()
+    local owner = Lumi:CreateWindow({Animations = false})
+    table.insert(windows, owner)
+    local button = owner:AddTab("Static"):AddSection("Action"):AddButton({Name = "No pulse"})
+    button:Press()
+    local scale = button.Input:FindFirstChildOfClass("UIScale")
+    equal(scale.Scale, 1, "opt-out still squashed the button")
+    task.wait(0.1)
+    equal(scale.Scale, 1, "opt-out left a pending motion return")
+end)
+
+test("slider captions, drag input and bounds have separate safe areas", function()
+    local group, owner = section()
+    local slider = group:AddSlider({Name = "Intensidade", Description = "Set the strength of the preview.", Min = 0, Max = 100, Default = 65})
+    local following = group:AddDropdown({Name = "Mode", Values = {"Balanced", "Smooth"}})
+    owner:FinishEntrance()
+    settle()
+    local scale = owner.Scale
+    local descriptionBottom = slider.DescriptionLabel.AbsolutePosition.Y + slider.DescriptionLabel.AbsoluteSize.Y
+    assert(slider.Input.AbsolutePosition.Y >= descriptionBottom + 8 * scale - 0.5, "slider drag target crowds its description")
+    local bounds = slider.Row:FindFirstChild("Maximum")
+    local boundsBottom = bounds.AbsolutePosition.Y + bounds.AbsoluteSize.Y
+    local rowBottom = slider.Row.AbsolutePosition.Y + slider.Row.AbsoluteSize.Y
+    assert(rowBottom - boundsBottom >= 10 * scale - 0.5, "slider bounds crowd the following row")
+    assert(following.Row.AbsolutePosition.Y >= boundsBottom + 10 * scale - 0.5, "next control reaches the slider bounds")
+end)
+
+test("narrow rows keep captions and controls inside their own space", function()
+    local group, owner = section()
+    local slider = group:AddSlider({Name = "Intensidade", Description = "Adjust the preview.", Min = 0, Max = 100})
+    local button = group:AddButton({Name = "Preview action", Action = "Run preview"})
+    local dropdown = group:AddDropdown({Name = "Interaction mode", Values = {"Balanced", "Smooth"}})
+    local toggle = group:AddToggle({Name = "Enabled", Description = "Keep the current state."})
+    owner.Viewport.Size = UDim2.fromOffset(320, 500)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    for _, control in ipairs({slider, button, dropdown, toggle}) do
+        local field = control.ValueInput or (control.Kind == "Toggle" and control.Input.Switch or control.Input)
+        local left, right = control.Row.AbsolutePosition.X, control.Row.AbsolutePosition.X + control.Row.AbsoluteSize.X
+        assert(control.Label.AbsoluteSize.X >= 80 * owner.Scale - 0.5, control.Kind .. " caption collapsed")
+        assert(field.AbsolutePosition.X >= left + 8 * owner.Scale - 0.5, control.Kind .. " field escapes left edge")
+        assert(field.AbsolutePosition.X + field.AbsoluteSize.X <= right - 8 * owner.Scale + 0.5, control.Kind .. " field escapes right edge")
+    end
+    assert(toggle.Input.State.AbsolutePosition.X >= toggle.Row.AbsolutePosition.X + 8 * owner.Scale - 0.5, "toggle state escapes its row")
+    assert(toggle.Input.State.AbsolutePosition.X + toggle.Input.State.AbsoluteSize.X <= toggle.Input.Switch.AbsolutePosition.X - 8 * owner.Scale + 0.5,
+        "toggle state overlaps its switch")
+    local minimum, maximum = slider.Row.Minimum, slider.Row.Maximum
+    assert(minimum.AbsolutePosition.X + minimum.AbsoluteSize.X + 8 * owner.Scale <= maximum.AbsolutePosition.X + 0.5,
+        "slider endpoint labels overlap")
+end)
+
+test("slider value changes preserve its drag lane and following rows", function()
+    local group, owner = section()
+    local slider = group:AddSlider({Name = "Amount", Description = "Keep the drag lane still.", Min = 0, Max = 100000000, Default = 0, Suffix = " units"})
+    local following = group:AddButton({Name = "Next action"})
+    owner.Viewport.Size = UDim2.fromOffset(584, 600)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    local lane, height, nextRow = slider.Input.AbsolutePosition.Y, slider.Row.AbsoluteSize.Y, following.Row.AbsolutePosition.Y
+    slider:Set(100000000, true)
+    settle()
+    equal(slider.Input.AbsolutePosition.Y, lane, "value length moved the drag target")
+    equal(slider.Row.AbsoluteSize.Y, height, "value length changed the row height")
+    equal(following.Row.AbsolutePosition.Y, nextRow, "value length shifted the following control")
+end)
+
+test("narrow dropdown popovers contain captions and empty-state text", function()
+    local group, owner = section()
+    local dropdown = group:AddDropdown({Name = "Empty choices", Values = {}})
+    owner.Viewport.Size = UDim2.fromOffset(320, 500)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    dropdown:Open()
+    task.wait(0.15)
+    local menu = owner.OpenDropdown
+    for _, label in ipairs({menu.Caption, menu.Options.Empty}) do
+        assert(label.AbsolutePosition.X >= menu.AbsolutePosition.X, "popover text escapes its left edge")
+        assert(label.AbsolutePosition.X + label.AbsoluteSize.X <= menu.AbsolutePosition.X + menu.AbsoluteSize.X + 0.5,
+            "popover text escapes its right edge")
+    end
+end)
+
+test("long property descriptions fit above their stacked action", function()
+    local group, owner = section()
+    local button = group:AddButton({Name = "Restore the current workspace properties",
+        Description = "Restore every property in this local preview to its original value while keeping the current workspace open and ready for the next adjustment.", Action = "Restore"})
+    owner.Viewport.Size = UDim2.fromOffset(500, 600)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    assert(button.Label.TextFits, "long property name is clipped")
+    assert(button.DescriptionLabel.TextFits, "description is clipped instead of reflowing")
+    local bottom = button.DescriptionLabel.AbsolutePosition.Y + button.DescriptionLabel.AbsoluteSize.Y
+    assert(button.Input.AbsolutePosition.Y >= bottom + 8 * owner.Scale - 0.5, "action overlaps its description")
+    assert(button.Input.AbsolutePosition.Y + button.Input.AbsoluteSize.Y <= button.Row.AbsolutePosition.Y + button.Row.AbsoluteSize.Y - 8 * owner.Scale + 0.5,
+        "stacked action reaches the next row")
+end)
+
+test("inspector action status fits its value field", function()
+    local group, owner = section()
+    local button = group:AddButton({Name = "Preview action"})
+    button:Press()
+    button:Press()
+    button:Press()
+    owner:FinishEntrance(); settle()
+    equal(owner.DetailValue.Text, button:Get(), "inspector lost the action status")
+    local label = owner.DetailValue
+    local params = Instance.new("GetTextBoundsParams")
+    params.Text, params.Size, params.Font, params.Width = label.Text, label.TextSize, label.FontFace, 100000
+    local measured = game:GetService("TextService"):GetTextBoundsAsync(params)
+    params:Destroy()
+    assert(measured.X * owner.Scale <= label.AbsoluteSize.X + 0.5, "inspector clips the completed action status")
+end)
+
+test("resizing lays out hidden controls below the visible page", function()
+    local owner = window()
+    owner:AddTab("First")
+    local hidden = owner:AddTab("Hidden")
+    local group = hidden:AddSection("More controls")
+    local last
+    for i = 1, 12 do last = group:AddButton({Name = "Inspect input", Description = "Exercises a placeholder action.", Action = "Inspect"}) end
+    owner.Viewport.Size = UDim2.fromOffset(640, 360)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    owner.Viewport.Size = UDim2.fromOffset(420, 700)
+    settle(); owner:Fit(); owner:SelectTab(hidden); settle()
+    local edge = last.Row.AbsolutePosition.X + last.Row.AbsoluteSize.X
+    assert(last.Label.AbsolutePosition.X + last.Label.AbsoluteSize.X <= edge - 8 * owner.Scale + 0.5,
+        "hidden caption retained its old width after resize")
+    local bottom = last.DescriptionLabel.AbsolutePosition.Y + last.DescriptionLabel.AbsoluteSize.Y
+    assert(last.Input.AbsolutePosition.Y >= bottom + 8 * owner.Scale - 0.5, "hidden field retained its old inline placement")
+end)
+
+test("medium viewports keep property text readable instead of shrinking the desktop", function()
+    local group, owner = section()
+    local toggle = group:AddToggle({Name = "Readable state", Description = "Keep this property visible."})
+    owner.Viewport.Size = UDim2.fromOffset(850, 720)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    assert(toggle.Label.TextSize * owner.Scale >= 11, "medium viewport shrinks property text below 11px")
+end)
+
+test("detached inspector leaves a real transparent gap and follows window bounds", function()
+    local owner = window()
+    owner:FinishEntrance(); settle()
+    assert(owner.Panel, "main painted surface is missing")
+    equal(owner.Main.BackgroundTransparency, 1, "gap has an opaque backdrop")
+    local function check()
+        local gap = owner.Inspector.AbsolutePosition.X - owner.Panel.AbsolutePosition.X - owner.Panel.AbsoluteSize.X
+        assert(gap >= 10 * owner.Scale, "surfaces touch or overlap")
+        local left = owner.Main.AbsolutePosition - owner.Viewport.AbsolutePosition
+        assert(left.X >= 7 and left.Y >= 7, "assembly escaped top/left viewport")
+        assert(left.X + owner.Main.AbsoluteSize.X <= owner.Viewport.AbsoluteSize.X - 7, "inspector escaped right viewport")
+    end
+    owner:SetCenter(Vector2.new(-10000, -10000)); settle(); check()
+    owner:SetCenter(Vector2.new(10000, 10000)); settle(); check()
+    equal(owner.Panel.Size.Y.Offset, owner.Inspector.Size.Y.Offset, "surfaces lost shared alignment")
+end)
+
+test("detached surfaces fade together and leave no inspector after close", function()
+    local owner = window()
+    owner:FinishEntrance(); settle()
+    assert(owner.Panel, "main painted surface is missing")
+    local inspector = owner.Inspector
+    owner:Close(); task.wait(0.04)
+    assert(owner.Panel.BackgroundTransparency > 0 and owner.Panel.BackgroundTransparency < 1, "panel skipped fade")
+    assert(inspector.BackgroundTransparency > 0 and inspector.BackgroundTransparency < 1, "inspector skipped fade")
+    assert(math.abs(owner.Panel.BackgroundTransparency - inspector.BackgroundTransparency) < 0.01, "surfaces fade out of sync")
+    eventually(function() return inspector.Parent == nil end, "orphan inspector after close")
+end)
+
+test("narrow page headings wrap and leave room for the following section", function()
+    local owner = window()
+    local tab = owner:AddTab("Configuración del espacio", {Description = "Todos los ajustes de tu sesión reunidos en un solo lugar."})
+    local group = tab:AddSection("Ajustes")
+    group:AddToggle({Name = "Activar"})
+    owner.Viewport.Size = UDim2.fromOffset(320, 500)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    assert(tab.Title.TextFits, "page title is truncated")
+    assert(tab.Header.Subtitle.TextFits, "page description is truncated")
+    assert(tab.Header.Subtitle.AbsolutePosition.Y >= tab.Title.AbsolutePosition.Y + tab.Title.AbsoluteSize.Y,
+        "title overlaps page description")
+    assert(group.Frame.AbsolutePosition.Y >= tab.Header.Subtitle.AbsolutePosition.Y + tab.Header.Subtitle.AbsoluteSize.Y,
+        "page description overlaps first section")
+end)
+
+test("detached inspector retains input capture independently of the transparent gap", function()
+    local owner = window()
+    local captured = false
+    local ancestor = owner.Inspector
+    while ancestor and ancestor:IsA("GuiObject") do
+        captured = captured or ancestor.Active
+        ancestor = ancestor.Parent
+    end
+    assert(captured, "inspector surface lets world input pass through")
+    equal(owner.Main.Active, false, "transparent gap consumes world input")
+end)
+
+test("inspector follows dragging with a bounded delay and returns to its gap", function()
+    local owner = window()
+    owner.Viewport.Size = UDim2.fromOffset(1920, 1080)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    owner:SetCenter(Vector2.new(960, 540))
+    local home = owner.Inspector.Position
+    owner:SetCenter(owner.Center + Vector2.new(-80, 24), true)
+    assert(owner.Inspector.Position.X.Offset > home.X.Offset, "inspector has no following delay")
+    assert(owner.Inspector.Position.X.Offset <= home.X.Offset + 18, "following delay is excessive")
+    task.wait(.25)
+    equal(owner.Inspector.Position, home, "inspector did not settle into its gap")
+    owner:SetCenter(Vector2.new(10000, 10000), true); settle()
+    local edge = owner.Inspector.AbsolutePosition + owner.Inspector.AbsoluteSize - owner.Viewport.AbsolutePosition
+    assert(edge.X <= 1913 and edge.Y <= 1073, "following inspector escaped viewport")
+end)
+
+test("sidebar trails a desktop drag and returns without closing the panel gap", function()
+    local owner = window()
+    owner.Viewport.Size = UDim2.fromOffset(1920, 1080)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    owner:SetCenter(Vector2.new(960, 540))
+    owner:SetCenter(owner.Center + Vector2.new(80, 24), true)
+    assert(owner.Sidebar.Position.X.Offset < 0, "sidebar has no following delay")
+    assert(owner.Sidebar.Position.X.Offset >= -16, "sidebar delay is excessive")
+    assert(owner.Sidebar.Position.Y.Offset < 0, "sidebar does not follow vertical dragging")
+    for _, delta in ipairs({Vector2.new(-80, -24), Vector2.new(80, 24)}) do
+        owner:SetCenter(owner.Center + delta, true)
+        local gap = owner.Panel.Position.X.Offset - owner.Sidebar.Position.X.Offset - owner.Sidebar.Size.X.Offset
+        assert(gap >= 6, "following sidebar reaches the main panel")
+    end
+    task.wait(.25)
+    equal(owner.Sidebar.Position, UDim2.fromOffset(0, 0), "sidebar did not settle into its gap")
+    equal(owner.Inspector.Position, UDim2.fromOffset(owner.PanelWidth + 12, 0), "inspector did not settle with sidebar")
+end)
+
+test("sidebar stays inside the fitted viewport during rapid edge drags", function()
+    local owner = window()
+    owner.Viewport.Size = UDim2.fromOffset(1920, 1080)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    owner:SetCenter(Vector2.new(960, 540))
+    owner:SetCenter(owner.Center + Vector2.new(40, 20), true)
+    assert(owner.Sidebar.Position.X.Offset < 0, "sidebar must actually trail before checking its limits")
+    for _, target in ipairs({Vector2.new(-10000, -10000), Vector2.new(10000, 10000), Vector2.new(-10000, 10000), Vector2.new(10000, -10000)}) do
+        owner:SetCenter(target, true); settle()
+        local first = owner.Sidebar.AbsolutePosition - owner.Viewport.AbsolutePosition
+        local last = first + owner.Sidebar.AbsoluteSize
+        assert(first.X >= 7.5 and first.Y >= 7.5, "following sidebar escaped top or left")
+        assert(last.X <= 1912.5 and last.Y <= 1072.5, "following sidebar escaped bottom or right")
+        local gap = owner.Panel.AbsolutePosition.X - owner.Sidebar.AbsolutePosition.X - owner.Sidebar.AbsoluteSize.X
+        assert(gap >= 6 * owner.Scale - .5, "following sidebar overlaps main panel")
+    end
+end)
+
+test("sidebar follows in compact desktop and remains stable in touch navigation", function()
+    local owner = window()
+    owner.Viewport.Size = UDim2.fromOffset(900, 720)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    assert(not owner.Mobile and not owner.Inspector.Visible, "fixture is not compact desktop")
+    owner:SetCenter(Vector2.new(450, 360))
+    owner:SetCenter(owner.Center + Vector2.new(0, 8), true)
+    assert(owner.Sidebar.Position.Y.Offset < 0, "compact desktop lost sidebar following")
+    owner.Viewport.Size = UDim2.fromOffset(390, 844)
+    settle(); owner:Fit(); settle(); owner:ToggleNavigation(true)
+    owner:SetCenter(owner.Center + Vector2.new(0, 8), true)
+    equal(owner.Sidebar.Position, UDim2.fromOffset(0, 0), "touch navigation retained a floating offset")
+end)
+
+test("sidebar following is cleared by minimize, resize and animation opt-out", function()
+    local owner = window()
+    owner.Viewport.Size = UDim2.fromOffset(1920, 1080)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    owner:SetCenter(Vector2.new(960, 540))
+    owner:SetCenter(owner.Center + Vector2.new(40, 20), true)
+    assert(owner.Sidebar.Position.X.Offset < 0, "sidebar must actually trail before minimizing")
+    owner:Minimize()
+    equal(owner.Sidebar.Position, UDim2.fromOffset(0, 0), "minimize retained sidebar lag")
+    owner:Restore(); owner.Presentation:FinishTransition()
+    owner:SetCenter(owner.Center + Vector2.new(-40, -20), true)
+    owner.Viewport.Size = UDim2.fromOffset(900, 720)
+    settle(); owner:Fit()
+    equal(owner.Sidebar.Position, UDim2.fromOffset(0, 0), "resize retained sidebar lag")
+    owner.Runtime.Animations = false
+    owner:SetCenter(owner.Center + Vector2.new(0, 8), true)
+    equal(owner.Sidebar.Position, UDim2.fromOffset(0, 0), "animation opt-out retained sidebar lag")
+end)
+
+test("minimize closes input scopes and restore preserves the same workspace", function()
+    local group, owner, tab = section()
+    local slider = group:AddSlider({Min = 0, Max = 100, Default = 37})
+    local dropdown = group:AddDropdown({Values = {"Uno", "Dos"}})
+    dropdown:Set("Dos", true); dropdown:Open()
+    local center, root = owner.Center, owner.Root
+    assert(type(owner.Minimize) == "function", "Minimize is missing")
+    owner:Minimize()
+    equal(owner:IsMinimized(), true, "minimize did not commit its state")
+    equal(owner.OpenDropdown, nil, "minimize kept its popup")
+    equal(owner._pointer, nil, "minimize kept pointer ownership")
+    task.wait(.28)
+    equal(owner.Main.Visible, false, "minimized panels remain visible")
+    equal(owner.Capsule.Visible, true, "restore capsule is missing")
+    owner:Restore(); task.wait(.28)
+    equal(owner:IsMinimized(), false, "restore did not commit its state")
+    equal(owner.Main.Visible, true, "restored panels stayed hidden")
+    equal(owner.Capsule.Visible, false, "capsule remained after restore")
+    equal(owner.Root, root, "restore recreated the workspace")
+    equal(owner.Center, center, "restore lost the saved position")
+    equal(owner.ActiveTab, tab, "restore lost the active page")
+    equal(slider:Get(), 37, "restore lost slider state")
+    equal(dropdown:Get(), "Dos", "restore lost dropdown state")
+end)
+
+test("rapid minimize and restore requests settle only the latest state", function()
+    local owner = window()
+    assert(type(owner.Minimize) == "function", "Minimize is missing")
+    owner:Minimize(); owner:Restore(); owner:Minimize(); task.wait(.3)
+    equal(owner.Main.Visible, false, "obsolete restore showed the panels")
+    equal(owner.Capsule.Visible, true, "obsolete restore hid the capsule")
+    owner:Restore(); owner:Minimize(); owner:Restore(); task.wait(.3)
+    equal(owner.Main.Visible, true, "obsolete minimize hid the panels")
+    equal(owner.Capsule.Visible, false, "obsolete minimize showed the capsule")
+    equal(owner.UIScale.Scale, owner.Scale, "transition left the window contracted")
+    equal(owner.Panel.BackgroundTransparency, 0, "transition left the panel faded")
+end)
+
+test("minimized compact resize keeps its capsule bounded and restores fitted geometry", function()
+    local owner = window()
+    assert(type(owner.Minimize) == "function", "Minimize is missing")
+    owner:Minimize()
+    owner.Viewport.Size = UDim2.fromOffset(320, 500)
+    settle(); owner:Fit(); settle()
+    equal(owner.Main.Visible, false, "resize exposed minimized panels")
+    local capsule = owner.Capsule
+    local position = capsule.AbsolutePosition - owner.Viewport.AbsolutePosition
+    assert(position.X >= 8 and position.Y >= 8, "capsule escaped top or left")
+    assert(position.X + capsule.AbsoluteSize.X <= 312, "capsule escaped right")
+    owner:Restore(); task.wait(.28)
+    assert(owner.Main.AbsoluteSize.X <= 288.5, "restored compact window overflows")
+    equal(owner.Inspector.Visible, false, "compact restore exposed inspector")
+end)
+
+test("animation opt-out minimizes and restores immediately without following lag", function()
+    local owner = Lumi:CreateWindow({Animations = false})
+    table.insert(windows, owner)
+    assert(type(owner.Minimize) == "function", "Minimize is missing")
+    owner:Minimize()
+    equal(owner.Main.Visible, false, "opt-out minimize deferred visibility")
+    equal(owner.Capsule.Visible, true, "opt-out capsule stayed hidden")
+    owner:Restore()
+    equal(owner.Main.Visible, true, "opt-out restore deferred visibility")
+    equal(owner.Capsule.Visible, false, "opt-out restore kept its capsule")
+    local home = owner.Inspector.Position
+    owner:SetCenter(owner.Center + Vector2.new(-80, 20), true)
+    equal(owner.Inspector.Position, home, "opt-out inspector still lags")
+end)
+
+test("close while minimized releases the capsule and every tracked connection", function()
+    local owner = window()
+    assert(type(owner.Minimize) == "function", "Minimize is missing")
+    local snapshot = trackedConnections(owner)
+    owner:Minimize(); task.wait(.25)
+    local capsule = owner.Capsule
+    owner:Close()
+    eventually(function() return capsule.Parent == nil end, "close left an orphan capsule")
+    disconnected(owner, snapshot)
+end)
+
+test("reload during minimization cannot leave a capsule or hide its replacement", function()
+    local old = window()
+    assert(type(old.Minimize) == "function", "Minimize is missing")
+    old:Minimize()
+    local capsule = old.Capsule
+    Lumi = ReloadLumi()
+    local current = window()
+    task.wait(.3)
+    equal(capsule.Parent, nil, "old capsule survived reload")
+    assert(current.Main.Visible and not current:IsMinimized(), "old completion minimized replacement")
+end)
+
+test("restore capsule accepts a real click during minimization near the top edge", function()
+    local owner = window()
+    owner:FinishEntrance()
+    owner:SetCenter(Vector2.new(owner.Viewport.AbsoluteSize.X / 2, owner.Height * owner.Scale / 2 + 8))
+    settle()
+    owner:Minimize(); task.wait()
+    equal(owner.Presentation.State, "minimizing", "fixture missed the transition")
+    local position = owner.Capsule.AbsolutePosition + owner.Capsule.AbsoluteSize / 2 + game:GetService("GuiService"):GetGuiInset()
+    local vim = game:GetService("VirtualInputManager")
+    vim:SendMouseMoveEvent(position.X, position.Y, game)
+    vim:SendMouseButtonEvent(position.X, position.Y, 0, true, game, 0)
+    task.wait(.01)
+    vim:SendMouseButtonEvent(position.X, position.Y, 0, false, game, 0)
+    task.wait(.04)
+    equal(owner:IsMinimized(), false, "presentation shield swallowed the restore click")
+    task.wait(.25)
+    equal(owner.Main.Visible, true, "restore click did not reveal the panels")
+end)
+
+test("a minimized dropdown cannot reopen an invisible popup or its input blocker", function()
+    local group, owner = section()
+    local dropdown = group:AddDropdown({Values = {"Uno", "Dos"}})
+    owner:Minimize(); task.wait(.25)
+    dropdown:Open()
+    equal(owner.OpenDropdown, nil, "hidden dropdown reopened its popup")
+    equal(owner.Blocker.Visible, false, "hidden dropdown installed an input blocker")
+end)
+
+test("navigation is a detached surface with its own open gap", function()
+    local owner = window()
+    owner.Viewport.Size = UDim2.fromOffset(1920, 1080)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    local gap = owner.Panel.AbsolutePosition.X - owner.Sidebar.AbsolutePosition.X - owner.Sidebar.AbsoluteSize.X
+    assert(gap >= 10 * owner.Scale, "navigation is still joined to the content")
+    equal(owner.Sidebar.Size.Y.Offset, owner.Panel.Size.Y.Offset, "navigation lost vertical alignment")
+end)
+
+test("navigation profile shows the local display name and account", function()
+    local owner = window()
+    assert(owner.Profile, "profile is missing")
+    local player = game:GetService("Players").LocalPlayer
+    equal(owner.Profile.NameLabel.Text, player.DisplayName, "profile display name")
+    equal(owner.Profile.UserLabel.Text, "@" .. player.Name, "profile account name")
+    assert(owner.Profile.Avatar:IsA("ImageLabel"), "profile has no avatar surface")
+end)
+
+test("image dropdown keeps stable values while presenting labels and thumbnails", function()
+    local group, owner = section()
+    local received
+    assert(type(group.AddImageDropdown) == "function", "image selector is missing")
+    local choice = group:AddImageDropdown({Name = "Cielo", Values = {
+        {Value = "day", Label = "Despejado", Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"},
+        {Value = "night", Label = "Noche", Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"},
+    }, Default = "night", Callback = function(value) received = value end})
+    equal(choice:Get(), "night", "selector lost its stable value")
+    equal(choice:GetLabel(), "Noche", "selector presents an internal ID")
+    choice:Set("day"); settle()
+    equal(received, "day", "callback received presentation data")
+    equal(choice:GetLabel(), "Despejado", "label did not follow selection")
+    choice:Open(); settle()
+    assert(owner.OpenDropdown.Options.Option1:FindFirstChild("Thumbnail", true), "menu has no thumbnail")
+    choice:Set("invalid")
+    equal(choice:Get(), "day", "invalid value replaced the selection")
+end)
+
+test("image resolver preserves native content and reports invalid embedded data", function()
+    assert(type(Lumi.ResolveImage) == "function", "image resolver is missing")
+    equal(Lumi:ResolveImage("rbxassetid://123"), "rbxassetid://123", "native content was rewritten")
+    local source, problem = Lumi:ResolveImage({Data = "!!invalid!!", Name = "invalid.png"})
+    equal(source, nil, "malformed image data was accepted")
+    assert(type(problem) == "string", "image failure has no diagnostic")
+end)
+
+test("phone layout gives content its width and opens navigation on demand", function()
+    local owner = window()
+    local first = owner:AddTab("Inicio")
+    first:AddSection("General"):AddDropdown({Name = "Modo", Values = {"Uno", "Dos"}})
+    local second = owner:AddTab("Aspecto")
+    owner.Viewport.Size = UDim2.fromOffset(320, 600)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    equal(owner.Sidebar.Visible, false, "phone sidebar takes the content width")
+    assert(owner.Workspace.AbsoluteSize.X >= 280, "phone content is too narrow")
+    assert(owner.MenuButton.Visible and owner.MenuButton.AbsoluteSize.X >= 44, "phone menu target is too small")
+    owner:ToggleNavigation(true)
+    equal(owner.Sidebar.Visible, true, "phone navigation did not open")
+    owner:SelectTab(second)
+    equal(owner.Sidebar.Visible, false, "page selection did not close phone navigation")
+    equal(owner.Panel.Visible, true, "page selection did not reveal content")
+    owner:SelectTab(first); settle()
+    assert(first.Controls[1].Input.AbsoluteSize.Y >= 44, "phone selector target is too short")
+end)
+
+test("phone navigation prevents controls behind it from opening a popup", function()
+    local group, owner = section()
+    local selector = group:AddDropdown({Values = {"Uno", "Dos"}})
+    owner.Viewport.Size = UDim2.fromOffset(390, 844)
+    settle(); owner:Fit(); owner:ToggleNavigation(true)
+    selector:Open()
+    equal(owner.OpenDropdown, nil, "hidden content opened a popup over phone navigation")
+    equal(owner.Blocker.Visible, false, "hidden content blocked phone navigation")
+end)
+
+test("short phone viewport contains a popup requested for an offscreen image selector", function()
+    local group, owner = section()
+    local last
+    for i = 1, 8 do last = group:AddImageDropdown({Name = "Cielo " .. i, Values = {
+        {Value = "a", Image = "rbxassetid://1"}, {Value = "b", Image = "rbxassetid://2"},
+        {Value = "c", Image = "rbxassetid://3"}, {Value = "d", Image = "rbxassetid://4"},
+        {Value = "e", Image = "rbxassetid://5"},
+    }}) end
+    owner.Viewport.Size = UDim2.fromOffset(320, 300)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    last:Open(); task.wait(.15)
+    assert(owner.OpenDropdown, "image popup did not open")
+    local menu = owner.OpenDropdown
+    assert(menu.Size.Y.Offset <= owner.Height - 16, "image popup escapes the short viewport")
+end)
+
+test("owned loading work can be cancelled before a suspended operation resumes", function()
+    local owner = window()
+    local gate = Instance.new("BindableEvent")
+    table.insert(cleanups, function() gate:Destroy() end)
+    local entered, resumed = false, false
+    local loading = owner.Runtime:Callback(function()
+        entered = true; gate.Event:Wait(); resumed = true
+    end)
+    eventually(function() return entered end, "loading fixture did not suspend")
+    owner.Runtime:CancelDelay(loading)
+    gate:Fire(); settle()
+    equal(resumed, false, "cancelled loading work resumed")
+end)
+
+test("phone panels and restore capsule leave space for the Roblox top bar", function()
+    local owner = window()
+    owner.Viewport.Size = UDim2.fromOffset(320, 568)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    local safe = game:GetService("GuiService"):GetGuiInset().Y + 8
+    local top = owner.Main.AbsolutePosition.Y - owner.Viewport.AbsolutePosition.Y
+    assert(top >= safe - .5, "phone controls overlap the Roblox top bar")
+    owner:Minimize(); task.wait(.25)
+    top = owner.Capsule.AbsolutePosition.Y - owner.Viewport.AbsolutePosition.Y
+    assert(top >= safe - .5, "restore capsule overlaps the Roblox top bar")
+end)
+
+test("settings shortcut opens one reusable settings page without changing user controls", function()
+    local group, owner, first = section()
+    local slider = group:AddSlider({Name = "Volumen", Min = 0, Max = 100, Default = 37})
+    assert(owner.SettingsButton and type(owner.OpenSettings) == "function", "settings shortcut is missing")
+    local page = owner:OpenSettings()
+    equal(owner.ActiveTab, page, "settings did not become active")
+    equal(page.Name, "Configuraciones", "settings page is not Spanish")
+    local count = #owner.Tabs
+    equal(owner:OpenSettings(), page, "settings page was recreated")
+    equal(#owner.Tabs, count, "settings accumulated duplicate pages")
+    owner:GoHome()
+    equal(owner.ActiveTab, first, "home did not return to the first page")
+    equal(slider:Get(), 37, "navigation changed a user value")
+end)
+
+test("settings controls change real animation, artwork and inspector preferences", function()
+    local group, owner = section()
+    owner.Viewport.Size = UDim2.fromOffset(1920, 1080)
+    settle(); owner:Fit(); owner:FinishEntrance(); settle()
+    assert(type(owner.OpenSettings) == "function", "settings page is missing")
+    owner:OpenSettings(); owner:FinishPages()
+    local controls = owner.Settings.Controls
+    controls.Animations:Set(false); settle()
+    equal(owner.Runtime.Animations, false, "animation control did not change runtime")
+    local image = owner.Sidebar.BrandWaves.ArtworkImage
+    local original = image.ImageTransparency
+    controls.Decoration:Set(0); settle()
+    equal(image.ImageTransparency, 1, "decoration control did not hide artwork")
+    controls.Inspector:Set(false); settle()
+    equal(owner.Inspector.Visible, false, "inspector preference did not hide the panel")
+    owner.Settings:Reset(); settle()
+    equal(owner.Runtime.Animations, true, "reset did not restore animations")
+    equal(owner.Inspector.Visible, true, "reset did not restore inspector")
+    assert(math.abs(image.ImageTransparency-original)<.001, "reset did not restore artwork")
+end)
+
+test("profile and settings cards leave a separate scrollable navigation area", function()
+    local owner = window()
+    owner:AddTab("Inicio")
+    assert(owner.SettingsButton, "settings card is missing")
+    for _, viewport in ipairs({Vector2.new(1920,1080),Vector2.new(900,720),Vector2.new(640,360),Vector2.new(390,844),Vector2.new(320,500)}) do
+        owner.Viewport.Size = UDim2.fromOffset(viewport.X,viewport.Y)
+        settle(); owner:Fit(); owner:FinishEntrance(); settle()
+        if owner.Mobile then owner:ToggleNavigation(true) end
+        local nav, profile, settings = owner.Navigation, owner.Profile.Frame, owner.SettingsButton
+        assert(nav.AbsolutePosition.Y+nav.AbsoluteSize.Y<=profile.AbsolutePosition.Y+1,"navigation overlaps profile")
+        assert(profile.AbsolutePosition.Y+profile.AbsoluteSize.Y<=settings.AbsolutePosition.Y-3,"profile overlaps settings")
+        assert(settings.AbsolutePosition.Y+settings.AbsoluteSize.Y<=owner.Sidebar.AbsolutePosition.Y+owner.Sidebar.AbsoluteSize.Y-7,"settings escapes sidebar")
+        assert(settings.Label.TextFits,"settings label is clipped")
+        assert(nav.AbsoluteSize.Y>=35,"footer consumed navigation")
+        if owner.Mobile then assert(settings.AbsoluteSize.Y>=44,"settings touch target is too short") end
+    end
+end)
+
+test("top bar search and window buttons fit without overlapping the drag region", function()
+    local owner = window()
+    owner:AddTab("Inicio")
+    assert(owner.Search and owner.HomeButton,"new top bar is missing")
+    for _, viewport in ipairs({Vector2.new(1920,1080),Vector2.new(900,720),Vector2.new(750,720),Vector2.new(640,360),Vector2.new(320,500)}) do
+        owner.Viewport.Size=UDim2.fromOffset(viewport.X,viewport.Y)
+        settle();owner:Fit();owner:FinishEntrance();settle()
+        local search, minimize, close = owner.Search.Button, owner.MinimizeButton, owner.CloseButton
+        assert(owner.Chrome.TitleDrag.AbsolutePosition.X+owner.Chrome.TitleDrag.AbsoluteSize.X<=search.AbsolutePosition.X+1,"search overlaps drag region")
+        assert(search.AbsolutePosition.X+search.AbsoluteSize.X<=minimize.AbsolutePosition.X-2,"search overlaps minimize")
+        assert(minimize.AbsolutePosition.X+minimize.AbsoluteSize.X<=close.AbsolutePosition.X-2,"window buttons overlap")
+        assert(close.AbsolutePosition.X+close.AbsoluteSize.X<=owner.Chrome.AbsolutePosition.X+owner.Chrome.AbsoluteSize.X,"close escapes chrome")
+        if owner.Mobile then assert(search.AbsoluteSize.Y>=44,"phone search target is too short") end
+    end
+end)
+
+test("search matches accents and routes to a control while preserving its value", function()
+    local group, owner, first=section()
+    local destination=owner:AddTab("Aspecto")
+    local settings=destination:AddSection("Iluminación")
+    local slider=settings:AddSlider({Name="Iluminación cálida",Description="Brillo del espacio.",Min=0,Max=100,Default=42})
+    assert(owner.Search,"search is missing")
+    local results=owner.Search:Find("ILUMINACION CALIDA")
+    local target
+    for _, entry in ipairs(results) do if entry.Control==slider then target=entry end end
+    assert(target,"accent-insensitive search did not find the control")
+    owner.Search:Choose(target);settle()
+    equal(owner.ActiveTab,destination,"search did not navigate")
+    equal(owner.SelectedControl,slider,"search did not focus its result")
+    equal(slider:Get(),42,"search changed a control value")
+    owner:GoHome();equal(owner.ActiveTab,first,"home did not restore first page")
+end)
+
+test("empty search closes its popup and releases editing focus", function()
+    local group, owner=section()
+    assert(owner.Search,"search is missing")
+    equal(#owner.Search:Find("zzzz-nothing-zzzz"),0,"unknown query returned a result")
+    owner.Search:Open("zzzz-nothing-zzzz");settle()
+    equal(owner.PopupOwner,owner.Search,"search did not own its popup")
+    assert(owner.OpenDropdown:FindFirstChild("Empty",true),"empty search has no explanation")
+    owner:ClosePopup();settle()
+    equal(owner.OpenDropdown,nil,"search left a popup")
+    local focused=game:GetService("UserInputService"):GetFocusedTextBox()
+    assert(not focused or not focused:IsDescendantOf(owner.Root),"search retained editing focus")
+    owner:Minimize();owner.Search:Open("test")
+    equal(owner.OpenDropdown,nil,"search opened over a minimized window")
+end)
+
+test("search shortcut targets the latest open window and preserves an existing query", function()
+    local first, second = window(), window()
+    first:AddTab("Primera"); second:AddTab("Segunda")
+    first:FinishEntrance(); second:FinishEntrance(); settle()
+    assert(second.Search, "search is missing")
+    local vim = game:GetService("VirtualInputManager")
+    local function shortcut()
+        vim:SendKeyEvent(true, Enum.KeyCode.LeftControl, false, game)
+        vim:SendKeyEvent(true, Enum.KeyCode.K, false, game)
+        vim:SendKeyEvent(false, Enum.KeyCode.K, false, game)
+        vim:SendKeyEvent(false, Enum.KeyCode.LeftControl, false, game)
+        settle()
+    end
+    shortcut()
+    equal(first.OpenDropdown, nil, "shortcut opened search in an older window")
+    equal(second.PopupOwner, second.Search, "shortcut missed the latest window")
+    local popup = second.OpenDropdown
+    popup.Query.Text = "segunda"; settle(); shortcut()
+    equal(second.OpenDropdown, popup, "shortcut recreated an open search")
+    equal(popup.Query.Text, "segunda", "shortcut erased the query")
+    second:Destroy(); shortcut()
+    equal(first.PopupOwner, first.Search, "closed window kept keyboard ownership")
+end)
+
+test("decoration preferences survive an in-flight minimize or restore animation", function()
+    local group, owner, tab = section()
+    owner:FinishEntrance(); owner:FinishPages(); settle()
+    assert(type(owner.SetPreference) == "function", "settings preferences are missing")
+    local image = owner.Sidebar.BrandWaves.ArtworkImage
+    owner:Minimize(); owner:SetPreference("Decoration", 0)
+    task.wait(.25); owner:Restore(); task.wait(.25)
+    equal(owner.Preferences.Decoration, 0, "minimize changed the preference")
+    equal(image.ImageTransparency, 1, "minimize animation overwrote the artwork preference")
+    owner:SetPreference("Decoration", 100)
+    owner:Minimize(); task.wait(.25)
+    owner:Restore(); owner:SetPreference("Decoration", 0); task.wait(.25)
+    equal(image.ImageTransparency, 1, "restore animation overwrote the artwork preference")
+end)
+
+test("navigation groups retain all nine entries and their separated headings", function()
+    local owner=window()
+    assert(type(owner.GetNavigationGroup)=="function","navigation groups are missing")
+    local groups={{"Principal",{"Inicio","Jugador","Aspecto"}},{"Espacio",{"Espacios","Interacción","Ajustes"}},{"Herramientas",{"Registros","Notas","Ayuda"}}}
+    for _, definition in ipairs(groups) do
+        local group=owner:GetNavigationGroup(definition[1])
+        equal(owner:GetNavigationGroup(definition[1]),group,"group was duplicated")
+        for _, name in ipairs(definition[2]) do
+            local tab=owner:AddTab(name,{Group=definition[1]})
+            equal(tab.Button.Parent,group.Content,"tab is outside its group")
+        end
+    end
+    settle()
+    equal(#owner.Tabs,9,"navigation lost an entry")
+    local first=owner:GetNavigationGroup("Principal")
+    local second=owner:GetNavigationGroup("Espacio")
+    local third=owner:GetNavigationGroup("Herramientas")
+    assert(first.Frame.AbsolutePosition.Y<second.Frame.AbsolutePosition.Y and second.Frame.AbsolutePosition.Y<third.Frame.AbsolutePosition.Y,"group order is wrong")
+    assert(second.Divider.Visible and third.Divider.Visible,"group separators are missing")
+end)
+
+test("wider sidebar gives its cards room and keeps the meter tied to preferences", function()
+    local owner=window();owner:AddTab("Inicio")
+    owner.Viewport.Size=UDim2.fromOffset(1920,1080)
+    settle();owner:Fit();owner:FinishEntrance();settle()
+    assert(owner.SidebarWidth>=220,"sidebar did not become wider")
+    assert(owner.Settings.Value and owner.Settings.Fill,"configuration meter is missing")
+    owner:SetPreference("Decoration",65);settle()
+    equal(owner.Settings.Value.Text,"65%","meter percentage is not real")
+    assert(math.abs(owner.Settings.Fill.Size.X.Scale-.65)<.001,"meter fill does not follow decoration")
+    assert(owner.SettingsButton.Label.TextFits,"configuration label is clipped")
+    assert(owner.Profile.NameLabel.AbsoluteSize.X>=110,"profile still has a narrow text area")
+end)
+
+test("settings navigation entry and footer share the same preferences page", function()
+    local owner=window();local home=owner:AddTab("Inicio")
+    assert(type(owner.ShowSettingsInNavigation)=="function","settings navigation API is missing")
+    local settings=owner:ShowSettingsInNavigation("Espacio","Ajustes")
+    equal(settings.Button.Parent,owner:GetNavigationGroup("Espacio").Content,"settings entry is in the wrong group")
+    equal(settings.Label.Text,"Ajustes","settings entry did not use its caption")
+    assert(settings.Button.Visible,"settings navigation entry is hidden")
+    equal(owner:OpenSettings(),settings,"footer created a different page")
+    local found=false
+    for _, entry in ipairs(owner.Search:Find("ajustes"))do if entry.Tab==settings then found=true end end
+    assert(found,"search does not recognize the navigation caption")
+    owner:GoHome();equal(owner.ActiveTab,home,"home did not preserve first user page")
+end)
+
+test("profile card opens one account page and keeps the home destination", function()
+    local owner=window();local home=owner:AddTab("Inicio")
+    assert(owner.Profile.Frame:IsA("GuiButton"),"profile card is not an entry point")
+    assert(type(owner.OpenProfile)=="function","profile page is missing")
+    local page=owner:OpenProfile();local count=#owner.Tabs
+    equal(owner.ActiveTab,page,"profile did not become active")
+    equal(owner:OpenProfile(),page,"profile was recreated")
+    equal(#owner.Tabs,count,"profile accumulated pages")
+    equal(page.Name,"Perfil","profile page is not Spanish")
+    owner:GoHome();equal(owner.ActiveTab,home,"profile replaced home")
+end)
+
+test("text inputs retain Unicode multiline values and honor silent updates", function()
+    local group,owner=section()
+    assert(type(group.AddInput)=="function","text input is missing")
+    local changes=0;local received
+    local note=group:AddInput({Name="Notas",MultiLine=true,Default="Primera línea",Callback=function(value)changes+=1;received=value end})
+    note.Input.Text="Nueva línea\nEspañol: áéíóú";settle()
+    equal(note:Get(),"Nueva línea\nEspañol: áéíóú","typing did not update value")
+    equal(received,note:Get(),"text callback did not receive value")
+    local before=changes;note:Set("Cambio silencioso",true);settle()
+    equal(changes,before,"silent update invoked callback")
+    equal(note.Input.Text,"Cambio silencioso","programmatic update did not reach input")
+    local readonly=group:AddInput({Name="Registro",ReadOnly=true,MultiLine=true,Default="Actividad local"})
+    equal(readonly.Input.TextEditable,false,"read-only field can be edited")
+    readonly:Set("Actividad nueva",true);equal(readonly:Get(),"Actividad nueva","read-only field rejected programmatic updates")
+end)
+
+test("multiline text fields keep their caption above a bounded scroll area", function()
+    local group,owner=section()
+    assert(type(group.AddInput)=="function","text input is missing")
+    local note=group:AddInput({Name="Notas personales",Description="Texto de la sesión.",MultiLine=true,Height=112})
+    for _, viewport in ipairs({Vector2.new(1920,1080),Vector2.new(900,720),Vector2.new(390,844),Vector2.new(320,500)})do
+        owner.Viewport.Size=UDim2.fromOffset(viewport.X,viewport.Y);settle();owner:Fit();owner:FinishEntrance();settle()
+        local field=note.ValueInput and note.ValueInput.Parent or note.Input
+        assert(field.AbsolutePosition.Y>=note.DescriptionLabel.AbsolutePosition.Y+note.DescriptionLabel.AbsoluteSize.Y+8,"text field overlaps description")
+        assert(field.AbsolutePosition.X>=note.Row.AbsolutePosition.X+8,"text field escapes row")
+        assert(field.AbsolutePosition.X+field.AbsoluteSize.X<=note.Row.AbsolutePosition.X+note.Row.AbsoluteSize.X-8,"text field escapes right edge")
+        assert(field.AbsoluteSize.Y>=80,"multiline area is too short")
+    end
+end)
+
+test("long notes expose every line and keep the focused caret in view", function()
+    local group,owner=section()
+    owner:FinishEntrance()
+    local note=group:AddInput({Name="Notas largas",MultiLine=true,Height=112,
+        Default=string.rep("Línea con acento.\n",30)})
+    settle()
+    assert(note.Field.AbsoluteCanvasSize.Y>400,"long text has no scrollable canvas")
+    note.Input:CaptureFocus();settle()
+    note.Input.CursorPosition=#note.Input.Text+1
+    eventually(function() return note.Field.CanvasPosition.Y>250 end,"end caret stayed outside the field")
+    note.Input.CursorPosition=1
+    eventually(function() return note.Field.CanvasPosition.Y<1 end,"home caret stayed outside the field")
+    note.Input:ReleaseFocus()
+end)
+
+test("navigation icons load as complete images and retain selection tint", function()
+    local owner=window()
+    local tabs={}
+    for _,style in ipairs({"Grid","User","Cube","Stack","Sliders","Settings","Document","Bookmark","Help","Layers"}) do
+        local tab=owner:AddTab(style,{Icon=style})
+        table.insert(tabs,tab)
+        assert(tab.Icon:IsA("ImageLabel"),style.." is still assembled from geometry")
+        eventually(function() return tab.Icon.Image~="" and tab.Icon.IsLoaded end,style.." image did not load")
+        equal(tab.Icon.Active,false,"icon captures pointer input")
+    end
+    owner:SelectTab(tabs[8]);owner:FinishPages();task.wait(.2)
+    equal(tabs[8].Icon.ImageColor3,tabs[8].Label.TextColor3,"selected icon lost its accent")
+    equal(tabs[1].Icon.ImageColor3,tabs[1].Label.TextColor3,"inactive icon lost its text color")
+    equal(tabs[8].Icon.BackgroundTransparency,1,"image has an opaque square behind it")
+end)
+
+test("page headers leave room for controls without the central plant", function()
+    local group,owner,tab=section()
+    owner.Viewport.Size=UDim2.fromOffset(1920,1080);settle();owner:Fit();owner:FinishEntrance();settle()
+    for _,object in ipairs(tab.Header:GetDescendants()) do
+        assert(not object:IsA("ImageLabel"),"central plant is still mounted")
+    end
+    assert(tab.Header.AbsoluteSize.Y<=140,"removed plant still reserves a tall hero area")
+    assert(group.Frame.AbsolutePosition.Y>=tab.Subtitle.AbsolutePosition.Y+tab.Subtitle.AbsoluteSize.Y+8,"section crowds the subtitle")
+end)
+
+test("local language changes translate the interface and preserve editable text", function()
+    local group,owner,tab=section()
+    assert(type(owner.SetLanguage)=="function","local language API is missing")
+    local note=group:AddInput({Name="Notas personales",MultiLine=true,Default="Inicio / Mi texto áéíóú"})
+    local intensity=group:AddSlider({Name="Intensidad",Min=0,Max=100,Default=65})
+    owner:SetLanguage("pt");settle()
+    equal(note.Label.Text,"Notas pessoais","input caption was not translated")
+    equal(intensity.Label.Text,"Intensidade","control caption was not translated")
+    equal(note:Get(),"Inicio / Mi texto áéíóú","language changed user text")
+    equal(note.Input.Text,note:Get(),"language rewrote editable input")
+    intensity:Set(37,true);settle();equal(intensity:Get(),37,"language changed slider value")
+    owner:OpenSettings();owner:FinishPages();settle()
+    equal(owner.SettingsButton.Label.Text,"Configurações","settings footer stayed Spanish")
+    owner.Settings.Controls.Language:Open();task.wait(.2)
+    equal(owner.PopupOwner,owner.Settings.Controls.Language,"translation relayout closed the language menu")
+    owner:ClosePopup()
+    local later=owner:AddTab("Ayuda");settle();equal(later.Label.Text,"Ajuda","new labels ignore the selected language")
+    local results=owner.Search:Find("intensidade");local found=false
+    for _,entry in ipairs(results)do if entry.Control==intensity then found=true end end
+    assert(found,"search cannot find translated labels")
+    owner:Minimize();task.wait(.22);owner:Restore();task.wait(.22)
+    equal(owner:GetLanguage(),"pt","restore lost the language")
+    owner:SetLanguage("es");settle()
+    equal(note.Label.Text,"Notas personales","Spanish source did not return")
+    equal(note.Input.Text,"Inicio / Mi texto áéíóú","round trip changed notes")
+    equal(owner:SetLanguage("xx"),false,"unknown language was accepted")
+    equal(owner:SetLanguage("en"),false,"unrequested English language was accepted")
+end)
+
+test("language changes preserve identity, search input and independent windows", function()
+    local first=Lumi:CreateWindow({Title="Espacio",Language="pt",Profile={DisplayName="Inicio",Username="Ayuda"}})
+    table.insert(windows,first)
+    local second=window();first:AddTab("Inicio");second:AddTab("Inicio");settle()
+    equal(first:GetLanguage(),"pt","initial Portuguese option was ignored")
+    equal(second:GetLanguage(),"es","one window changed another language")
+    equal(first.Sidebar.Brand.Text,"Espacio","brand was translated")
+    equal(first.Profile.NameLabel.Text,"Inicio","display name was translated")
+    equal(first.Profile.UserLabel.Text,"@Ayuda","account name was translated")
+    local popup=first.Search:Open("minha consulta");settle()
+    first:SetLanguage("es");settle()
+    equal(first.OpenDropdown,popup,"language change destroyed the search")
+    equal(popup.Query.Text,"minha consulta","language change rewrote the query")
+end)
+
+test("readonly translations preserve stored text, limits and callback silence", function()
+    local group,owner=section();local calls=0
+    local field=group:AddInput({Name="Material",ReadOnly=true,Translate=true,Default="Lino",MaxLength=4,
+        Callback=function() calls+=1 end})
+    owner:SetLanguage("pt");settle()
+    equal(field.Input.Text,"Linho","translated display was truncated by source length")
+    equal(field:Get(),"Lino","display translation changed the stored value")
+    equal(calls,0,"display translation invoked the data callback")
+    owner:SetLanguage("es");settle()
+    equal(field.Input.Text,"Lino","readonly translation lost its Spanish source")
+end)
+
+test("window shortcut toggles only the latest window and ignores text editing", function()
+    local first=window();local second=window();first:FinishEntrance();second:FinishEntrance()
+    local vim=game:GetService("VirtualInputManager")
+    local function shortcut()
+        vim:SendKeyEvent(true,Enum.KeyCode.RightShift,false,game);task.wait(.03)
+        vim:SendKeyEvent(false,Enum.KeyCode.RightShift,false,game);task.wait(.23)
+    end
+    shortcut();equal(second:IsMinimized(),true,"shortcut did not minimize the newest window")
+    equal(first:IsMinimized(),false,"shortcut also minimized the older window")
+    shortcut();equal(second:IsMinimized(),false,"shortcut did not restore the window")
+    local input=second:AddTab("Notas"):AddSection("Sesión"):AddInput({Name="Notas personales",Default="Texto"})
+    input.Input:CaptureFocus();settle();shortcut()
+    equal(second:IsMinimized(),false,"shortcut fired during typing")
+    input.Input:ReleaseFocus();second:Destroy();shortcut()
+    equal(first:IsMinimized(),true,"closed window retained shortcut ownership")
+end)
+
+local function cleanupCase()
+    local errors = {}
+    -- Release yielding callbacks before disposing their real BindableEvents.
+    for _, cleanup in ipairs(cleanups) do
+        local ok, problem = pcall(cleanup)
+        if not ok then table.insert(errors, tostring(problem)) end
+    end
+    table.clear(cleanups)
+    for _, owner in ipairs(windows) do
+        local ok, problem = pcall(function() owner:Destroy() end)
+        if not ok then table.insert(errors, tostring(problem)) end
+        -- Still remove the actual UI if the library's Destroy itself failed.
+        pcall(function() owner.Root:Destroy() end)
+        pcall(function() owner.Runtime:Destroy() end)
+    end
+    table.clear(windows)
+    return errors
+end
+
+for _, case in ipairs(cases) do
+    local ok, problem = xpcall(case.Body, debug.traceback)
+    local cleanupErrors = cleanupCase()
+    if #cleanupErrors > 0 then
+        ok = false
+        problem = tostring(problem or "") .. "\ncleanup: " .. table.concat(cleanupErrors, "; ")
+    end
+    if ok then
+        passed += 1
+        print("[LUMI TEST] PASS " .. case.Name)
+    else
+        table.insert(failures, case.Name .. ": " .. tostring(problem))
+        warn("[LUMI TEST] FAIL " .. failures[#failures])
+    end
+end
+
+-- Also clear the library registry and any windows retained by the library.
+local cleanupOK, cleanupProblem = pcall(function() Lumi:Destroy(); Lumi:Destroy() end)
+if not cleanupOK then table.insert(failures, "library cleanup: " .. tostring(cleanupProblem)) end
+print(string.format("[LUMI TEST] summary: %d/%d passed, %d failures", passed, #cases, #failures))
+if #failures > 0 then error("[LUMI TEST] failures:\n" .. table.concat(failures, "\n"), 0) end
+return Lumi

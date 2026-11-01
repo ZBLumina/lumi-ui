@@ -1,0 +1,9 @@
+# Cabecera ampliada de Lumi
+
+`lumi-cabecera-arcos-v1.png` es un PNG original con transparencia, creado con la herramienta integrada **imagegen**. Amplía la composición con dos arcos, una onda larga, tres hojas simples y un único destello. Conserva el estilo plano y deja espacio transparente entre los motivos.
+
+## Prompt utilizado
+
+```text
+Use case: logo-brand. Asset type: ONE transparent PNG decorative header corner for Lumi's warm coffee GUI. Make a more elaborate yet restrained botanical composition in a WIDE LANDSCAPE 3:1 canvas. The artwork belongs entirely to the right side of a header, with a long low tapering wave extending left. At the lower right is a small fan of three simple pointed almond-shaped leaves on curved stems. Two broad elegant ribbon bands spring from the same lower-right hub, curl upward along the right edge in tall open arcs, and taper out at the upper right. One additional very fine curved line echoes the low leftward wave. A SINGLE small flat four-point star above the leaves. Keep plenty of transparent open space between the curves so the motif breathes; do not make a dense wreath. FLAT 2D vector-like shapes, only three solid warm colors: ivory #F7E7D3 for two leaves and the star, honey #D8B183 for one leaf and a small highlight, muted taupe #96704E for the broad arcs. The arcs must be quieter and darker than the leaves. No gradients, no leaf veins, no realistic texture, no paper grain, no folds, no 3D, no shadows, no glow or hazy background. Clear elegant antialiased silhouettes. The result will display at about 280 by 124 pixels on a medium cocoa background, so avoid tiny details. A tasteful coordinated composition of leaves and flowing arcs, ornamental but not crowded. Genuine transparent alpha everywhere outside the solid shapes. No text, letters, logos, buttons, frames, borders, or UI screenshot. Only this one corner decoration.
+```
