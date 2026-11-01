@@ -8,9 +8,14 @@ local Tab = {}
 Tab.__index = Tab
 
 function Tab.new(window, name, options)
+    local id = options.Id or tostring(name)
+    if not options.Id and window.TabsById[id] then id = id .. "#" .. tostring(#window.Tabs + 1) end
+    assert(not window.TabsById[id], "[Lumi UI] ID de página duplicado: " .. tostring(id))
     local index = #window.Tabs + 1
     local self = setmetatable({Name = tostring(name), Description = options.Description or Textos.descripcionPagina,
         Window = window, Sections = {}, Controls = {}}, Tab)
+    self.Id = id
+    window.TabsById[id] = self
     local group = window:GetNavigationGroup(options.Group)
     group.Count += 1
     self.NavigationGroup = group
@@ -96,16 +101,19 @@ function Tab:Relayout()
     self.Label.Size = UDim2.new(1, -48, 1, 0)
     local width = self:GetContentWidth()
     local textWidth = width
-    self.Title.TextSize = self.Window.Mobile and 32 or 40
-    self.Subtitle.TextSize = self.Window.Mobile and 15 or 16
+    UI.textSize(self.Title,self.Window.Mobile and 32 or 40)
+    UI.textSize(self.Subtitle,self.Window.Mobile and 15 or 16)
     local function height(label, available, minimum)
         local bounds = Fonts.bounds(label.Text, label.TextSize, label.FontFace, available - 1)
         return math.max(minimum, math.ceil(bounds.Y) + 2)
     end
     local titleHeight = height(self.Title, textWidth, self.Window.Mobile and 39 or 48)
-    local subtitleY = 21 + titleHeight + 8
+    local eyebrowHeight=height(self.Header.Eyebrow,textWidth,14)
+    local titleY=eyebrowHeight+7
+    local subtitleY = titleY + titleHeight + 8
     local subtitleHeight = height(self.Subtitle, textWidth, 18)
-    self.Header.Eyebrow.Size = UDim2.fromOffset(textWidth, 14)
+    self.Header.Eyebrow.Size = UDim2.fromOffset(textWidth, eyebrowHeight)
+    self.Title.Position=UDim2.fromOffset(0,titleY)
     self.Title.Size = UDim2.fromOffset(textWidth, titleHeight)
     self.Subtitle.Position = UDim2.fromOffset(0, subtitleY)
     self.Subtitle.Size = UDim2.fromOffset(textWidth, subtitleHeight)

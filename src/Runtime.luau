@@ -69,7 +69,10 @@ function Runtime:Callback(callback, ...)
         if self.Destroyed then self.Threads[thread] = nil; return end
         local ok, problem = pcall(callback, table.unpack(args, 1, args.n))
         self.Threads[thread] = nil
-        if not ok then warn("[Lumi UI] error en la función: " .. tostring(problem)) end
+        if not ok then
+            warn("[Lumi UI] error en la función: " .. tostring(problem))
+            if type(self.OnError)=="function" then pcall(self.OnError,problem) end
+        end
     end)
     self.Threads[thread] = true
     task.spawn(thread)
@@ -78,6 +81,12 @@ end
 
 function Runtime:OnCleanup(callback)
     table.insert(self.Cleanups, callback)
+    return callback
+end
+
+function Runtime:RemoveCleanup(callback)
+    local index=table.find(self.Cleanups,callback)
+    if index then table.remove(self.Cleanups,index) end
 end
 
 function Runtime:Destroy()

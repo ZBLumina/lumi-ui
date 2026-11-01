@@ -1,6 +1,7 @@
 local T = require("Theme")
 local Fonts = require("Fonts")
 local Icons = require("Icons")
+local Typography = require("Typography")
 local UI = {}
 
 function UI.new(class, parent, properties)
@@ -20,9 +21,12 @@ function UI.new(class, parent, properties)
     if properties and properties.TextSize and (properties.Font == T.Font or properties.Font == T.Medium or properties.Font == T.Mono) then
         object.TextSize += 2
     end
+    Typography.bind(object,parent)
     object.Parent = parent
     return object
 end
+
+function UI.textSize(object,size) return Typography.size(object,size) end
 
 function UI.frame(parent, name, x, y, width, height, color, radius)
     local frame = UI.new("Frame", parent, {

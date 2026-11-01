@@ -54,7 +54,7 @@ function Toggle.new(section, options)
         return true
     end
     rt:Connect(input.Activated, function()
-        if window._closing then return end
+        if not c:CanInteract() then return end
         window:FinishEntrance()
         c:Focus()
         c:Set(not value)

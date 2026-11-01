@@ -39,6 +39,8 @@ function Locale:Layout()
         local w = self.Window
         if w._destroyed or w._closing then return end
         for _,tab in ipairs(w.Tabs) do tab:Relayout() end
+        if w.Context and w.Context.Fit then w.Context:Fit() end
+        if w.Notifications then w.Notifications:Fit() end
     end)
 end
 

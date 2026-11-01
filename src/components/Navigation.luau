@@ -55,4 +55,12 @@ function Navigation:Reveal(tab)
     end)
 end
 
+function Navigation:Fit()
+    local factor=self.Window.TextScale or 1
+    for index,group in ipairs(self.Order) do
+        group.Label.Size=UDim2.new(1,-20,0,math.ceil(16*factor))
+        group.Frame.Heading.Size=UDim2.new(1,0,0,(index==1 and 24 or 42)+math.ceil(16*(factor-1)))
+    end
+end
+
 return Navigation

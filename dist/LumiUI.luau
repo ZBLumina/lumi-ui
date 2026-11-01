@@ -13,6 +13,143 @@ return {
 }
 end
 
+__factories["Control"] = function(__require)
+-- src/Control.luau
+local Runtime = __require("Runtime")
+local UI = __require("UI")
+local PropertyLayout = __require("PropertyLayout")
+local Control = {}
+
+function Control.id(section, options, kind)
+    local w = section.Tab.Window
+    local explicit = options.Id ~= nil
+    local id = explicit and tostring(options.Id) or section.Tab.Id .. "/" .. section.Id .. "/" .. tostring(options.Name or kind)
+    assert(id ~= "", "[Lumi UI] El ID no puede estar vacío")
+    if explicit then assert(not w.ControlsById[id], "[Lumi UI] ID de control duplicado: " .. id)
+    else
+        local base, suffix = id, 2
+        while w.ControlsById[id] do id = base .. "#" .. suffix; suffix += 1 end
+    end
+    return id
+end
+
+function Control.attach(c, options, id)
+    local w = c.Section.Tab.Window
+    c.Id, c.Options, c.Enabled, c._destroyed = id, options, options.Enabled ~= false, false
+    c.Persist = options.Persist ~= false and c.Kind ~= "Button" and options.ReadOnly ~= true
+    local rt = Runtime.new()
+    rt.Animations = w.Runtime.Animations
+    rt.OnError = function(problem) if w.Runtime.OnError then w.Runtime.OnError(problem) end end
+    c.ParentCleanup=w.Runtime:OnCleanup(function() c:Destroy() end)
+    c.Runtime = rt
+    w.ControlsById[id] = c
+    function c:IsEnabled() return not self._destroyed and self.Enabled end
+    function c:CanInteract() return self:IsEnabled() and not w._closing and not w.Minimized end
+    function c:Changed()
+        if self.Persist and not self._destroyed and w.Profiles and not w._applyingState then w.Profiles:Changed() end
+    end
+    function c:SetEnabled(enabled)
+        if self._destroyed then return false end
+        enabled = enabled == true
+        local changed = self.Enabled ~= enabled
+        self.Enabled = enabled
+        self.Row.GroupTransparency = enabled and 0 or .48
+        for _,object in ipairs(self.Row:GetDescendants()) do
+            if object:IsA("GuiButton") then
+                object.Active, object.Selectable, object.Interactable = enabled, enabled, enabled
+            elseif object:IsA("TextBox") then
+                object.Active, object.Selectable = enabled, enabled
+                object.TextEditable = enabled and not self.ReadOnly
+            end
+        end
+        if not enabled then
+            if w.PopupOwner == self then w:ClosePopup() end
+            if w.SelectedControl == self then w:EndPointer() end
+            local focused = game:GetService("UserInputService"):GetFocusedTextBox()
+            if focused and focused:IsDescendantOf(self.Row) then focused:ReleaseFocus(false) end
+        end
+        if changed then self:Changed() end
+        return changed
+    end
+    function c:Update(patch)
+        if self._destroyed or type(patch) ~= "table" then return false, "Actualización no válida" end
+        if patch.Id and patch.Id ~= self.Id then return false, "El ID del control no se puede cambiar" end
+        if patch.Name ~= nil and type(patch.Name) ~= "string" then return false, "Nombre no válido" end
+        if patch.Description ~= nil and type(patch.Description) ~= "string" then return false, "Descripción no válida" end
+        if patch.Callback ~= nil and patch.Callback ~= false and type(patch.Callback) ~= "function" then return false, "Callback no válido" end
+        if patch.Value ~= nil and not self.Set then return false, "Este control no acepta valores" end
+        if patch.Name then self.Name, options.Name, self.Label.Text = patch.Name, patch.Name, patch.Name end
+        if patch.Description then self.Description, options.Description, self.DescriptionLabel.Text = patch.Description, patch.Description, patch.Description end
+        if patch.Callback ~= nil then options.Callback = patch.Callback end
+        if patch.Action and self.Kind == "Button" then
+            options.Action, self.Input.Text = tostring(patch.Action), tostring(patch.Action)
+            self.ControlWidth = PropertyLayout.inputWidth(self.Input.Text, self.Input.FontFace, self.Input.TextSize, 144, 280)
+        end
+        if patch.Placeholder and self.Kind == "Input" then self.Input.PlaceholderText = tostring(patch.Placeholder) end
+        if patch.Value ~= nil then self:Set(patch.Value, patch.Silent == true) end
+        if patch.Enabled ~= nil then self:SetEnabled(patch.Enabled) end
+        if patch.Visible ~= nil then self.Row.Visible = patch.Visible == true end
+        self:Relayout(); self:Refresh()
+        return true
+    end
+    function c:Destroy()
+        if self._destroyed then return end
+        self._destroyed = true
+        if not w.Runtime.Destroyed then w.Runtime:RemoveCleanup(self.ParentCleanup) end
+        self.ParentCleanup=nil
+        if w.PopupOwner == self then w:ClosePopup() end
+        if w.SelectedControl == self then
+            w:EndPointer(); w.SelectedControl = nil
+            if not w._destroyed then w:SetDetails() end
+        end
+        w.ControlsById[self.Id] = nil
+        for _,array in ipairs({self.Section.Controls, self.Section.Tab.Controls}) do
+            local index = table.find(array, self)
+            if index then table.remove(array, index) end
+        end
+        rt:Destroy()
+        if not self._rowDestroying and self.Row.Parent then self.Row:Destroy() end
+        if self.Persist and not w._destroyed and w.Profiles and not w._applyingState then w.Profiles:Changed() end
+    end
+    rt:Connect(c.Row.Destroying, function() c._rowDestroying=true; c:Destroy() end)
+    return c
+end
+
+function Control.finish(c)
+    local nativeGet, nativeSet, nativePress, nativeOpen = c.Get, c.Set, c.Press, c.Open
+    c.Get = function(self) if not c._destroyed and nativeGet then return nativeGet(self) end end
+    if nativeSet then c.Set = function(self, ...)
+        if c._destroyed then return false end
+        local changed = nativeSet(self, ...)
+        if changed then c:Changed() end
+        return changed
+    end end
+    if nativePress then c.Press = function(self, ...)
+        if not c:CanInteract() then return false end
+        return nativePress(self, ...)
+    end end
+    if nativeOpen then c.Open = function(self, ...)
+        if not c:CanInteract() then return nil end
+        return nativeOpen(self, ...)
+    end end
+    function c:Activate()
+        if not self:CanInteract() then return false end
+        if self.Kind == "Button" then return self:Press()
+        elseif self.Kind == "Toggle" then return self:Set(not self:Get())
+        elseif self.Kind == "Dropdown" then self:Open(); return true
+        else
+            local field = self.ValueInput or self.Input
+            if field:IsA("TextBox") then field:CaptureFocus(); return true end
+        end
+        return false
+    end
+    c:SetEnabled(c.Enabled)
+    return c
+end
+
+return Control
+end
+
 __factories["Fonts"] = function(__require)
 -- src/Fonts.luau
 -- Static OFL fonts are embedded by the builder; no runtime HTTP requests.
@@ -448,6 +585,8 @@ function Locale:Layout()
         local w = self.Window
         if w._destroyed or w._closing then return end
         for _,tab in ipairs(w.Tabs) do tab:Relayout() end
+        if w.Context and w.Context.Fit then w.Context:Fit() end
+        if w.Notifications then w.Notifications:Fit() end
     end)
 end
 
@@ -580,6 +719,361 @@ end
 return Motion
 end
 
+__factories["Profiles"] = function(__require)
+-- src/Profiles.luau
+local Http = game:GetService("HttpService")
+local Profiles = {}
+Profiles.__index = Profiles
+local DEBOUNCE = .3
+
+local function finite(value)
+    return type(value) == "number" and value == value and math.abs(value) < math.huge
+end
+
+local function validName(name)
+    return type(name) == "string" and #name <= 128 and name:find("%S") ~= nil
+end
+
+local function validateState(state)
+    assert(type(state) == "table" and state.Version == 1, "El estado del perfil no tiene una versión válida.")
+    local view = state.Window
+    assert(type(view) == "table" and type(view.Position) == "table" and type(view.Preferences) == "table"
+        and type(state.Controls) == "table", "El estado del perfil está incompleto.")
+    assert(finite(view.Position.X) and finite(view.Position.Y) and view.Position.X >= 0 and view.Position.X <= 1
+        and view.Position.Y >= 0 and view.Position.Y <= 1, "La posición del perfil no es válida.")
+    assert(view.Page == nil or type(view.Page) == "string", "La página del perfil no es válida.")
+    for name, value in pairs(view.Preferences) do
+        local valid = (name == "Language" and (value == "es" or value == "pt"))
+            or ((name == "Animations" or name == "Inspector") and type(value) == "boolean")
+            or (name == "Decoration" and finite(value) and value >= 0 and value <= 100)
+            or (name == "TextScale" and finite(value) and value >= 1 and value <= 1.3)
+        assert(valid, "El perfil contiene una preferencia no válida.")
+    end
+    for id, control in pairs(state.Controls) do
+        assert(type(id) == "string" and #id > 0 and type(control) == "table"
+            and type(control.Enabled) == "boolean", "El perfil contiene un control no válido.")
+        local value, kind = control.Value, control.Kind
+        local valid = (kind == "Toggle" and type(value) == "boolean")
+            or (kind == "Slider" and finite(value)) or (kind == "Input" and type(value) == "string")
+            or (kind == "Dropdown" and (value == nil or type(value) == "string"
+                or type(value) == "boolean" or finite(value)))
+        assert(valid, "El perfil contiene un valor no válido.")
+    end
+end
+
+local function decode(text)
+    local document = Http:JSONDecode(text)
+    assert(type(document) == "table" and document.Version == 1 and type(document.Profiles) == "table",
+        "El archivo de perfiles no tiene un formato válido.")
+    for name, state in pairs(document.Profiles) do
+        assert(validName(name), "El archivo contiene un nombre de perfil no válido.")
+        validateState(state)
+    end
+    assert(document.Active == nil or (validName(document.Active) and document.Profiles[document.Active] ~= nil),
+        "El perfil activo no existe en el archivo.")
+    return document
+end
+
+local function checked(callback, ...)
+    local ok, value, problem = pcall(callback, ...)
+    if not ok then error(tostring(value), 0) end
+    if value == false then error(tostring(problem or "El proveedor rechazó la operación."), 0) end
+    return value
+end
+
+local function nativeStorage()
+    if type(readfile) ~= "function" or type(writefile) ~= "function" or type(isfile) ~= "function"
+        or type(makefolder) ~= "function" then return nil end
+    return {
+        Read = readfile,
+        Write = writefile,
+        Exists = function(path)
+            return isfile(path) or (type(isfolder) == "function" and isfolder(path))
+        end,
+        MakeFolder = function(path)
+            if type(isfolder) ~= "function" or not isfolder(path) then return makefolder(path) end
+        end,
+    }
+end
+
+function Profiles.new(window, config)
+    local self = setmetatable({Window = window, Configured = config ~= nil, Enabled = false,
+        AutoLoad = false, AutoSave = false, ReadyDone = false, Destroyed = false, Loading = false,
+        Busy = false, Dirty = false, Revision = 0}, Profiles)
+    if type(config) == "table" then
+        local key = config.Key
+        if type(key) ~= "string" or #key == 0 or #key > 128 or not key:match("^[A-Za-z0-9_-]+$") then
+            self.Error = "La clave de configuración solo admite letras, números, guiones y guiones bajos."
+        else
+            self.Directory = "lumi-ui/config/" .. key
+            self.Path = self.Directory .. "/profiles.json"
+            self.BackupPath = self.Path .. ".bak"
+            self.Storage = config.Storage
+            if self.Storage == nil then self.Storage = nativeStorage() end
+            local available = type(self.Storage) == "table"
+            for _, name in ipairs({"Read", "Write", "Exists", "MakeFolder"}) do
+                available = available and type(self.Storage[name]) == "function"
+            end
+            self.Enabled = available
+            if not available then self.Error = "El almacenamiento local de perfiles no está disponible." end
+        end
+        self.AutoLoad, self.AutoSave = config.AutoLoad == true, config.AutoSave == true
+    else
+        self.Error = "El guardado de perfiles no está habilitado."
+    end
+    window.Runtime:OnCleanup(function() self:Destroy() end)
+    return self
+end
+
+function Profiles:_cancel()
+    self.Window.Runtime:CancelDelay(self.Pending)
+    self.Pending = nil
+end
+
+function Profiles:_operation(loading, callback)
+    if self.Destroyed or self.Window._destroyed or self.Window.Runtime.Destroyed then
+        return false, "La ventana está cerrada."
+    end
+    if not self.Enabled then return false, self.Error end
+    if self.Busy then return false, "Ya hay una operación de perfiles en curso." end
+    self.Busy, self.Loading = true, loading
+    local called, ok, problem = pcall(callback)
+    self.Busy, self.Loading = false, false
+    if not called then problem, ok = tostring(ok), false end
+    if ok ~= true then
+        problem = tostring(problem or "No se pudo completar la operación de perfiles.")
+        self.LastError = problem
+        return false, problem
+    end
+    self.LastError = nil
+    return true
+end
+
+function Profiles:_exists(path)
+    -- Exists=false means absence, whereas false from Read/Write means rejection.
+    local ok, value = pcall(self.Storage.Exists, path)
+    if not ok then error(tostring(value), 0) end
+    assert(type(value) == "boolean", "El proveedor no pudo comprobar el archivo.")
+    return value
+end
+
+function Profiles:_text(path)
+    if not self:_exists(path) then return nil end
+    local text = checked(self.Storage.Read, path)
+    assert(type(text) == "string", "No se pudo leer un archivo existente; se conservan los datos anteriores.")
+    return text
+end
+
+function Profiles:_read()
+    local text = self:_text(self.Path)
+    if text == nil then
+        assert(not self:_exists(self.BackupPath), "Falta el archivo de perfiles; se conserva el respaldo existente.")
+        return {Version = 1, Profiles = {}}, nil
+    end
+    -- Only this live store may retry bytes left by its own failed first write.
+    -- Pre-existing corrupt files and externally changed bytes still fail closed.
+    if text==self.InitialResidue and not pcall(decode,text) and not self:_exists(self.BackupPath) then
+        return {Version=1,Profiles={}},nil
+    end
+    -- Never convert corrupt or unreadable data to an empty store, or promote a
+    -- backup implicitly: a failed load must leave both the UI and backup intact.
+    return decode(text), text
+end
+
+function Profiles:_write(path, text)
+    checked(self.Storage.Write, path, text)
+    local observed = checked(self.Storage.Read, path)
+    assert(observed == text, "La relectura no coincide con el archivo escrito.")
+end
+
+function Profiles:_restore(previous, backup)
+    local errors = {}
+    for _, item in ipairs({{self.Path, previous}, {self.BackupPath, backup}}) do
+        if item[2] ~= nil then
+            local ok, problem = pcall(self._write, self, item[1], item[2])
+            if not ok then table.insert(errors, tostring(problem)) end
+        end
+    end
+    if #errors > 0 then return " No se pudo verificar la restauración: " .. table.concat(errors, "; ") end
+    return ""
+end
+
+function Profiles:_commit(document, previous)
+    -- Encode and validate before any directory or file writes.
+    local text = Http:JSONEncode(document)
+    decode(text)
+    local backup = self:_text(self.BackupPath)
+    if backup ~= nil and not pcall(decode, backup) then backup = nil end
+    for _, folder in ipairs({"lumi-ui", "lumi-ui/config", self.Directory}) do
+        if not self:_exists(folder) then checked(self.Storage.MakeFolder, folder) end
+    end
+    if previous ~= nil then
+        local ok, problem = pcall(self._write, self, self.BackupPath, previous)
+        if not ok then error(tostring(problem) .. self:_restore(nil, backup), 0) end
+    end
+    local ok, problem = pcall(self._write, self, self.Path, text)
+    if not ok then
+        local recovery=self:_restore(previous or Http:JSONEncode({Version=1,Profiles={}}), backup)
+        if previous==nil then
+            local read,residue=pcall(self._text,self,self.Path)
+            if read and type(residue)=="string" and not pcall(decode,residue) then self.InitialResidue=residue end
+        end
+        error(tostring(problem) .. recovery,0)
+    end
+    self.InitialResidue=nil
+    return backup
+end
+
+function Profiles:Save(name)
+    return self:_operation(false, function()
+        local document, previous = self:_read()
+        if name == nil then name = self.Active or document.Active or "Predeterminado" end
+        assert(validName(name), "El nombre del perfil debe contener entre 1 y 128 caracteres.")
+        self:_cancel()
+        local revision = self.Revision
+        local state = self.Window:GetState()
+        validateState(state)
+        document.Profiles[name], document.Active = state, name
+        self:_commit(document, previous)
+        self.Active = name
+        if revision == self.Revision then self.Dirty = false end
+        self:_clearSaveError()
+        return true
+    end)
+end
+
+function Profiles:_load(name, options, allowEmpty)
+    local document, previous = self:_read()
+    if name == nil then name = self.Active or document.Active end
+    if name == nil and allowEmpty then return true end
+    assert(validName(name) and document.Profiles[name] ~= nil, "No se encontró el perfil solicitado.")
+    local state = document.Profiles[name]
+    local before = self.Window:GetState()
+    self:_cancel()
+    -- Persist a changed selection before applying it, so a storage failure
+    -- cannot replace the live controls or publish an uncommitted active name.
+    local changedActive = document.Active ~= name
+    local backup
+    if changedActive then
+        document.Active = name
+        backup = self:_commit(document, previous)
+    end
+    local called, ok, problem = pcall(self.Window.ApplyState, self.Window, state, options)
+    if not called or ok ~= true then
+        local issue = tostring(called and problem or ok)
+        local restored, applied = pcall(self.Window.ApplyState, self.Window, before, {Silent = true})
+        if not restored or applied ~= true then issue ..= " No se pudo restaurar el estado de la ventana." end
+        if changedActive then issue ..= self:_restore(previous, backup) end
+        error(issue, 0)
+    end
+    self.Active, self.Dirty = name, false
+    self:_clearSaveError()
+    return true
+end
+
+function Profiles:Load(name, options)
+    return self:_operation(true, function() return self:_load(name, options, false) end)
+end
+
+function Profiles:List()
+    local names = {}
+    local ok, problem = self:_operation(false, function()
+        local document = self:_read()
+        for name in pairs(document.Profiles) do table.insert(names, name) end
+        table.sort(names)
+        return true
+    end)
+    if not ok then return {}, problem end
+    return names
+end
+
+function Profiles:GetActive()
+    return self.Active
+end
+
+function Profiles:Ready()
+    if self.Destroyed then return false, "La ventana está cerrada." end
+    if self.ReadyDone then
+        if self.ReadyError then return false, self.ReadyError end
+        return true
+    end
+    self.ReadyDone = true
+    if not self.Configured then return true end
+    if not self.Enabled then self.ReadyError = self.Error; return false, self.Error end
+    if not self.AutoLoad then return true end
+    local ok, problem = self:_operation(true, function() return self:_load(nil, nil, true) end)
+    self.ReadyError = problem
+    return ok, problem
+end
+
+function Profiles:_clearSaveError()
+    local notice = self.SaveErrorNotice
+    self.SaveErrorNotice, self.SaveErrorNotified = nil, false
+    if notice and type(notice.Dismiss) == "function" then pcall(notice.Dismiss, notice) end
+end
+
+function Profiles:_saveFailed(problem)
+    -- Keep every full diagnostic, but show one generic notice per failure episode.
+    warn("[Lumi UI] No se pudo guardar el perfil: " .. tostring(problem))
+    local window = self.Window
+    if self.SaveErrorNotified or self.Destroyed or window._destroyed or window._closing
+        or window.Runtime.Destroyed or type(window.Notify) ~= "function" then return end
+    self.SaveErrorNotified = true
+    local notice
+    local ok, result = pcall(window.Notify, window, {
+        Title = "No se pudo guardar el perfil",
+        Message = "Tus cambios siguen en esta ventana. Puedes volver a intentarlo.",
+        Kind = "Error", Duration = 6,
+        Action = {Text = "Reintentar", Callback = function()
+            if self.SaveErrorNotice ~= notice or self.Destroyed or window._destroyed or window._closing
+                or window.Runtime.Destroyed then return end
+            -- An explicit retry may show its own failure; background edits cannot
+            -- repeatedly enqueue the same error while the provider is unavailable.
+            self:_clearSaveError()
+            local saved, issue = self:Flush()
+            if not saved then self:_saveFailed(issue) end
+        end},
+    })
+    if ok then
+        notice, self.SaveErrorNotice = result, result
+    else
+        warn("[Lumi UI] No se pudo mostrar el aviso de guardado: " .. tostring(result))
+    end
+end
+
+function Profiles:Changed()
+    if self.Destroyed or not self.Enabled or not self.AutoSave or not self.ReadyDone or self.Loading
+        or self.Window._destroyed or self.Window._closing or self.Window._applyingState
+        or self.Window.Runtime.Destroyed then return false end
+    self.Dirty = true
+    self.Revision += 1
+    self:_cancel()
+    self.Pending = self.Window.Runtime:Delay(DEBOUNCE, function()
+        self.Pending = nil
+        local ok, problem = self:Flush()
+        if not ok then self:_saveFailed(problem) end
+    end)
+    return true
+end
+
+function Profiles:Flush()
+    self:_cancel()
+    if self.Destroyed then return false, "La ventana está cerrada." end
+    if not self.Dirty then return true end
+    return self:Save(self.Active)
+end
+
+function Profiles:Destroy()
+    if self.Destroyed then return end
+    self.Destroyed = true
+    self:_cancel()
+    self.Dirty = false
+    self:_clearSaveError()
+end
+
+return Profiles
+end
+
 __factories["PropertyLayout"] = function(__require)
 -- src/PropertyLayout.luau
 local Fonts = __require("Fonts")
@@ -638,7 +1132,11 @@ function Layout.measure(control, width)
         result.BoundsY = result.HitY + result.HitHeight + 2
         result.LaneX, result.LaneWidth = PAD, available
         result.BoundsWidth = math.max(1, (available - 12) / 2)
-        result.Height = (control.ShowBounds == false and result.HitY + result.HitHeight or result.BoundsY + 14) + VERTICAL
+        result.BoundsHeight = 14
+        for _,label in ipairs(control.BoundsLabels or {}) do
+            result.BoundsHeight = math.max(result.BoundsHeight, textHeight(label, result.BoundsWidth, 14))
+        end
+        result.Height = (control.ShowBounds == false and result.HitY + result.HitHeight or result.BoundsY + result.BoundsHeight) + VERTICAL
     end
     return result
 end
@@ -719,7 +1217,10 @@ function Runtime:Callback(callback, ...)
         if self.Destroyed then self.Threads[thread] = nil; return end
         local ok, problem = pcall(callback, table.unpack(args, 1, args.n))
         self.Threads[thread] = nil
-        if not ok then warn("[Lumi UI] error en la función: " .. tostring(problem)) end
+        if not ok then
+            warn("[Lumi UI] error en la función: " .. tostring(problem))
+            if type(self.OnError)=="function" then pcall(self.OnError,problem) end
+        end
     end)
     self.Threads[thread] = true
     task.spawn(thread)
@@ -728,6 +1229,12 @@ end
 
 function Runtime:OnCleanup(callback)
     table.insert(self.Cleanups, callback)
+    return callback
+end
+
+function Runtime:RemoveCleanup(callback)
+    local index=table.find(self.Cleanups,callback)
+    if index then table.remove(self.Cleanups,index) end
 end
 
 function Runtime:Destroy()
@@ -792,6 +1299,8 @@ local UI = __require("UI")
 local T = __require("Theme")
 local PropertyLayout = __require("PropertyLayout")
 local Textos = __require("Textos")
+local Control = __require("Control")
+local Fonts = __require("Fonts")
 local Button = __require("controls/Button")
 local Toggle = __require("controls/Toggle")
 local Slider = __require("controls/Slider")
@@ -814,11 +1323,13 @@ function Section.new(tab, name, options)
     UI.frame(header, "IndexBadge", 16, 10, 24, 24, T.AccentWash, 12).BackgroundTransparency = 0.35
     UI.text(header, "Index", string.format("%02d", index), 16, 0, 24, 43, 10, T.Secondary, T.Mono).TextXAlignment = Enum.TextXAlignment.Center
     local heading = UI.text(header, "Title", name, 45, 0, 440, 43, 15, T.Text, T.Medium)
+    heading.TextWrapped,heading.TextTruncate=true,Enum.TextTruncate.None
     local tag = UI.text(header, "Tag", options.Tag or Textos.ajustes, 510, 0, 116, 43, 9, T.Muted, T.Mono)
     tag.TextXAlignment = Enum.TextXAlignment.Right
     tag.Position = UDim2.new(1, -132, 0, 0)
     local self = setmetatable({Name = tostring(name), Tab = tab, Frame = frame, Content = frame, Controls = {},
         Heading = heading, Tag = tag, _order = 0}, Section)
+    self.Id = options.Id or tostring(name)
     table.insert(tab.Sections, self)
     local function fitHeader() self:Relayout() end
     tab.Window.Runtime:Connect(header:GetPropertyChangedSignal("AbsoluteSize"), fitHeader)
@@ -833,12 +1344,18 @@ end
 function Section:Relayout()
     local wide = self:GetWidth() >= 420
     self.Tag.Visible = wide
-    self.Heading.Size = UDim2.new(1, wide and -190 or -61, 0, 43)
+    local reserved=wide and 190 or 61
+    local width=math.max(1,self:GetWidth()-reserved)
+    local height=math.max(43,math.ceil(Fonts.bounds(self.Heading.Text,self.Heading.TextSize,self.Heading.FontFace,width).Y)+14)
+    self.Heading.Parent.Size=UDim2.new(1,0,0,height)
+    self.Heading.Size = UDim2.new(1, -reserved, 0, height)
+    self.Tag.Size=UDim2.fromOffset(116,height)
 end
 
 function Section:Row(options, kind, height)
+    local id = Control.id(self, options, kind)
     self._order += 1
-    local row = UI.new("Frame", self.Content, {Name = (options.Name or kind) .. "Row",
+    local row = UI.new("CanvasGroup", self.Content, {Name = (options.Name or kind) .. "Row",
         Size = UDim2.new(1, 0, 0, height or 64), LayoutOrder = self._order, ClipsDescendants = true})
     local selection = UI.frame(row, "SelectionWash", 6, 5, 0, 0, T.AccentWash, 8)
     UI.stroke(selection, T.AccentSoft).Transparency = 0.45
@@ -854,13 +1371,15 @@ function Section:Row(options, kind, height)
     local control = {Name = nombre, Description = options.Description or "", Kind = kind,
         Row = row, Section = self, Runtime = self.Tab.Window.Runtime, Label = title, DescriptionLabel = description,
         SelectionWash = selection}
+    Control.attach(control, options, id)
     control.FocusIndicator = UI.new("Frame", row, {Name = "FocusIndicator", Position = UDim2.fromOffset(0, 14),
         Size = UDim2.new(0, 1, 1, -28), BackgroundTransparency = 0.25, BackgroundColor3 = T.AccentSoft, Visible = false})
-    function control:Focus() self.Section.Tab.Window:Focus(self) end
+    function control:Focus() if not self._destroyed then self.Section.Tab.Window:Focus(self) end end
     function control:Refresh()
         if self.Section.Tab.Window.SelectedControl == self then self:Focus() end
     end
     function control:Relayout()
+        if self._destroyed then return end
         local width = self.Section:GetWidth() * row.Size.X.Scale + row.Size.X.Offset
         if width <= 0 then return end
         local placement = PropertyLayout.measure(self, width)
@@ -888,14 +1407,91 @@ function Section:Row(options, kind, height)
     return control
 end
 
-function Section:AddButton(options) return Button.new(self, options or {}) end
-function Section:AddToggle(options) return Toggle.new(self, options or {}) end
-function Section:AddSlider(options) return Slider.new(self, options or {}) end
-function Section:AddDropdown(options) return Dropdown.new(self, options or {}) end
-function Section:AddImageDropdown(options) return Dropdown.new(self, options or {}) end
-function Section:AddInput(options) return Input.new(self, options or {}) end
+function Section:AddButton(options) return Control.finish(Button.new(self, options or {})) end
+function Section:AddToggle(options) return Control.finish(Toggle.new(self, options or {})) end
+function Section:AddSlider(options) return Control.finish(Slider.new(self, options or {})) end
+function Section:AddDropdown(options) return Control.finish(Dropdown.new(self, options or {})) end
+function Section:AddImageDropdown(options) return self:AddDropdown(options) end
+function Section:AddInput(options) return Control.finish(Input.new(self, options or {})) end
 
 return Section
+end
+
+__factories["State"] = function(__require)
+-- src/State.luau
+local State = {}
+local function finite(value) return type(value)=="number" and value==value and math.abs(value)<math.huge end
+
+function State.Export(w)
+    local controls = {}
+    for id,c in pairs(w.ControlsById) do
+        if c.Persist and not c._destroyed and c.Get then
+            controls[id] = {Kind=c.Kind,Value=c:Get(),Enabled=c.Enabled}
+        end
+    end
+    local size = w.Viewport.AbsoluteSize
+    local center = w.Main.Visible and (w.Main.AbsolutePosition + w.Main.AbsoluteSize / 2 - w.Viewport.AbsolutePosition) or w.Center
+    return {Version=1,Window={Position={X=center.X/math.max(1,size.X),Y=center.Y/math.max(1,size.Y)},
+        Page=w.ActiveTab and w.ActiveTab.Id,Preferences=table.clone(w.Preferences)},Controls=controls}
+end
+
+function State.Validate(w,state)
+    if type(state)~="table" or state.Version~=1 or type(state.Window)~="table" or type(state.Controls)~="table" then
+        return nil,"El perfil no tiene un formato válido."
+    end
+    local view=state.Window
+    if type(view.Preferences)~="table" or type(view.Position)~="table"
+        or not finite(view.Position.X) or not finite(view.Position.Y)
+        or view.Position.X<0 or view.Position.X>1 or view.Position.Y<0 or view.Position.Y>1 then
+        return nil,"La posición o las preferencias no son válidas."
+    end
+    for key,value in pairs(view.Preferences) do
+        local valid = (key=="Language" and (value=="es" or value=="pt"))
+            or ((key=="Animations" or key=="Inspector") and type(value)=="boolean")
+            or (key=="Decoration" and finite(value) and value>=0 and value<=100)
+            or (key=="TextScale" and finite(value) and value>=1 and value<=1.3)
+        if not valid then return nil,"El perfil contiene una preferencia no válida." end
+    end
+    local pending={}
+    for id,saved in pairs(state.Controls) do
+        local c=w.ControlsById[id]
+        if c and c.Persist then
+            if type(saved)~="table" or saved.Kind~=c.Kind or type(saved.Enabled)~="boolean" then return nil,"El perfil contiene un control no válido." end
+            local value=saved.Value
+            local valid=(c.Kind=="Toggle" and type(value)=="boolean") or (c.Kind=="Slider" and finite(value))
+                or (c.Kind=="Dropdown" and (table.find(c.Values,value)~=nil or (#c.Values==0 and value==nil)))
+                or (c.Kind=="Input" and type(value)=="string")
+            if not valid then return nil,"El perfil contiene un valor no válido." end
+            table.insert(pending,{Control=c,Value=value,Enabled=saved.Enabled})
+        end
+    end
+    return pending
+end
+
+function State.Apply(w,state,options)
+    if w._destroyed or w._closing then return false,"La ventana está cerrada." end
+    local pending,problem=State.Validate(w,state)
+    if not pending then return false,problem end
+    options=options or {}
+    w._applyingState=true
+    local ok,issue=pcall(function()
+        for name,value in pairs(state.Window.Preferences) do w:SetPreference(name,value) end
+        for _,entry in ipairs(pending) do
+            entry.Control:Set(entry.Value,options.Silent==true)
+            entry.Control:SetEnabled(entry.Enabled)
+        end
+        local tab=w.TabsById[state.Window.Page]
+        if tab then w:SelectTab(tab) end
+        local size=w.Viewport.AbsoluteSize
+        w:SetCenter(Vector2.new(state.Window.Position.X*size.X,state.Window.Position.Y*size.Y))
+    end)
+    w._applyingState=false
+    if not ok then return false,"No se pudo aplicar el perfil: "..tostring(issue) end
+    if w.Profiles then w.Profiles:Changed() end
+    return true
+end
+
+return State
 end
 
 __factories["Tab"] = function(__require)
@@ -910,9 +1506,14 @@ local Tab = {}
 Tab.__index = Tab
 
 function Tab.new(window, name, options)
+    local id = options.Id or tostring(name)
+    if not options.Id and window.TabsById[id] then id = id .. "#" .. tostring(#window.Tabs + 1) end
+    assert(not window.TabsById[id], "[Lumi UI] ID de página duplicado: " .. tostring(id))
     local index = #window.Tabs + 1
     local self = setmetatable({Name = tostring(name), Description = options.Description or Textos.descripcionPagina,
         Window = window, Sections = {}, Controls = {}}, Tab)
+    self.Id = id
+    window.TabsById[id] = self
     local group = window:GetNavigationGroup(options.Group)
     group.Count += 1
     self.NavigationGroup = group
@@ -998,16 +1599,19 @@ function Tab:Relayout()
     self.Label.Size = UDim2.new(1, -48, 1, 0)
     local width = self:GetContentWidth()
     local textWidth = width
-    self.Title.TextSize = self.Window.Mobile and 32 or 40
-    self.Subtitle.TextSize = self.Window.Mobile and 15 or 16
+    UI.textSize(self.Title,self.Window.Mobile and 32 or 40)
+    UI.textSize(self.Subtitle,self.Window.Mobile and 15 or 16)
     local function height(label, available, minimum)
         local bounds = Fonts.bounds(label.Text, label.TextSize, label.FontFace, available - 1)
         return math.max(minimum, math.ceil(bounds.Y) + 2)
     end
     local titleHeight = height(self.Title, textWidth, self.Window.Mobile and 39 or 48)
-    local subtitleY = 21 + titleHeight + 8
+    local eyebrowHeight=height(self.Header.Eyebrow,textWidth,14)
+    local titleY=eyebrowHeight+7
+    local subtitleY = titleY + titleHeight + 8
     local subtitleHeight = height(self.Subtitle, textWidth, 18)
-    self.Header.Eyebrow.Size = UDim2.fromOffset(textWidth, 14)
+    self.Header.Eyebrow.Size = UDim2.fromOffset(textWidth, eyebrowHeight)
+    self.Title.Position=UDim2.fromOffset(0,titleY)
     self.Title.Size = UDim2.fromOffset(textWidth, titleHeight)
     self.Subtitle.Position = UDim2.fromOffset(0, subtitleY)
     self.Subtitle.Size = UDim2.fromOffset(textWidth, subtitleHeight)
@@ -1127,11 +1731,78 @@ return {
 }
 end
 
+__factories["Typography"] = function(__require)
+-- src/Typography.luau
+local Typography = {}
+local scopes = setmetatable({}, {__mode = "k"})
+local BASE = "LumiBaseTextSize"
+
+local function text(object)
+    return object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")
+end
+
+local function factor(value)
+    if type(value) ~= "number" or value ~= value or math.abs(value) == math.huge then return 1 end
+    return math.clamp(value, 1, 1.3)
+end
+
+local function scope(object)
+    while object do
+        local found = scopes[object]
+        if found and not found.Runtime.Destroyed then return found end
+        object = object.Parent
+    end
+end
+
+function Typography.get(root)
+    local found = scope(root)
+    return found and found.Factor or 1
+end
+
+function Typography.bind(object, parent)
+    if not text(object) then return end
+    local found = scope(parent or object.Parent)
+    if not found then return end
+    -- UI.new calls this after the font's optical adjustment, before parenting.
+    local base = object:GetAttribute(BASE)
+    if base == nil then base = object.TextSize; object:SetAttribute(BASE, base) end
+    object.TextSize = base * found.Factor
+end
+
+function Typography.size(label, base)
+    if not text(label) then return end
+    assert(type(base) == "number" and base == base and base > 0 and base < math.huge, "[Lumi UI] Tamaño de texto no válido")
+    label:SetAttribute(BASE, base)
+    label.TextSize = base * Typography.get(label)
+    return label.TextSize
+end
+
+function Typography.apply(root, value)
+    local found = scopes[root]
+    if not found or found.Runtime.Destroyed then return false end
+    found.Factor = factor(value)
+    root:SetAttribute("LumiTextScale", found.Factor)
+    for _, object in ipairs(root:GetDescendants()) do Typography.bind(object, object.Parent) end
+    return found.Factor
+end
+
+function Typography.mount(runtime, root, value)
+    if scopes[root] then return Typography.apply(root, value) end
+    scopes[root] = {Runtime = runtime, Factor = factor(value)}
+    runtime:OnCleanup(function() scopes[root] = nil end)
+    runtime:Connect(root.DescendantAdded, function(object) Typography.bind(object, object.Parent) end)
+    return Typography.apply(root, value)
+end
+
+return Typography
+end
+
 __factories["UI"] = function(__require)
 -- src/UI.luau
 local T = __require("Theme")
 local Fonts = __require("Fonts")
 local Icons = __require("Icons")
+local Typography = __require("Typography")
 local UI = {}
 
 function UI.new(class, parent, properties)
@@ -1151,9 +1822,12 @@ function UI.new(class, parent, properties)
     if properties and properties.TextSize and (properties.Font == T.Font or properties.Font == T.Medium or properties.Font == T.Mono) then
         object.TextSize += 2
     end
+    Typography.bind(object,parent)
     object.Parent = parent
     return object
 end
+
+function UI.textSize(object,size) return Typography.size(object,size) end
 
 function UI.frame(parent, name, x, y, width, height, color, radius)
     local frame = UI.new("Frame", parent, {
@@ -1285,6 +1959,11 @@ local Search = __require("components/Search")
 local Navigation = __require("components/Navigation")
 local Icons = __require("Icons")
 local Locale = __require("Locale")
+local State = __require("State")
+local Profiles = __require("Profiles")
+local Notifications = __require("components/Notifications")
+local Typography = __require("Typography")
+local Keyboard = __require("components/Keyboard")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
@@ -1299,9 +1978,12 @@ function Window.new(options)
     rt.Animations = options.Animations ~= false
     local root = rt:Mount()
     Icons.mount(rt, root)
-    local self = setmetatable({Runtime = rt, Root = root, Tabs = {}, _destroyed = false,
+    local textScale = math.clamp(UI.number(options.TextScale,1),1,1.3)
+    Typography.mount(rt,root,textScale)
+    local self = setmetatable({Runtime = rt, Root = root, Tabs = {}, ControlsById = {}, TabsById = {}, _destroyed = false,
         Width = 1100, Height = DESKTOP_HEIGHT, Scale = 1, OpenDropdown = nil, Minimized = false}, Window)
     self.Language = options.Language == "pt" and "pt" or "es"
+    self.TextScale = textScale
     self.ToggleKey = options.ToggleKey == nil and Enum.KeyCode.RightShift or options.ToggleKey
     if self.ToggleKey ~= false and (typeof(self.ToggleKey) ~= "EnumItem" or self.ToggleKey.EnumType ~= Enum.KeyCode) then
         self.ToggleKey = Enum.KeyCode.RightShift
@@ -1389,7 +2071,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.20", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.5.0", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -1445,6 +2127,14 @@ function Window.new(options)
     self:Fit()
     table.insert(liveWindows, self)
     self.Locale = Locale.new(self, self.Language)
+    self.Notifications = Notifications.new(self)
+    if type(options.Config)=="table" then self.Profiles=Profiles.new(self,options.Config) end
+    self.Keyboard = Keyboard.new(self)
+    rt.OnError=function()
+        if not self._destroyed and not self._closing then
+            self:Notify({Title="No se pudo completar la acción",Message="Revisa los valores e inténtalo de nuevo.",Kind="Error",Duration=6})
+        end
+    end
     task.defer(function()
         if self._destroyed or self._closing or self._entranceInterrupted or rt.Animations == false then return end
         self.UIScale.Scale = self.Scale * 0.99
@@ -1480,7 +2170,7 @@ function Window:Fit()
     local verticalMargin = self.Mobile and self.SafeTop + 8 or 32
     self.Height = math.max(280, math.min(self.Mobile and 768 or PREFERRED_HEIGHT, size.Y - verticalMargin))
     if not self.Mobile then self.NavigationOpen = false end
-    self.SidebarWidth = self.Mobile and self.Width or 228
+    self.SidebarWidth = self.Mobile and self.Width or (228+math.floor(((self.Preferences.TextScale or 1)-1)*200))
     local sideWidth = self.SidebarWidth
     self.Inspector.Visible = not compact and not self.Mobile and self.Preferences.Inspector
     self.PanelWidth = self.Width - (self.Inspector.Visible and INSPECTOR_WIDTH + PANEL_GAP or 0)
@@ -1492,10 +2182,12 @@ function Window:Fit()
     self.Sidebar.Visible = not self.Mobile or self.NavigationOpen == true
     self.TopEdge.Size = UDim2.fromOffset(self.Panel.Size.X.Offset - 24, 1)
     self.Sidebar.Size = UDim2.fromOffset(sideWidth, self.Height)
-    self.Sidebar.Brand.Size = UDim2.fromOffset(sideWidth - (self.Mobile and 124 or 70), 30)
-    self.Sidebar.BrandSub.Size = UDim2.fromOffset(sideWidth - 40, 14)
+    local textFactor=self.Preferences.TextScale or 1
+    self.Sidebar.Brand.Size = UDim2.fromOffset(sideWidth - (self.Mobile and 124 or 70), math.ceil(32*textFactor))
+    self.Sidebar.BrandSub.Size = UDim2.fromOffset(sideWidth - 40, math.ceil(16*textFactor))
     self.Sidebar.BrandSub.Text = Fonts.tracked(sideWidth < 170 and Textos.biblioteca or Textos.interfaz)
     local short = self.Height < 480
+    self.NavigationUI:Fit()
     local navTop = short and 88 or 106
     self.Sidebar.BrandSub.Position = UDim2.fromOffset(21, short and 60 or 65)
     self.Sidebar.BrandWaves.Visible = not short
@@ -1543,6 +2235,8 @@ function Window:Fit()
     for _, tab in ipairs(self.Tabs) do tab:Relayout() end
     self:SetCenter(self.Center or size / 2)
     self.Presentation:Fit()
+    if self.Notifications then self.Notifications:Fit() end
+    if self.Context and self.Context.Fit then self.Context:Fit() end
 end
 
 function Window:SetCenter(center, follow)
@@ -1557,6 +2251,7 @@ function Window:SetCenter(center, follow)
     self.Main.Position = UDim2.fromOffset(x, y)
     if follow and previous then self.Presentation:Follow(self.Center - previous)
     else self.Presentation:StopFollow() end
+    if previous and previous~=self.Center and self.Profiles and not self._applyingState then self.Profiles:Changed() end
 end
 
 function Window:BeginPointer(input, update, finish)
@@ -1613,7 +2308,7 @@ end
 Window._closeDropdown = Window.ClosePopup
 
 function Window:Focus(control)
-    if self._destroyed or self._closing then return end
+    if self._destroyed or self._closing or control._destroyed then return end
     local changed = self.SelectedControl ~= control
     if self.SelectedControl and self.SelectedControl.FocusIndicator then
         self.SelectedControl.FocusIndicator.Visible = false
@@ -1645,10 +2340,44 @@ end
 
 function Window:OpenSettings() return self.Settings:Open() end
 
+function Window:GetControl(id) return self.ControlsById[id] end
+
+function Window:GetState() return State.Export(self) end
+function Window:ApplyState(state,options) return State.Apply(self,state,options) end
+function Window:Notify(options) return self.Notifications:Push(options or {}) end
+function Window:SaveProfile(name)
+    if not self.Profiles then return false,"El guardado local no está configurado." end
+    local ok,problem=self.Profiles:Save(name)
+    if ok then self.Settings:RefreshProfiles() end
+    return ok,problem
+end
+function Window:LoadProfile(name,options)
+    if not self.Profiles then return false,"El guardado local no está configurado." end
+    local ok,problem=self.Profiles:Load(name,options)
+    if ok then self.Settings:RefreshProfiles() end
+    return ok,problem
+end
+function Window:ListProfiles()
+    if self.Profiles then return self.Profiles:List() end
+    return {}
+end
+function Window:GetActiveProfile() return self.Profiles and self.Profiles:GetActive() or nil end
+function Window:Ready()
+    self:FinishPages()
+    if self.Profiles then
+        local ok,problem=self.Profiles:Ready()
+        self.Settings:RefreshProfiles()
+        if self.Settings.ProfileName and self:GetActiveProfile() then self.Settings.ProfileName:Set(self:GetActiveProfile(),true) end
+        return ok,problem
+    end
+    return true
+end
+
 function Window:SetLanguage(language)
     if not self.Locale:Set(language) then return false end
     self.Language, self.Preferences.Language = language, language
     if self.Settings.Controls.Language then self.Settings.Controls.Language:Set(language, true) end
+    if self.Profiles and not self._applyingState then self.Profiles:Changed() end
     return true
 end
 
@@ -1695,6 +2424,7 @@ function Window:SelectTab(tab)
         tab.Motion:Fade(0.35, 0, Motion.Time.Page)
     end
     self.Breadcrumb.Text = Textos.espacio .. " / " .. tab.Name
+    if self.Profiles and not self._applyingState then self.Profiles:Changed() end
     self.NavigationUI:Reveal(tab)
     if self.SelectedControl and self.SelectedControl.FocusIndicator then
         self.SelectedControl.FocusIndicator.Visible = false
@@ -1736,6 +2466,10 @@ end
 
 function Window:Close()
     if self._destroyed or self._closing then return end
+    if self.Profiles then
+        local ok,problem=self.Profiles:Flush()
+        if not ok then self.Profiles:_saveFailed(problem);return false,problem end
+    end
     self:FinishEntrance()
     self.Presentation:FinishTransition()
     self:EndPointer()
@@ -1828,6 +2562,10 @@ function Inspector.new(window)
     self.Shadow = Shadow.new(frame, 14)
     UI.stroke(frame, T.Line)
     BrandArt.footer(window.Runtime, frame)
+    frame = UI.new("ScrollingFrame", frame, {Name="InspectorContent",Size=UDim2.fromScale(1,1),
+        CanvasSize=UDim2.new(),ScrollBarThickness=2,ScrollBarImageColor3=T.Line,
+        ScrollingDirection=Enum.ScrollingDirection.Y,Active=true,ClipsDescendants=true})
+    self.Content, self.Rules = frame, {}
     UI.micro(frame, "InspectorHeading", "INSPECTOR", 18, 20, 188, 16)
     UI.line(frame, 18, 47, 188)
     window.DetailTitle = UI.text(frame, "DetailTitle", Textos.tuEspacio, 18, 67, 188, 52, 21, T.Text, T.Title)
@@ -1884,7 +2622,9 @@ function Inspector.new(window)
         UI.text(frame, name .. "Key", Textos.claves[i], 18, y, 50, 24, 12, T.Muted)
         window.DetailRows[i] = UI.text(frame, name .. "Value", "--", 74, y, 132, 24, 12, T.Secondary)
         window.DetailRows[i].TextXAlignment = Enum.TextXAlignment.Right
-        UI.line(frame, 18, y + 29, 188)
+        window.DetailRows[i].TextWrapped=true
+        window.DetailRows[i].TextTruncate=Enum.TextTruncate.None
+        self.Rules[i]=UI.line(frame, 18, y + 29, 188)
     end
     self.Hint = UI.text(frame, "Hint", Textos.pistaInicial, 18, 0, 188, 32, 12, T.Secondary)
     self.Hint.Position = UDim2.new(0, 18, 1, -56)
@@ -1911,11 +2651,57 @@ function Inspector:SetValue(text)
     label.Text = tostring(text)
     local size = 32
     while size > 15 do
-        local bounds = Fonts.bounds(label.Text, size, label.FontFace)
+        local bounds = Fonts.bounds(label.Text, size*(self.Window.TextScale or 1), label.FontFace)
         if bounds.X <= label.Size.X.Offset - 2 then break end
         size -= 1
     end
-    label.TextSize = size
+    UI.textSize(label,size)
+end
+
+function Inspector:Fit()
+    local w,frame=self.Window,self.Content
+    if w._destroyed or not frame.Parent then return end
+    local factor=w.TextScale or 1
+    frame.InspectorHeading.Size=UDim2.fromOffset(188,math.ceil(16*factor))
+    local titleHeight=math.max(52,math.ceil(Fonts.bounds(w.DetailTitle.Text,w.DetailTitle.TextSize,w.DetailTitle.FontFace,187).Y)+2)
+    w.DetailTitle.Size=UDim2.fromOffset(188,titleHeight)
+    local descriptionY=math.max(126,67+titleHeight+7)
+    local descriptionHeight=math.max(44,math.ceil(Fonts.bounds(w.DetailDescription.Text,w.DetailDescription.TextSize,w.DetailDescription.FontFace,187).Y)+2)
+    w.DetailDescription.Position=UDim2.fromOffset(18,descriptionY)
+    w.DetailDescription.Size=UDim2.fromOffset(188,descriptionHeight)
+    local previewY=math.max(190,descriptionY+descriptionHeight+20)
+    local previewHeight=math.ceil(176*factor)
+    frame.ValuePreview.Position=UDim2.fromOffset(18,previewY)
+    frame.ValuePreview.Size=UDim2.fromOffset(188,previewHeight)
+    w.DetailKind.Size=UDim2.fromOffset(160,math.ceil(16*factor))
+    w.DetailValue.Position=UDim2.fromOffset(14,math.ceil(40*factor))
+    w.DetailValue.Size=UDim2.fromOffset(160,math.ceil(40*factor))
+    self.Numeric.Position=UDim2.fromOffset(14,math.ceil(96*factor))
+    self.Boolean.Position=UDim2.fromOffset(14,math.ceil(104*factor))
+    self.ChoiceHint.Position=UDim2.fromOffset(14,math.ceil(103*factor))
+    self.Options.Position=UDim2.fromOffset(14,math.ceil(112*factor))
+    self.Action.Position=UDim2.fromOffset(14,math.ceil(104*factor))
+    for _,object in ipairs({self.Meta,self.Low,self.High})do
+        object.Position=UDim2.new(object.Position.X.Scale,object.Position.X.Offset,0,previewHeight-math.ceil(24*factor))
+        object.Size=UDim2.fromOffset(object.Size.X.Offset,math.ceil(16*factor))
+    end
+    local propsY=math.max(390,previewY+previewHeight+24)
+    frame.Properties.Position=UDim2.fromOffset(18,propsY)
+    frame.Properties.Size=UDim2.fromOffset(188,math.ceil(16*factor))
+    local y=propsY+27
+    for i,name in ipairs({"Page","Section","Type","Range"})do
+        local key,value=frame[name.."Key"],w.DetailRows[i]
+        local h=math.max(math.ceil(24*factor),math.ceil(Fonts.bounds(value.Text,value.TextSize,value.FontFace,121).Y)+2)
+        key.Position=UDim2.fromOffset(18,y);key.Size=UDim2.fromOffset(62,h)
+        value.Position=UDim2.fromOffset(84,y);value.Size=UDim2.fromOffset(122,h)
+        self.Rules[i].Position=UDim2.fromOffset(18,y+h+5)
+        y+=h+10
+    end
+    local hintHeight=math.max(math.ceil(32*factor),math.ceil(Fonts.bounds(self.Hint.Text,self.Hint.TextSize,self.Hint.FontFace,187).Y)+2)
+    local hintY=math.max(w.Height-hintHeight-24,y+24)
+    self.Hint.Position=UDim2.fromOffset(18,hintY)
+    self.Hint.Size=UDim2.fromOffset(188,hintHeight)
+    frame.CanvasSize=UDim2.fromOffset(0,hintY+hintHeight+24)
 end
 
 function Inspector:Update(control)
@@ -1935,6 +2721,7 @@ function Inspector:Update(control)
     end
     window.DetailTitle.Text, window.DetailDescription.Text = control.Name, control.Description or ""
     window.DetailKind.Text = Textos.etiquetaTipo(control.Kind)
+    window.DetailValue:SetAttribute("LumiUserText",control.Kind=="Dropdown" and control.TranslateValues==false)
     self:SetValue(shown)
     window.DetailRows[1].Text, window.DetailRows[2].Text = control.Section.Tab.Name, control.Section.Name
     window.DetailRows[3].Text, window.DetailRows[4].Text = Textos.nombreTipo(control.Kind), control.Range or "--"
@@ -1991,9 +2778,207 @@ function Inspector:Update(control)
         self.Meta.Text = Textos.alPulsar
         self.Hint.Text = Textos.pistaAccion
     end
+    self:Fit()
 end
 
 return Inspector
+end
+
+__factories["components/Keyboard"] = function(__require)
+-- src/components/Keyboard.luau
+local Input = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
+local Keyboard = {}
+Keyboard.__index = Keyboard
+local live = {}
+
+local function available(self)
+    local w = self.Window
+    return not self.Destroyed and not w.Runtime.Destroyed and not w._destroyed and not w._closing
+        and not w.Minimized and w.Root.Parent ~= nil and w.Root.Enabled and w.Main.Visible
+end
+
+local function shown(object, root)
+    if typeof(object) ~= "Instance" or not object:IsA("GuiObject") or not object:IsDescendantOf(root) then return false end
+    local ancestor = object
+    while ancestor ~= root do
+        if ancestor:IsA("GuiObject") and not ancestor.Visible then return false end
+        ancestor = ancestor.Parent
+    end
+    return root.Enabled
+end
+
+local function owner()
+    local selected = GuiService.SelectedObject
+    for index = #live, 1, -1 do
+        local self = live[index]
+        if available(self) and (not selected or selected:IsDescendantOf(self.Window.Root)) then return self end
+    end
+end
+
+local function reveal(self, object)
+    local w, ancestor = self.Window, object.Parent
+    local scale = math.max(.01, w.Scale or 1)
+    while ancestor and ancestor ~= w.Root do
+        if ancestor:IsA("ScrollingFrame") then
+            local height = ancestor.AbsoluteWindowSize.Y / scale
+            local top = (object.AbsolutePosition.Y - ancestor.AbsolutePosition.Y) / scale + ancestor.CanvasPosition.Y
+            local bottom = top + object.AbsoluteSize.Y / scale
+            local y = ancestor.CanvasPosition.Y
+            if top < y then y = top - 8 elseif bottom > y + height then y = bottom - height + 8 end
+            local limit = math.max(0, ancestor.AbsoluteCanvasSize.Y / scale - height)
+            ancestor.CanvasPosition = Vector2.new(ancestor.CanvasPosition.X, math.clamp(y, 0, limit))
+        end
+        ancestor = ancestor.Parent
+    end
+end
+
+function Keyboard:GetTargets()
+    local w, result, seen = self.Window, {}, {}
+    self.Actions, self.Controls = {}, {}
+    if not available(self) or w.PopupOwner or w.OpenDropdown then return result end
+    local function add(object, action, control, scope)
+        if not shown(object, w.Root) or seen[object] or not object.Active then return end
+        if object:IsA("GuiButton") and not object.Interactable then return end
+        seen[object], object.Selectable = true, true
+        self.Actions[object], self.Controls[object] = action, control
+        if action and object:IsA("GuiButton") and not self.Native[object]
+            and not (control and control.Kind == "Slider") then
+            local native = {Count = 0}
+            self.Native[object] = native
+            local runtime = scope or (control and control.Runtime) or w.Runtime
+            runtime:Connect(object.Activated, function(input)
+                if input and input.UserInputType == Enum.UserInputType.Keyboard then
+                    native.Count += 1
+                    native.Input = input
+                end
+            end)
+        end
+        table.insert(result, object)
+    end
+    add(w.HomeButton, function() w:GoHome() end)
+    add(w.MenuButton, function() w:ToggleNavigation() end)
+    add(w.Search and w.Search.Button, function() w.Search:Open() end)
+    add(w.MinimizeButton, function() w:Minimize() end)
+    add(w.CloseButton, function() w:Close() end)
+    add(w.NavigationCloseButton, function() w:ToggleNavigation(false) end)
+    for _, tab in ipairs(w.Tabs) do add(tab.Button, function() w:SelectTab(tab) end) end
+    add(w.Profile and w.Profile.Frame, function() w:OpenProfile() end)
+    add(w.SettingsButton, function() w:OpenSettings() end)
+    for _, control in ipairs(w.ActiveTab and w.ActiveTab.Controls or {}) do
+        if not control._destroyed and control.Enabled ~= false and not control.Runtime.Destroyed
+            and w.ControlsById[control.Id] == control then
+            local function activate() control:Activate() end
+            add(control.Input, activate, control)
+            add(control.ValueInput, activate, control)
+        end
+    end
+    if w.Notifications and type(w.Notifications.GetTargets) == "function" then
+        -- Notification records share the same native-first activation path.
+        for _, target in ipairs(w.Notifications:GetTargets()) do
+            if type(target) == "table" and type(target.Activate) == "function" then
+                add(target.Object, function() target:Activate() end,nil,target.Runtime)
+            else
+                add(target)
+            end
+        end
+    end
+    return result
+end
+
+function Keyboard:Focus(target)
+    local w = self.Window
+    if not available(self) or w.PopupOwner or w.OpenDropdown then return false end
+    local object = type(target) == "table" and (target.Input or target.ValueInput) or target
+    if not table.find(self:GetTargets(), object) then return false end
+    local editor = Input:GetFocusedTextBox()
+    if editor and editor ~= object then editor:ReleaseFocus(false) end
+    w:FinishEntrance()
+    w:FinishPages()
+    GuiService.SelectedObject = object
+    local control = self.Controls[object]
+    if control then w:Focus(control) end
+    reveal(self, object)
+    return true
+end
+
+function Keyboard:Step(reverse)
+    if not available(self) or self.Window.PopupOwner or self.Window.OpenDropdown or Input:GetFocusedTextBox() then return false end
+    local targets = self:GetTargets()
+    if #targets == 0 then return false end
+    local index = table.find(targets, GuiService.SelectedObject)
+    if not index then index = reverse and 1 or 0 end
+    return self:Focus(targets[(index - 1 + (reverse and -1 or 1)) % #targets + 1])
+end
+
+function Keyboard.new(window)
+    local self = setmetatable({Window = window, Actions = {}, Controls = {}, Keys = {},
+        Native = setmetatable({}, {__mode = "k"}), Destroyed = false}, Keyboard)
+    local rt = window.Runtime
+    table.insert(live, self)
+    rt:OnCleanup(function()
+        self.Destroyed = true
+        local selected, editor = GuiService.SelectedObject, Input:GetFocusedTextBox()
+        if selected and selected:IsDescendantOf(window.Root) then GuiService.SelectedObject = nil end
+        if editor and editor:IsDescendantOf(window.Root) then editor:ReleaseFocus(false) end
+        local index = table.find(live, self)
+        if index then table.remove(live, index) end
+        table.clear(self.Actions); table.clear(self.Controls); table.clear(self.Keys); table.clear(self.Native)
+    end)
+    rt:Connect(GuiService:GetPropertyChangedSignal("SelectedObject"), function()
+        local selected = GuiService.SelectedObject
+        if not available(self) or window.PopupOwner or window.OpenDropdown or not shown(selected, window.Root) then return end
+        self:GetTargets()
+        local control = self.Controls[selected]
+        if control then window:Focus(control) end
+    end)
+    rt:Connect(Input.TextBoxFocused, function(editor)
+        if not available(self) or window.PopupOwner or window.OpenDropdown or not editor:IsDescendantOf(window.Root) then return end
+        -- Editing owns Space/Enter; a separately selected button must not consume them.
+        local selected = GuiService.SelectedObject
+        if selected and selected:IsDescendantOf(window.Root) then GuiService.SelectedObject = nil end
+        table.clear(self.Keys)
+    end)
+    rt:Connect(window.Root.DescendantRemoving, function(object)
+        local selected = GuiService.SelectedObject
+        if selected and (selected == object or selected:IsDescendantOf(object)) then GuiService.SelectedObject = nil end
+    end)
+    rt:Connect(Input.InputEnded, function(input)
+        local press = self.Keys[input.KeyCode]
+        self.Keys[input.KeyCode] = nil
+        if type(press) ~= "table" then return end
+        -- Let the engine's release/Activated callbacks finish before supplying a fallback.
+        rt:Delay(0, function()
+            if not available(self) or Input:GetFocusedTextBox() or window.PopupOwner or window.OpenDropdown
+                or GuiService.SelectedObject ~= press.Object then return end
+            local native = press.Native
+            if native and (native.Count ~= press.Count or native.Input == press.Input) then return end
+            self:GetTargets()
+            local action = self.Actions[press.Object]
+            if action then action() end
+        end)
+    end)
+    rt:Connect(Input.WindowFocusReleased, function() table.clear(self.Keys) end)
+    rt:Connect(Input.InputBegan, function(input)
+        local key = input.KeyCode
+        if input.UserInputType ~= Enum.UserInputType.Keyboard or self.Keys[key] or owner() ~= self
+            or Input:GetFocusedTextBox() or window.PopupOwner or window.OpenDropdown then return end
+        if key == Enum.KeyCode.Tab then
+            self.Keys[key] = true
+            self:Step(Input:IsKeyDown(Enum.KeyCode.LeftShift) or Input:IsKeyDown(Enum.KeyCode.RightShift))
+        elseif key == Enum.KeyCode.Return or key == Enum.KeyCode.KeypadEnter or key == Enum.KeyCode.Space then
+            self:GetTargets()
+            local selected = GuiService.SelectedObject
+            if self.Actions[selected] then
+                local native = self.Native[selected]
+                self.Keys[key] = {Object = selected, Input = input, Native = native, Count = native and native.Count}
+            end
+        end
+    end)
+    return self
+end
+
+return Keyboard
 end
 
 __factories["components/Navigation"] = function(__require)
@@ -2055,7 +3040,326 @@ function Navigation:Reveal(tab)
     end)
 end
 
+function Navigation:Fit()
+    local factor=self.Window.TextScale or 1
+    for index,group in ipairs(self.Order) do
+        group.Label.Size=UDim2.new(1,-20,0,math.ceil(16*factor))
+        group.Frame.Heading.Size=UDim2.new(1,0,0,(index==1 and 24 or 42)+math.ceil(16*(factor-1)))
+    end
+end
+
 return Navigation
+end
+
+__factories["components/Notifications"] = function(__require)
+-- src/components/Notifications.luau
+local Runtime = __require("Runtime")
+local UI = __require("UI")
+local T = __require("Theme")
+local Fonts = __require("Fonts")
+local Icons = __require("Icons")
+local RunService = game:GetService("RunService")
+local GuiService = game:GetService("GuiService")
+local Notifications = {}
+Notifications.__index = Notifications
+local Handle = {}
+Handle.__index = Handle
+local colors = {Info = T.Secondary, Success = T.Green, Error = T.Danger, Loading = T.Accent}
+local marks = {Info = "i", Success = "✓", Error = "!", Loading = ""}
+local GAP, INSET, CONTENT_X = 8, 12, 42
+
+local function alive(self)
+    local window = self.Window
+    return not self.Destroyed and not self.Runtime.Destroyed and not window.Runtime.Destroyed
+        and not window._destroyed and not window._closing
+end
+
+local function pause(handle)
+    if handle._deadline then handle._remaining = math.max(0, handle._deadline - os.clock()) end
+    handle.Runtime:CancelDelay(handle._timer)
+    handle._timer, handle._deadline = nil, nil
+end
+
+local function spin(handle, enabled)
+    local rt = handle.Runtime
+    if not enabled or handle.Manager.Window.Runtime.Animations == false then
+        if handle._spin then
+            handle._spin:Disconnect()
+            local index = table.find(rt.Connections, handle._spin)
+            if index then table.remove(rt.Connections, index) end
+            handle._spin = nil
+        end
+        handle.Spinner.Rotation = 0
+    elseif not handle._spin then
+        handle._spin = rt:Connect(RunService.Heartbeat, function(delta)
+            if alive(handle.Manager) then handle.Spinner.Rotation = (handle.Spinner.Rotation + delta * 240) % 360 end
+        end)
+    end
+end
+
+local function show(handle, visible)
+    if not visible then
+        pause(handle)
+        spin(handle, false)
+    elseif handle.Duration > 0 and not handle._timer then
+        local remaining = handle._remaining
+        handle._deadline = os.clock() + remaining
+        handle._timer = handle.Runtime:Delay(remaining, function() handle:Dismiss() end)
+    end
+    handle.Visible, handle.Frame.Visible = visible, visible
+    spin(handle, visible and handle.Kind == "Loading")
+end
+
+function Handle:Update(patch)
+    local manager = self.Manager
+    if self.Dismissed or not alive(manager) or type(patch) ~= "table" then return false end
+    if patch.Title ~= nil then self.Title = tostring(patch.Title) end
+    if patch.Message ~= nil then self.Message = tostring(patch.Message) end
+    if colors[patch.Kind] then self.Kind = patch.Kind end
+    if patch.Duration ~= nil then
+        pause(self)
+        self.Duration = math.max(0, UI.number(patch.Duration, self.Duration))
+        self._remaining = self.Duration
+    end
+    if patch.Action ~= nil then
+        local action = patch.Action
+        self.Action = type(action) == "table" and type(action.Callback) == "function"
+            and {Text = tostring(action.Text or "Continuar"), Callback = action.Callback} or nil
+    end
+    self.TitleLabel.Text, self.MessageLabel.Text = self.Title, self.Message
+    self.TitleLabel.Visible, self.Body.Visible = self.Title ~= "", self.Message ~= ""
+    self.ActionButton.Text = self.Action and self.Action.Text or ""
+    self.ActionButton.Visible = self.Action ~= nil
+    self.Mark.Text, self.Mark.TextColor3 = marks[self.Kind], colors[self.Kind]
+    self.Stripe.BackgroundColor3 = colors[self.Kind]
+    self.Spinner.Visible, self.Mark.Visible = self.Kind == "Loading", self.Kind ~= "Loading"
+    spin(self, self.Visible and self.Kind == "Loading")
+    manager:Fit()
+    return true
+end
+
+function Handle:Dismiss()
+    return self.Manager:_Remove(self)
+end
+
+function Notifications.new(window)
+    local self = setmetatable({Window = window, Runtime = Runtime.new(), Items = {}, Destroyed = false,
+        _revision = 0, _fitting = false}, Notifications)
+    if not alive(self) then self:Destroy(); return self end
+    local layer = UI.new("Frame", window.Viewport, {
+        Name = "Notifications", Size = UDim2.fromScale(1, 1), ZIndex = 120, ClipsDescendants = true,
+    })
+    self.Frame, self.Runtime.Root = layer, layer
+    window.Runtime:OnCleanup(function() self:Destroy() end)
+    self.Runtime:Connect(layer.Destroying, function()
+        self.Runtime.Root = nil
+        self:Destroy()
+    end)
+    return self
+end
+
+function Notifications:Push(options)
+    options = type(options) == "table" and options or {}
+    local handle = setmetatable({Manager = self, Runtime = Runtime.new(), Dismissed = false, Visible = false,
+        Title = "Aviso", Message = "", Kind = "Info", Duration = 4, _remaining = 4}, Handle)
+    if not alive(self) then
+        handle.Dismissed = true
+        handle.Runtime:Destroy()
+        return handle
+    end
+    local rt = handle.Runtime
+    rt.Animations = self.Window.Runtime.Animations
+    local frame = UI.new("Frame", self.Frame, {
+        Name = "Notification", Size = UDim2.fromOffset(320, 80), Visible = false,
+        BackgroundColor3 = T.Surface, BackgroundTransparency = 0, ClipsDescendants = true, ZIndex = 120,
+    })
+    handle.Frame, rt.Root = frame, frame
+    -- Bind embedded icons to this toast, rather than retaining them in the window scope.
+    Icons.mount(rt, frame)
+    UI.corner(frame, 10)
+    UI.stroke(frame, T.Line)
+    handle.Stripe = UI.frame(frame, "Kind", 0, 8, 3, 32, T.Secondary, 2)
+    handle.Mark = UI.text(frame, "Status", "i", 13, 14, 18, 20, 14, T.Secondary, T.Medium)
+    handle.Mark.TextXAlignment = Enum.TextXAlignment.Center
+    handle.Spinner = UI.frame(frame, "Loading", 14, 16, 16, 16)
+    for index, point in ipairs({Vector2.new(6, 0), Vector2.new(12, 6), Vector2.new(6, 12), Vector2.new(0, 6)}) do
+        local dot = UI.frame(handle.Spinner, "Dot", point.X, point.Y, 4, 4, T.Accent, 2)
+        dot.BackgroundTransparency = (index - 1) * 0.2
+    end
+    handle.TitleLabel = UI.text(frame, "Title", "", CONTENT_X, INSET, 200, 24, 13, T.Text, T.Medium)
+    handle.TitleLabel.TextWrapped = true
+    handle.TitleLabel.TextYAlignment = Enum.TextYAlignment.Top
+    handle.Body = UI.new("ScrollingFrame", frame, {
+        Name = "MessageArea", BackgroundTransparency = 1, BorderSizePixel = 0,
+        CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.None,
+        ScrollingDirection = Enum.ScrollingDirection.Y, ScrollBarThickness = 3,
+        ScrollBarImageColor3 = T.Line, Active = true, Selectable = false, ClipsDescendants = true,
+    })
+    handle.MessageLabel = UI.text(handle.Body, "Message", "", 0, 0, 200, 20, 12, T.Secondary)
+    handle.MessageLabel.TextWrapped = true
+    handle.MessageLabel.TextTruncate = Enum.TextTruncate.None
+    handle.MessageLabel.TextYAlignment = Enum.TextYAlignment.Top
+    handle.CloseButton = UI.button(frame, "CloseNotification", "", 0, 4, 44, 44)
+    handle.CloseButton:SetAttribute("LumiLabel", "Cerrar aviso")
+    UI.icon(handle.CloseButton, "Close", 14, 14, T.Muted)
+    handle.ActionButton = UI.button(frame, "NotificationAction", "", CONTENT_X, 0, 200, 44)
+    handle.ActionButton.BackgroundColor3, handle.ActionButton.BackgroundTransparency = T.Raised, 0
+    handle.ActionButton.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.corner(handle.ActionButton, 7)
+    UI.hover(rt, handle.ActionButton, T.Raised, T.Hover)
+    rt:Connect(handle.CloseButton.Activated, function()
+        if alive(self) and handle.Visible then handle:Dismiss() end
+    end)
+    rt:Connect(handle.ActionButton.Activated, function() self:Activate(handle) end)
+    rt:Connect(frame.Destroying, function()
+        rt.Root = nil
+        self:_Remove(handle)
+    end)
+    for _, label in ipairs({handle.TitleLabel, handle.MessageLabel, handle.ActionButton}) do
+        for _, property in ipairs({"Text", "TextSize", "FontFace"}) do
+            rt:Connect(label:GetPropertyChangedSignal(property), function() self:Fit() end)
+        end
+    end
+    table.insert(self.Items, handle)
+    handle:Update(options)
+    return handle
+end
+
+function Notifications:_Remove(handle)
+    if handle.Manager ~= self or handle.Dismissed then return false end
+    handle.Dismissed, handle.Visible = true, false
+    handle._timer, handle._deadline, handle.Action = nil, nil, nil
+    local index = table.find(self.Items, handle)
+    if index then table.remove(self.Items, index) end
+    handle.Runtime:Destroy()
+    self:Fit()
+    return true
+end
+
+-- Window.NotifyAction may delegate here; GUI activation follows the same guard.
+function Notifications:Activate(handle)
+    if type(handle) ~= "table" or handle.Manager ~= self or handle.Dismissed
+        or not handle.Visible or handle._actionUsed or not alive(self) or not handle.Action then return false end
+    handle._actionUsed = true
+    local callback = handle.Action.Callback
+    handle:Dismiss()
+    -- The action belongs to the window: dismissing its toast must not cancel it,
+    -- while closing the window must still cancel a suspended user callback.
+    self.Window.Runtime:Callback(callback)
+    return true
+end
+
+local function measure(handle, width, maximum)
+    local title, message, action = handle.TitleLabel, handle.MessageLabel, handle.ActionButton
+    local contentWidth = math.max(1, width - CONTENT_X - INSET)
+    local titleWidth = math.max(1, width - CONTENT_X - 48)
+    local line = Fonts.bounds("Ag", title.TextSize, title.FontFace, titleWidth).Y
+    local titleHeight = handle.Title ~= "" and math.ceil(math.min(
+        Fonts.bounds(title.Text, title.TextSize, title.FontFace, titleWidth).Y + 2, line * 2 + 2)) or 0
+    local actionHeight = handle.Action and math.max(44, math.ceil(action.TextSize + 16)) or 0
+    local top = math.max(44, INSET + titleHeight)
+    local bodyHeight = handle.Message ~= "" and math.ceil(
+        Fonts.bounds(message.Text, message.TextSize, message.FontFace, math.max(1, contentWidth - 6)).Y + 2) or 0
+    local footer = INSET + (actionHeight > 0 and actionHeight + GAP or 0)
+    -- Cap exceptional text with a real scrolling message area, without shrinking fonts.
+    local bodyView = math.min(bodyHeight, math.max(0, maximum - top - footer))
+    return {Handle = handle, Width = width, Height = math.min(maximum, top + bodyView + footer),
+        TitleWidth = titleWidth, TitleHeight = titleHeight, ContentWidth = contentWidth,
+        Top = top, BodyHeight = bodyHeight, BodyView = bodyView, ActionHeight = actionHeight}
+end
+
+function Notifications:Fit()
+    if not alive(self) then return end
+    self._revision += 1
+    if self._fitting then return end
+    self._fitting = true
+    self.Runtime:Delay(0, function()
+        repeat
+            local revision = self._revision
+            local size = self.Window.Viewport.AbsoluteSize
+            local inset = GuiService:GetGuiInset()
+            local top = math.max(INSET, inset.Y + 8)
+            local available = math.max(0, size.Y - top - INSET)
+            local budget = math.min(available, math.max(120, math.floor(size.Y * 0.55)))
+            local width = math.max(1, math.min(360, size.X - INSET * 2))
+            local plan, height = {}, 0
+            if size.X > INSET * 2 and budget >= 80 then
+                for _, handle in ipairs(table.clone(self.Items)) do
+                    if #plan == 3 then break end
+                    local entry = measure(handle, width, budget)
+                    if not alive(self) or revision ~= self._revision then break end
+                    if handle.Dismissed then break end
+                    local nextHeight = height + (#plan > 0 and GAP or 0) + entry.Height
+                    if nextHeight > budget then break end
+                    table.insert(plan, entry)
+                    height = nextHeight
+                end
+            end
+            -- Fonts.bounds may yield. Discard measurements after an update, resize,
+            -- dismissal or destruction instead of applying a stale GUI plan.
+            if not alive(self) then break end
+            if revision == self._revision then
+                local selected = {}
+                local y = size.Y - INSET - height
+                for _, entry in ipairs(plan) do
+                    local handle = entry.Handle
+                    selected[handle] = true
+                    handle.Frame.Position = UDim2.fromOffset(size.X - INSET - width, y)
+                    handle.Frame.Size = UDim2.fromOffset(width, entry.Height)
+                    handle.Stripe.Size = UDim2.fromOffset(3, math.max(0, entry.Height - 16))
+                    handle.TitleLabel.Size = UDim2.fromOffset(entry.TitleWidth, entry.TitleHeight)
+                    handle.CloseButton.Position = UDim2.fromOffset(width - 48, 4)
+                    handle.Body.Position = UDim2.fromOffset(CONTENT_X, entry.Top)
+                    handle.Body.Size = UDim2.fromOffset(entry.ContentWidth, entry.BodyView)
+                    handle.Body.CanvasSize = UDim2.fromOffset(0, entry.BodyHeight)
+                    handle.MessageLabel.Size = UDim2.fromOffset(math.max(1, entry.ContentWidth - 6), entry.BodyHeight)
+                    handle.ActionButton.Position = UDim2.fromOffset(CONTENT_X, entry.Height - INSET - entry.ActionHeight)
+                    handle.ActionButton.Size = UDim2.fromOffset(entry.ContentWidth, entry.ActionHeight)
+                    y += entry.Height + GAP
+                end
+                -- Hide outgoing slots before promoting queued handles; even during
+                -- reflow there must never be four visible cards.
+                for _, handle in ipairs(self.Items) do if not selected[handle] then show(handle, false) end end
+                for _, entry in ipairs(plan) do show(entry.Handle, true) end
+            end
+        until revision == self._revision
+        self._fitting = false
+    end)
+end
+
+function Notifications:GetTargets()
+    local targets = {}
+    if not alive(self) then return targets end
+    for _, handle in ipairs(self.Items) do
+        if handle.Visible and not handle.Dismissed then
+            if handle.Action then
+                table.insert(targets, {
+                    Object = handle.ActionButton,
+                    Runtime = handle.Runtime,
+                    Activate = function(_target) return self:Activate(handle) end,
+                })
+            end
+            table.insert(targets, {
+                Object = handle.CloseButton,
+                Runtime = handle.Runtime,
+                Activate = function(_target)
+                    if alive(self) and handle.Visible then return handle:Dismiss() end
+                    return false
+                end,
+            })
+        end
+    end
+    return targets
+end
+
+function Notifications:Destroy()
+    if self.Destroyed then return end
+    self.Destroyed = true
+    for index = #self.Items, 1, -1 do self:_Remove(self.Items[index]) end
+    self.Runtime:Destroy()
+end
+
+return Notifications
 end
 
 __factories["components/Profile"] = function(__require)
@@ -2172,7 +3476,9 @@ end
 function Profile:Fit(width, short, bottom)
     if not alive(self) then return end
     width = math.max(0, math.floor(UI.number(width, self.Frame.Size.X.Offset)))
-    local height = short and 50 or 60
+    local factor=self.Window.TextScale or 1
+    local height = (short and 50 or 60)+math.ceil((factor-1)*50)
+    local nameHeight=math.ceil(18*factor)
     local compact = short or width < 124
     local avatarSize = compact and 32 or 34
     local gap = compact and 8 or 10
@@ -2190,15 +3496,15 @@ function Profile:Fit(width, short, bottom)
     self.Avatar.Visible = width >= avatarSize
     self._placeholder.Size = UDim2.fromOffset(avatarSize, avatarSize)
     self.NameLabel.Position = UDim2.fromOffset(textX, nameY)
-    self.NameLabel.Size = UDim2.fromOffset(textWidth, 18)
+    self.NameLabel.Size = UDim2.fromOffset(textWidth, nameHeight)
     self.NameLabel.Visible = textWidth > 0
-    self.UserLabel.Position = UDim2.fromOffset(textX, nameY + 18)
-    self.UserLabel.Size = UDim2.fromOffset(textWidth, 16)
+    self.UserLabel.Position = UDim2.fromOffset(textX, nameY + nameHeight)
+    self.UserLabel.Size = UDim2.fromOffset(textWidth, math.ceil(16*factor))
     self.UserLabel.Visible = showUser
-    self.Status.Position = UDim2.fromOffset(textX + 9, nameY + 19)
-    self.Status.Size = UDim2.fromOffset(math.max(0, textWidth - 9), 15)
+    self.Status.Position = UDim2.fromOffset(textX + 9, nameY + nameHeight + 1)
+    self.Status.Size = UDim2.fromOffset(math.max(0, textWidth - 9), math.ceil(15*factor))
     self.Status.Visible = not showUser and textWidth >= 50
-    self.StatusDot.Position = UDim2.fromOffset(textX, nameY + 25)
+    self.StatusDot.Position = UDim2.fromOffset(textX, nameY + nameHeight + 7)
     self.StatusDot.Visible = self.Status.Visible
     self.Frame.Chevron.Position = UDim2.fromOffset(width - 25, height / 2 - 8)
 end
@@ -2516,12 +3822,13 @@ __factories["components/Settings"] = function(__require)
 local UI = __require("UI")
 local T = __require("Theme")
 local Textos = __require("Textos")
+local Typography = __require("Typography")
 local Settings = {}
 Settings.__index = Settings
 
 function Settings.new(window)
     local self = setmetatable({Window = window, Controls = {}}, Settings)
-    self.Defaults = {Animations = window.Runtime.Animations, Inspector = true, Decoration = 100, Language = window.Language}
+    self.Defaults = {Animations = window.Runtime.Animations, Inspector = true, Decoration = 100, Language = window.Language,TextScale=window.TextScale or 1}
     window.Preferences = table.clone(self.Defaults)
     window.Runtime.Decoration = 1
     local button = UI.button(window.Sidebar, "SettingsShortcut", "", 12, 0, 204, 56)
@@ -2549,17 +3856,19 @@ function Settings:Fit(width, short)
     local button = self.Button
     local height = short and 52 or 56
     local cardWidth = width - 24
+    local factor=self.Window.TextScale or 1
     button.Position = UDim2.new(0, 12, 1, -(height + 12))
     button.Size = UDim2.fromOffset(cardWidth, height)
     self.Tile.Position = UDim2.fromOffset(10, (height - 30) / 2)
     self.Label.Position = UDim2.fromOffset(50, 9)
-    self.Label.Size = UDim2.fromOffset(cardWidth - 100, 19)
+    self.Label.Size = UDim2.fromOffset(cardWidth - 100, math.ceil(19*factor))
     self.Hint.Visible = false
     self.Value.Position = UDim2.fromOffset(cardWidth - 47, 10)
+    self.Value.Size=UDim2.fromOffset(36,math.ceil(18*factor))
     self.Track.Position = UDim2.fromOffset(50, short and 34 or 36)
     self.Track.Size = UDim2.fromOffset(cardWidth - 62, 4)
     self.Window.Profile:Fit(cardWidth, short, height + 20)
-    return height + 20 + (short and 50 or 60) + 8
+    return height + 20 + self.Window.Profile.Frame.Size.Y.Offset + 8
 end
 
 function Settings:UpdateMeter()
@@ -2579,6 +3888,7 @@ function Settings:Set(name, value)
     if w._destroyed or w._closing or self.Defaults[name] == nil then return false end
     if name == "Language" then return w:SetLanguage(value) end
     if name == "Decoration" then value = math.clamp(UI.number(value, 100), 0, 100)
+    elseif name=="TextScale" then value=math.clamp(UI.number(value,1),1,1.3)
     else value = value == true end
     if w.Preferences[name] == value then return false end
     w:FinishEntrance(); w:FinishPages()
@@ -2586,6 +3896,7 @@ function Settings:Set(name, value)
     w.Preferences[name] = value
     if name == "Animations" then
         w.Runtime.Animations = value
+        for _,c in pairs(w.ControlsById) do c.Runtime.Animations=value end
         w.Presentation:StopFollow()
     elseif name == "Inspector" then
         w._lastViewport = nil
@@ -2598,50 +3909,112 @@ function Settings:Set(name, value)
                 if opacity then image.ImageTransparency = 1 - opacity * w.Runtime.Decoration end
             end
         end
+    elseif name=="TextScale" then
+        w.TextScale=value
+        Typography.apply(w.Root,value)
+        w._lastViewport=nil;w:Fit()
     end
-    if self.Controls[name] then self.Controls[name]:Set(value, true) end
+    if self.Controls[name] then self.Controls[name]:Set(name=="TextScale" and value*100 or value, true) end
     self:UpdateMeter()
+    if w.Profiles and not w._applyingState then w.Profiles:Changed() end
     return true
 end
 
 function Settings:Reset()
-    for _, name in ipairs({"Animations", "Inspector", "Decoration", "Language"}) do self:Set(name, self.Defaults[name]) end
+    for _, name in ipairs({"Animations", "Inspector", "Decoration", "Language","TextScale"}) do self:Set(name, self.Defaults[name]) end
+end
+
+function Settings:RefreshProfiles()
+    if not self.ProfileGroup or self.Window._destroyed then return end
+    local w = self.Window
+    local names, problem = w:ListProfiles()
+    local active = w:GetActiveProfile()
+    local old = self.ProfileSelect and self.ProfileSelect:Get()
+    local selection = table.find(names, active) and active or (table.find(names, old) and old or names[1])
+    -- A selector owns its popup and connections. Replacing it releases those
+    -- resources while retaining the public identifier and keyboard position.
+    if self.ProfileSelect then self.ProfileSelect:Destroy() end
+    self.ProfileSelect = self.ProfileGroup:AddDropdown({Id="lumi.profile-select",Persist=false,
+        Name="Perfil guardado",Description="Elige los valores que quieres recuperar.",Values=names,Default=selection,TranslateValues=false,
+        Callback=function(value)self.ProfileName:Set(value,true)end})
+    self.ProfileSelect.Row.LayoutOrder=2
+    local enabled = w.Profiles and w.Profiles.Enabled == true
+    self.ProfileSave:SetEnabled(enabled)
+    self.ProfileLoad:SetEnabled(enabled and #names>0 and not problem)
+    self.ProfileSelect:SetEnabled(enabled and #names>0 and not problem)
+    self.ProfileStatus:Set(not enabled and "El guardado no está disponible en esta sesión."
+        or (problem and "No se pudo leer el archivo de perfiles."
+        or (#names==0 and "Aún no hay perfiles guardados." or "Tus perfiles están disponibles en este equipo.")),true)
+end
+
+function Settings:ProfileAction(action)
+    local w=self.Window
+    local saving=action=="save"
+    local name=saving and self.ProfileName:Get():match("^%s*(.-)%s*$") or self.ProfileSelect:Get()
+    local toast=w:Notify({Title=saving and "Guardando perfil" or "Cargando perfil",Kind="Loading",Duration=0})
+    local ok = saving and w:SaveProfile(name) or false
+    if not saving then ok=w:LoadProfile(name) end
+    local action=false
+    if not ok then action={Text="Reintentar",Callback=function()self:ProfileAction(saving and "save" or "load")end} end
+    toast:Update({Title=ok and (saving and "Perfil guardado" or "Perfil cargado")
+        or (saving and "No se pudo guardar" or "No se pudo cargar"),
+        Message=ok and "Tus preferencias están listas." or "Revisa el almacenamiento e inténtalo de nuevo.",
+        Kind=ok and "Success" or "Error",Duration=ok and 3 or 7,
+        Action=action})
+    self:RefreshProfiles()
 end
 
 function Settings:Ensure()
     local w = self.Window
     if w._destroyed or w._closing then return nil end
     if not self.Tab then
-        local tab = w:AddTab(Textos.configuraciones, {Icon = "Settings",
+        local tab = w:AddTab(Textos.configuraciones, {Id="lumi.settings",Icon = "Settings",
             Description = "Personaliza tu espacio de Lumi.", Eyebrow = "LUMI / TU ESPACIO"})
         self.Tab = tab
         tab.Button.Visible = false
         local group = tab:AddSection("Interfaz", {Tag = "A TU MEDIDA"})
-        self.Controls.Language = group:AddDropdown({Name = "Idioma", Description = "Elige el idioma de la interfaz.",
+        self.Controls.Language = group:AddDropdown({Id="lumi.language",Persist=false,Name = "Idioma", Description = "Elige el idioma de la interfaz.",
             Values = {{Value = "es", Label = "Español"}, {Value = "pt", Label = "Português"}}, Default = w.Language,
             Callback = function(value) w:SetLanguage(value) end})
-        self.Controls.Animations = group:AddToggle({Name = "Animaciones",
+        self.Controls.TextScale=group:AddSlider({Id="lumi.text-scale",Persist=false,Name="Tamaño del texto",Description="Amplía las letras y conserva el espacio de los controles.",
+            Min=100,Max=130,Step=5,Suffix="%",Default=w.Preferences.TextScale*100,Callback=function(value)self:Set("TextScale",value/100)end})
+        self.Controls.Animations = group:AddToggle({Id="lumi.animations",Persist=false,Name = "Animaciones",
             Description = "Aperturas, transiciones y seguimiento suave.", Default = w.Preferences.Animations,
             Callback = function(value) self:Set("Animations", value) end})
-        self.Controls.Decoration = group:AddSlider({Name = "Intensidad de la decoración",
+        self.Controls.Decoration = group:AddSlider({Id="lumi.decoration",Persist=false,Name = "Intensidad de la decoración",
             Description = "Mantén las imágenes como un fondo sutil.", Min = 0, Max = 100,
             Default = w.Preferences.Decoration, Suffix = "%",
             Callback = function(value) self:Set("Decoration", value) end})
-        self.Controls.Inspector = group:AddToggle({Name = "Mostrar inspector",
+        self.Controls.Inspector = group:AddToggle({Id="lumi.inspector",Persist=false,Name = "Mostrar inspector",
             Description = "Presenta los detalles del control seleccionado.", Default = w.Preferences.Inspector,
             Callback = function(value) self:Set("Inspector", value) end})
-        tab:AddSection("Preferencias", {Tag = "ESTA VENTANA"}):AddButton({Name = "Restablecer apariencia",
+        self.ProfileGroup=tab:AddSection("Perfiles",{Id="profiles",Tag="GUARDADO LOCAL"})
+        self.ProfileName=self.ProfileGroup:AddInput({Id="lumi.profile-name",Persist=false,Name="Nombre del perfil",
+            Description="Guarda varios espacios con tus propios nombres.",Default=w:GetActiveProfile() or "Predeterminado",MaxLength=128})
+        self.ProfileSave=self.ProfileGroup:AddButton({Id="lumi.profile-save",Name="Guardar perfil",Action="Guardar",
+            Description="Conserva valores, idioma, posición y apariencia.",Callback=function()self:ProfileAction("save")end})
+        self.ProfileSave.Row.LayoutOrder=3
+        self.ProfileLoad=self.ProfileGroup:AddButton({Id="lumi.profile-load",Name="Cargar perfil",Action="Cargar",Variant="Secondary",
+            Description="Recupera el perfil seleccionado.",Callback=function()self:ProfileAction("load")end})
+        self.ProfileLoad.Row.LayoutOrder=4
+        self.ProfileStatus=self.ProfileGroup:AddInput({Id="lumi.profile-status",Name="Almacenamiento",ReadOnly=true,Translate=true,MultiLine=true,Height=80})
+        self.ProfileStatus.Row.LayoutOrder=5
+        self:RefreshProfiles()
+        tab:AddSection("Preferencias", {Tag = "ESTA VENTANA"}):AddButton({Id="lumi.reset-appearance",Name = "Restablecer apariencia",
             Description = "Recupera los ajustes iniciales de esta ventana.", Action = "Restablecer", Variant = "Secondary",
             Callback = function() self:Reset() end})
         tab:AddSection("Ayuda y atajos", {Tag = "ACCESIBILIDAD"}):AddInput({Name = "Atajo de ventana",
             Description = "Minimiza o restaura sin interrumpir la escritura.", ReadOnly = true, Translate = true,
             Default = w.ToggleKey == Enum.KeyCode.RightShift and "Mayús derecha" or (w.ToggleKey and w.ToggleKey.Name or "Desactivado")})
+        tab.Sections[#tab.Sections]:AddInput({Name="Navegación con teclado",ReadOnly=true,Translate=true,MultiLine=true,Height=90,
+            Default="Tab y Mayús+Tab cambian el foco. Intro o Espacio activan. Las flechas ajustan los deslizadores."})
     end
     return self.Tab
 end
 
 function Settings:ShowNavigation(group, label)
     local tab = self:Ensure()
+    self:RefreshProfiles()
     if not tab then return nil end
     tab:SetNavigation(group or "Espacio", label or "Ajustes")
     tab.Button.Visible = true
@@ -2653,6 +4026,7 @@ function Settings:Open()
     if w._destroyed or w._closing or w.Minimized then return nil end
     local tab = self:Ensure()
     w:SelectTab(tab)
+    self:RefreshProfiles()
     self:SyncSelection(tab)
     return tab
 end
@@ -3008,6 +4382,7 @@ function Dropdown.new(section, options)
     UI.corner(selector, 7)
     local border = UI.stroke(selector, T.Line)
     local label = UI.text(selector, "Selection", selected == nil and Textos.vacio or selected, 12, 0, 178, 31, 13, T.Secondary)
+    label:SetAttribute("LumiUserText",options.TranslateValues==false)
     local preview, binding
     if pictures then
         preview, binding = Thumbnail.new(rt, selector, nil, 6, 5, 32, 22)
@@ -3016,6 +4391,7 @@ function Dropdown.new(section, options)
     UI.chevron(selector, 197, 15)
     c.Input, c.Values = selector, values
     c.Options, c.HasImages = entries, pictures
+    c.TranslateValues=options.TranslateValues~=false
     local function selectedEntry()
         local index = table.find(values, selected)
         return index and entries[index]
@@ -3068,7 +4444,9 @@ function Dropdown.new(section, options)
         local scale = window.Scale
         local relative = (selector.AbsolutePosition - window.Main.AbsolutePosition) / scale
         local panelWidth = window.PanelWidth
-        local rowHeight = (pictures or detailed) and (window.Mobile and 56 or 52) or (window.Mobile and 44 or 32)
+        local textFactor=window.TextScale or 1
+        local rowHeight = (pictures or detailed) and math.max(window.Mobile and 56 or 52,math.ceil(44*textFactor)+8)
+            or math.max(window.Mobile and 44 or 32,math.ceil(24*textFactor)+8)
         local width = math.min(window.Panel.Size.X.Offset - 16, math.max(pictures and 244 or 180, selector.AbsoluteSize.X / scale))
         local wanted = math.min(266, math.max(1, #values) * rowHeight + 38)
         local inputHeight = selector.AbsoluteSize.Y / scale
@@ -3112,10 +4490,12 @@ function Dropdown.new(section, options)
             UI.corner(item, 4)
             if pictures then Thumbnail.new(popupRuntime, item, entry.Image, 7, (rowHeight - 32) / 2, 48, 32) end
             local textX = pictures and 64 or 8
-            local textHeight = entry.Description and 19 or rowHeight
-            UI.text(item, "Label", entry.Label, textX, entry.Description and 7 or 0, 167, textHeight, 13,
-                value == selected and T.Accent or T.Text).Size = UDim2.new(1, -(textX + 30), 0, textHeight)
-            if entry.Description then UI.text(item, "Description", entry.Description, textX, 27, 120, 17, 11, T.Muted).Size = UDim2.new(1, -(textX + 30), 0, 17) end
+            local textHeight = entry.Description and math.ceil(19*textFactor) or rowHeight
+            local optionLabel=UI.text(item, "Label", entry.Label, textX, entry.Description and 7 or 0, 167, textHeight, 13,
+                value == selected and T.Accent or T.Text)
+            optionLabel.Size = UDim2.new(1, -(textX + 30), 0, textHeight)
+            optionLabel:SetAttribute("LumiUserText",options.TranslateValues==false)
+            if entry.Description then UI.text(item, "Description", entry.Description, textX, 8+textHeight, 120, math.ceil(17*textFactor), 11, T.Muted).Size = UDim2.new(1, -(textX + 30), 0, math.ceil(17*textFactor)) end
             if value == selected then UI.check(item, width - 39, rowHeight / 2 - 3) end
             UI.hover(popupRuntime, item, value == selected and T.AccentWash or T.Raised, T.Hover)
             popupRuntime:Connect(item.Activated, function()
@@ -3354,6 +4734,7 @@ function Slider.new(section, options)
     high.Position = UDim2.new(1, -108, 0, 74)
     high.TextXAlignment = Enum.TextXAlignment.Right
     c.ShowBounds = options.ShowBounds ~= false
+    c.BoundsLabels = {low, high}
     low.Visible, high.Visible = c.ShowBounds, c.ShowBounds
     c.Layout = function(place)
         field.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
@@ -3362,9 +4743,9 @@ function Slider.new(section, options)
         track.Size = UDim2.fromOffset(place.LaneWidth, 4)
         hit.Position = UDim2.fromOffset(place.LaneX, place.HitY)
         hit.Size = UDim2.fromOffset(place.LaneWidth, place.HitHeight)
-        low.Position, low.Size = UDim2.fromOffset(place.LaneX, place.BoundsY), UDim2.fromOffset(place.BoundsWidth, 14)
+        low.Position, low.Size = UDim2.fromOffset(place.LaneX, place.BoundsY), UDim2.fromOffset(place.BoundsWidth, place.BoundsHeight)
         high.Position = UDim2.fromOffset(place.LaneX + place.LaneWidth - place.BoundsWidth, place.BoundsY)
-        high.Size = UDim2.fromOffset(place.BoundsWidth, 14)
+        high.Size = UDim2.fromOffset(place.BoundsWidth, place.BoundsHeight)
     end
     local dragging, hovered, focused = false, false, false
     local function emphasize()
@@ -3397,6 +4778,7 @@ function Slider.new(section, options)
         return true
     end
     rt:Connect(hit.InputBegan, function(input)
+        if not c:CanInteract() then return end
         if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
         if window._closing then return end
         c:Focus()
@@ -3427,6 +4809,7 @@ function Slider.new(section, options)
     rt:Connect(hit.SelectionGained, function() focused = true; c:Focus(); emphasize() end)
     rt:Connect(hit.SelectionLost, function() focused = false; emphasize() end)
     rt:Connect(Input.InputBegan, function(input)
+        if not c:CanInteract() then return end
         if GuiService.SelectedObject ~= hit or Input:GetFocusedTextBox() then return end
         if input.KeyCode == Enum.KeyCode.Left then c:Set(value - step)
         elseif input.KeyCode == Enum.KeyCode.Right then c:Set(value + step) end
@@ -3496,7 +4879,7 @@ function Toggle.new(section, options)
         return true
     end
     rt:Connect(input.Activated, function()
-        if window._closing then return end
+        if not c:CanInteract() then return end
         window:FinishEntrance()
         c:Focus()
         c:Set(not value)
@@ -3518,9 +4901,22 @@ local Window = __require("Window")
 local Images = __require("ImageSource")
 local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
-if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
+if type(previous) == "table" and type(previous.Destroy) == "function" then
+    -- Reinjection is an intentional handoff. Commit a pending debounce before
+    -- disposing the old runtime; direct Destroy still cancels pending work.
+    for _,window in ipairs(previous._windows or {}) do
+        if window.Profiles and not window._destroyed then
+            local ok,problem=window.Profiles:Flush()
+            if not ok then
+                window.Profiles:_saveFailed(problem)
+                error("[Lumi UI] No se pudo guardar; la ventana anterior sigue abierta.",0)
+            end
+        end
+    end
+    previous:Destroy()
+end
 
-local Lumi = {Version = "0.4.20", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.5.0", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] La biblioteca está cerrada; vuelve a cargarla para continuar")
@@ -3817,6 +5213,48 @@ local Portuguese = {
     ["Herramientas incluye registros, notas y ayuda."] = "Em Ferramentas, você encontra registros, notas e ajuda.",
     ["Ctrl+K busca páginas y controles. Escape cierra los menús."] = "Ctrl+K busca páginas e controles. Escape fecha os menus.",
     ["El perfil y Configuraciones permanecen abajo."] = "O perfil e as Configurações ficam na parte inferior.",
+    ["Tamaño del texto"] = "Tamanho do texto",
+    ["Amplía las letras y conserva el espacio de los controles."] = "Amplia as letras e mantém o espaço dos controles.",
+    ["Perfiles"] = "Perfis",
+    ["GUARDADO LOCAL"] = "ARMAZENAMENTO LOCAL",
+    ["Nombre del perfil"] = "Nome do perfil",
+    ["Guarda varios espacios con tus propios nombres."] = "Salve vários espaços com seus próprios nomes.",
+    ["Perfil guardado"] = "Perfil salvo",
+    ["Elige los valores que quieres recuperar."] = "Escolha os valores que deseja recuperar.",
+    ["Guardar perfil"] = "Salvar perfil",
+    ["Guardar"] = "Salvar",
+    ["Conserva valores, idioma, posición y apariencia."] = "Mantém valores, idioma, posição e aparência.",
+    ["Cargar perfil"] = "Carregar perfil",
+    ["Cargar"] = "Carregar",
+    ["Recupera el perfil seleccionado."] = "Recupera o perfil selecionado.",
+    ["Almacenamiento"] = "Armazenamento",
+    ["El guardado no está disponible en esta sesión."] = "O armazenamento não está disponível nesta sessão.",
+    ["No se pudo leer el archivo de perfiles."] = "Não foi possível ler o arquivo de perfis.",
+    ["Aún no hay perfiles guardados."] = "Ainda não há perfis salvos.",
+    ["Tus perfiles están disponibles en este equipo."] = "Seus perfis estão disponíveis neste computador.",
+    ["Guardando perfil"] = "Salvando perfil",
+    ["Cargando perfil"] = "Carregando perfil",
+    ["Perfil cargado"] = "Perfil carregado",
+    ["No se pudo guardar"] = "Não foi possível salvar",
+    ["No se pudo guardar el perfil"] = "Não foi possível salvar o perfil",
+    ["Tus cambios siguen en esta ventana. Puedes volver a intentarlo."] = "Suas alterações continuam nesta janela. Você pode tentar novamente.",
+    ["No se pudo cargar"] = "Não foi possível carregar",
+    ["Tus preferencias están listas."] = "Suas preferências estão prontas.",
+    ["Revisa el almacenamiento e inténtalo de nuevo."] = "Verifique o armazenamento e tente novamente.",
+    ["Reintentar"] = "Tentar novamente",
+    ["Navegación con teclado"] = "Navegação pelo teclado",
+    ["Tab y Mayús+Tab cambian el foco. Intro o Espacio activan. Las flechas ajustan los deslizadores."] = "Tab e Shift+Tab mudam o foco. Enter ou Espaço ativam. As setas ajustam os controles deslizantes.",
+    ["No se pudo completar la acción"] = "Não foi possível concluir a ação",
+    ["Revisa los valores e inténtalo de nuevo."] = "Verifique os valores e tente novamente.",
+    ["Aviso"] = "Aviso",
+    ["Continuar"] = "Continuar",
+    ["Cerrar aviso"] = "Fechar aviso",
+    ["Preparando vista previa"] = "Preparando prévia",
+    ["Un momento..."] = "Um momento...",
+    ["Vista previa lista"] = "Prévia pronta",
+    ["La acción se completó correctamente."] = "A ação foi concluída com sucesso.",
+    ["Ver ajustes"] = "Ver configurações",
+    ["Cambios guardados."] = "Alterações salvas.",
 }
 
 -- string.upper/lower só convertem ASCII; trate os acentos dos dois idiomas.

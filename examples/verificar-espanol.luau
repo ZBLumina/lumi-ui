@@ -1,7 +1,7 @@
 -- Comprobación opcional para Potassium. Ejecuta primero LumiUI.pilot.luau.
 local entorno = type(getgenv) == "function" and getgenv() or _G
 local Lumi = entorno.__LumiUI
-assert(Lumi and Lumi.Version == "0.4.20", "[Lumi] Carga primero la demostración v0.4.20")
+assert(Lumi and Lumi.Version == "0.5.0", "[Lumi] Carga primero la demostración v0.5.0")
 local ventana = Lumi._windows[1]
 assert(ventana and not ventana._destroyed, "[Lumi] La ventana de demostración debe estar abierta")
 

@@ -16,6 +16,10 @@ function Inspector.new(window)
     self.Shadow = Shadow.new(frame, 14)
     UI.stroke(frame, T.Line)
     BrandArt.footer(window.Runtime, frame)
+    frame = UI.new("ScrollingFrame", frame, {Name="InspectorContent",Size=UDim2.fromScale(1,1),
+        CanvasSize=UDim2.new(),ScrollBarThickness=2,ScrollBarImageColor3=T.Line,
+        ScrollingDirection=Enum.ScrollingDirection.Y,Active=true,ClipsDescendants=true})
+    self.Content, self.Rules = frame, {}
     UI.micro(frame, "InspectorHeading", "INSPECTOR", 18, 20, 188, 16)
     UI.line(frame, 18, 47, 188)
     window.DetailTitle = UI.text(frame, "DetailTitle", Textos.tuEspacio, 18, 67, 188, 52, 21, T.Text, T.Title)
@@ -72,7 +76,9 @@ function Inspector.new(window)
         UI.text(frame, name .. "Key", Textos.claves[i], 18, y, 50, 24, 12, T.Muted)
         window.DetailRows[i] = UI.text(frame, name .. "Value", "--", 74, y, 132, 24, 12, T.Secondary)
         window.DetailRows[i].TextXAlignment = Enum.TextXAlignment.Right
-        UI.line(frame, 18, y + 29, 188)
+        window.DetailRows[i].TextWrapped=true
+        window.DetailRows[i].TextTruncate=Enum.TextTruncate.None
+        self.Rules[i]=UI.line(frame, 18, y + 29, 188)
     end
     self.Hint = UI.text(frame, "Hint", Textos.pistaInicial, 18, 0, 188, 32, 12, T.Secondary)
     self.Hint.Position = UDim2.new(0, 18, 1, -56)
@@ -99,11 +105,57 @@ function Inspector:SetValue(text)
     label.Text = tostring(text)
     local size = 32
     while size > 15 do
-        local bounds = Fonts.bounds(label.Text, size, label.FontFace)
+        local bounds = Fonts.bounds(label.Text, size*(self.Window.TextScale or 1), label.FontFace)
         if bounds.X <= label.Size.X.Offset - 2 then break end
         size -= 1
     end
-    label.TextSize = size
+    UI.textSize(label,size)
+end
+
+function Inspector:Fit()
+    local w,frame=self.Window,self.Content
+    if w._destroyed or not frame.Parent then return end
+    local factor=w.TextScale or 1
+    frame.InspectorHeading.Size=UDim2.fromOffset(188,math.ceil(16*factor))
+    local titleHeight=math.max(52,math.ceil(Fonts.bounds(w.DetailTitle.Text,w.DetailTitle.TextSize,w.DetailTitle.FontFace,187).Y)+2)
+    w.DetailTitle.Size=UDim2.fromOffset(188,titleHeight)
+    local descriptionY=math.max(126,67+titleHeight+7)
+    local descriptionHeight=math.max(44,math.ceil(Fonts.bounds(w.DetailDescription.Text,w.DetailDescription.TextSize,w.DetailDescription.FontFace,187).Y)+2)
+    w.DetailDescription.Position=UDim2.fromOffset(18,descriptionY)
+    w.DetailDescription.Size=UDim2.fromOffset(188,descriptionHeight)
+    local previewY=math.max(190,descriptionY+descriptionHeight+20)
+    local previewHeight=math.ceil(176*factor)
+    frame.ValuePreview.Position=UDim2.fromOffset(18,previewY)
+    frame.ValuePreview.Size=UDim2.fromOffset(188,previewHeight)
+    w.DetailKind.Size=UDim2.fromOffset(160,math.ceil(16*factor))
+    w.DetailValue.Position=UDim2.fromOffset(14,math.ceil(40*factor))
+    w.DetailValue.Size=UDim2.fromOffset(160,math.ceil(40*factor))
+    self.Numeric.Position=UDim2.fromOffset(14,math.ceil(96*factor))
+    self.Boolean.Position=UDim2.fromOffset(14,math.ceil(104*factor))
+    self.ChoiceHint.Position=UDim2.fromOffset(14,math.ceil(103*factor))
+    self.Options.Position=UDim2.fromOffset(14,math.ceil(112*factor))
+    self.Action.Position=UDim2.fromOffset(14,math.ceil(104*factor))
+    for _,object in ipairs({self.Meta,self.Low,self.High})do
+        object.Position=UDim2.new(object.Position.X.Scale,object.Position.X.Offset,0,previewHeight-math.ceil(24*factor))
+        object.Size=UDim2.fromOffset(object.Size.X.Offset,math.ceil(16*factor))
+    end
+    local propsY=math.max(390,previewY+previewHeight+24)
+    frame.Properties.Position=UDim2.fromOffset(18,propsY)
+    frame.Properties.Size=UDim2.fromOffset(188,math.ceil(16*factor))
+    local y=propsY+27
+    for i,name in ipairs({"Page","Section","Type","Range"})do
+        local key,value=frame[name.."Key"],w.DetailRows[i]
+        local h=math.max(math.ceil(24*factor),math.ceil(Fonts.bounds(value.Text,value.TextSize,value.FontFace,121).Y)+2)
+        key.Position=UDim2.fromOffset(18,y);key.Size=UDim2.fromOffset(62,h)
+        value.Position=UDim2.fromOffset(84,y);value.Size=UDim2.fromOffset(122,h)
+        self.Rules[i].Position=UDim2.fromOffset(18,y+h+5)
+        y+=h+10
+    end
+    local hintHeight=math.max(math.ceil(32*factor),math.ceil(Fonts.bounds(self.Hint.Text,self.Hint.TextSize,self.Hint.FontFace,187).Y)+2)
+    local hintY=math.max(w.Height-hintHeight-24,y+24)
+    self.Hint.Position=UDim2.fromOffset(18,hintY)
+    self.Hint.Size=UDim2.fromOffset(188,hintHeight)
+    frame.CanvasSize=UDim2.fromOffset(0,hintY+hintHeight+24)
 end
 
 function Inspector:Update(control)
@@ -123,6 +175,7 @@ function Inspector:Update(control)
     end
     window.DetailTitle.Text, window.DetailDescription.Text = control.Name, control.Description or ""
     window.DetailKind.Text = Textos.etiquetaTipo(control.Kind)
+    window.DetailValue:SetAttribute("LumiUserText",control.Kind=="Dropdown" and control.TranslateValues==false)
     self:SetValue(shown)
     window.DetailRows[1].Text, window.DetailRows[2].Text = control.Section.Tab.Name, control.Section.Name
     window.DetailRows[3].Text, window.DetailRows[4].Text = Textos.nombreTipo(control.Kind), control.Range or "--"
@@ -179,6 +232,7 @@ function Inspector:Update(control)
         self.Meta.Text = Textos.alPulsar
         self.Hint.Text = Textos.pistaAccion
     end
+    self:Fit()
 end
 
 return Inspector

@@ -1,6 +1,6 @@
 # Lumi UI
 
-Biblioteca modular de interfaces en Luau para Potassium. **v0.4.20 incorpora traducción local entre español y portugués y un atajo para minimizar/restaurar, con iconos de MingCute y cabecera despejada.** La barra izquierda de 228 px organiza nueve accesos en Principal, Espacio y Herramientas; el perfil y Configuraciones permanecen al pie. La barra superior incluye Inicio, ruta y búsqueda funcional. Los títulos usan Fredoka SemiBold; el texto, Nunito Sans Regular/Medium; los rótulos pequeños espaciados, Montserrat Medium; la marca, Comfortaa SemiBold. Combina bases de carbón cálido con superficies café y acentos crema. Conserva los tres paneles separados, los fondos suaves, el seguimiento lateral, los selectores con miniaturas y la cápsula superior. La interfaz y la demostración inician en español; Configuraciones permite elegir portugués. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
+Biblioteca modular de interfaces en Luau para Potassium. **v0.5.0 añade perfiles locales, notificaciones, texto ampliable y navegación con teclado, con una API común de controles.** Solo español y portugués, con español inicial. Conserva MingCute, la marca L con punto, Fredoka, Nunito Sans, Montserrat y Comfortaa, y la combinación de carbón cálido, café y crema. Los tres paneles separados mantienen el seguimiento lateral, los fondos contenidos y la cápsula superior. La barra izquierda organiza nueve accesos en Principal, Espacio y Herramientas; la cuenta y Configuraciones permanecen al pie. La cabecera central sigue despejada. Las acciones de ejemplo modifican la interfaz y sus valores de prueba.
 
 Las cinco variantes TTF y sus licencias OFL están en `assets/fonts`. El generador incorpora sus bytes en el script: no se descargan fuentes al abrirlo. Potassium las registra en su carpeta local `lumi-ui/fonts`; otros entornos sin registro de archivos usan fuentes nativas de respaldo. El ajuste de textos utiliza la FontFace real.
 
@@ -11,6 +11,8 @@ Los textos fuente se concentran en `src/Textos.luau` y el catálogo portugués e
 Idiomas y atajo se registran en [las notas de v0.4.20](docs/design/studio-v0420-idiomas-atajo.md). Los iconos y la cabecera se registran en [las notas de v0.4.19](docs/design/studio-v0419-mingcute.md). La barra completa se registra en [las notas de v0.4.18](docs/design/studio-v0418-barra-completa.md). La navegación superior se registra en [las notas de v0.4.17](docs/design/studio-v0417-navegacion.md). Los fondos y el seguimiento lateral se registran en [las notas de v0.4.16](docs/design/studio-v0416-fondos-seguimiento.md). La cabecera completa y su comprobación se registran en [las notas de v0.4.15](docs/design/studio-v0415-cabecera.md). La corrección de claridad y marca se registra en [las notas de v0.4.14](docs/design/studio-v0414-claridad.md). La decoración botánica y su comprobación se registran en [las notas de v0.4.13](docs/design/studio-v0413-imagenes.md).
 
 ## Probar la versión actual en Potassium
+
+Los cambios y comprobaciones de esta entrega se documentan en [v0.5.0](docs/design/studio-v050-producto.md).
 
 Esta versión se desarrolla en la rama del PR. Para probarla:
 
@@ -51,7 +53,66 @@ print(intensidad:Get())
 -- Lumi:Destroy()         -- Cierra todas las ventanas de esta biblioteca.
 ```
 
-Todos los controles aceptan `Name`, `Description` y `Callback`. Los controles con valor ofrecen `Get()`, `Set(valor, omitirFuncion?)` y `Focus()`. Los botones ofrecen `Press()` y un estado legible mediante `Get()`: «Listo», «1 ejecución», «2 ejecuciones»… Los selectores también ofrecen `Open()` y `Close()`.
+Todos los controles aceptan `Id`, `Name`, `Description`, `Callback`, `Enabled` y `Persist`. Los controles con valor ofrecen `Get()`, `Set(valor, omitirFuncion?)` y `Focus()`. Los botones ofrecen `Press()` y un estado legible mediante `Get()`: «Listo», «1 ejecución», «2 ejecuciones»… Los selectores también ofrecen `Open()` y `Close()`.
+
+## Perfiles locales
+
+El guardado es optativo en la biblioteca y está habilitado en la demostración. Asigna una `Config.Key` distinta a cada aplicación y un `Id` explícito estable a cada página y control. El nombre visible y su traducción pueden cambiar sin perder los datos. Llama a `Ready()` **después** de crear todos los controles: entonces se carga el último perfil. Configuraciones permite nombrar, guardar y cargar varios perfiles; el autoguardado actualiza el perfil activo tras una pausa de 0,3 segundos.
+
+```luau
+local ventana = Lumi:CreateWindow({Title="Lumi",
+    Config={Key="mi-aplicacion",AutoLoad=true,AutoSave=true}})
+local general = ventana:AddTab("Inicio",{Id="inicio"}):AddSection("General",{Id="general"})
+local activo = general:AddToggle({Id="espacio.activo",Name="Activar espacio",Default=true,
+    Callback=function(valor) print(valor) end})
+local ok, problema = ventana:Ready()
+if not ok then warn(problema) end
+
+ventana:SaveProfile("Trabajo")
+ventana:LoadProfile("Trabajo") -- Restaura valores y llama a las funciones de los cambios.
+ventana:LoadProfile("Trabajo",{Silent=true}) -- Solo sincroniza la interfaz.
+print(ventana:GetActiveProfile())
+for _,nombre in ipairs(ventana:ListProfiles()) do print(nombre) end
+```
+
+Se guardan valores, idioma, página, posición relativa a la pantalla, tamaño del texto, movimiento, inspector y decoración. Se excluyen botones, campos de solo lectura y `Persist=false`. Los nombres de perfil y el texto escrito se conservan tal cual. Los IDs desaparecidos se ignoran; los valores conocidos se validan antes de aplicarlos. Usa `GetState()` y `ApplyState(estado,{Silent=true})` para un intercambio en memoria.
+
+Potassium escribe `lumi-ui/config/<Key>/profiles.json`, mantiene un respaldo de la versión anterior en `.bak` y verifica cada escritura mediante relectura. Un archivo ilegible o corrupto genera un error y no se convierte en una configuración vacía. El respaldo queda disponible para recuperación manual. Los perfiles pertenecen a este equipo; no se sincronizan por Internet. El entorno debe ofrecer `readfile`, `writefile`, `isfile` y `makefolder`; sin esas funciones la GUI funciona y muestra que el guardado no está disponible. `Config.Storage={Read,Write,Exists,MakeFolder}` admite un proveedor alternativo con funciones simples, sin `self`.
+
+El cierre con `Close()` y una reinyección guardan los cambios pendientes antes de limpiar. `Destroy()` directo cancela las tareas pendientes; para conservarlas explícitamente llama antes a `ventana.Profiles:Flush()`.
+
+## API de actualización y limpieza
+
+```luau
+local control = ventana:GetControl("espacio.activo")
+control:Update({Name="Activar sesión",Description="Conserva este espacio.",Value=false,Silent=true})
+control:SetEnabled(false) -- Bloquea entrada de usuario y atenúa la fila.
+control:Set(true,true)    -- La sincronización desde código sigue disponible.
+print(control:IsEnabled())
+control:SetEnabled(true)
+control:Destroy()         -- Elimina fila, registro, conexiones y tareas propias.
+```
+
+`Update` admite `Name`, `Description`, `Value`, `Silent`, `Callback`, `Enabled` y `Visible`; también `Action` en botones y `Placeholder` en campos. `Callback=false` elimina la función. El ID es inmutable y los IDs explícitos duplicados se rechazan antes de crear una fila. Tras `Destroy()`, `GetControl(id)` devuelve `nil` y el handle no acepta interacción ni actualizaciones. `Activate()` ofrece la acción principal del control con las mismas comprobaciones de disponibilidad que el usuario.
+
+El ejemplo [integracion.luau](examples/integracion.luau) reúne perfiles, actualizaciones y notificaciones.
+
+## Notificaciones
+
+```luau
+local aviso = ventana:Notify({Title="Preparando vista previa",Kind="Loading",Duration=0})
+aviso:Update({Title="Vista previa lista",Message="La acción se completó correctamente.",
+    Kind="Success",Duration=4,Action={Text="Ver ajustes",Callback=function() ventana:OpenSettings() end}})
+-- aviso:Dismiss()
+```
+
+`Kind` admite `Info`, `Success`, `Error` y `Loading`. `Duration=0` mantiene el aviso hasta actualizarlo o cerrarlo. Se muestran como máximo tres; los restantes esperan su turno y su temporizador empieza al aparecer. Los textos largos tienen desplazamiento y no reducen la letra. Acción y cierre son accesibles con teclado. La acción se ejecuta una sola vez; cerrar la ventana limpia también los avisos y sus tareas. Los errores de una función de control muestran un aviso breve y mantienen el diagnóstico en la consola.
+
+## Legibilidad y teclado
+
+Configuraciones permite ampliar el texto entre 100 y 130 %. `ventana:SetPreference("TextScale",1.2)` aplica 120 %. Las filas crecen, los campos pasan debajo cuando falta ancho y el inspector permite desplazarse si su contenido no cabe. La barra izquierda se amplía con la fuente. Los objetivos táctiles de los controles conservan al menos 44 px en modo móvil.
+
+Tab y Mayús+Tab recorren los controles disponibles; Intro y Espacio activan, y las flechas izquierda y derecha ajustan un deslizador seleccionado. Intro sobre un campo inicia la edición. Mientras escribes, el navegador de Lumi no toma esas teclas; los menús mantienen su propio manejo de teclado. El foco seleccionado tiene un indicador visible y se desplaza a la vista. Mayús derecha minimiza/restaura sin interrumpir la edición.
 
 Las páginas aceptan `Group = "Principal"`, `"Espacio"` o `"Herramientas"` para organizar la navegación, y `NavigationLabel` para abreviar el acceso sin cambiar el título. Los grupos se crean según se necesitan. Los iconos disponibles incluyen `Grid`, `Sliders`, `Layers`, `User`, `Cube`, `Stack`, `Document`, `Bookmark`, `Help` y `Settings`. Son alias de iconos MingCute Core Regular. Si falta el valor o no se reconoce, se usa la cuadrícula. Los nombres aprovechan el ancho de la navegación y los títulos, el encabezado completo.
 
@@ -65,7 +126,7 @@ Para añadir otro icono al paquete: guarda el SVG oficial en `assets/icons/mingc
 
 ## Configuraciones y búsqueda
 
-La tarjeta inferior abre Configuraciones. Su porcentaje y barra reflejan la intensidad de la decoración; Ajustes en el grupo Espacio abre la misma página. Sus preferencias actúan sobre la ventana: animaciones, intensidad de la decoración y visibilidad del inspector cuando hay espacio. Restablecer recupera los valores iniciales. Se conservan al cambiar de página y minimizar; pertenecen a la sesión de esa ventana.
+La tarjeta inferior abre Configuraciones. Su porcentaje y barra reflejan la intensidad de la decoración; Ajustes en el grupo Espacio abre la misma página. Sus preferencias actúan sobre esta ventana. Restablecer apariencia recupera los valores iniciales. Los perfiles permiten conservarlos entre ejecuciones cuando el guardado está habilitado.
 
 ```luau
 window:OpenSettings()
@@ -79,7 +140,7 @@ Pulsa la búsqueda o Ctrl+K para localizar páginas y controles por nombre y des
 
 ## Idiomas y atajo de ventana
 
-Configuraciones ofrece solo español y portugués. El catálogo se incluye en el script, conserva el texto fuente y traduce la presentación sin enviar datos. La búsqueda encuentra los nombres traducidos. No es un traductor automático de notas o texto libre. Las preferencias pertenecen a la sesión y a cada ventana.
+Configuraciones ofrece solo español y portugués. El catálogo se incluye en el script, conserva el texto fuente y traduce la presentación sin enviar datos. La búsqueda encuentra los nombres traducidos. No es un traductor automático de notas o texto libre. El idioma se guarda con el perfil cuando el almacenamiento está habilitado.
 
 ```luau
 local ventana = Lumi:CreateWindow({Title = "Lumi", Language = "es"})
@@ -93,7 +154,7 @@ Mayús derecha minimiza o restaura la última ventana de Lumi; se ignora mientra
 
 ## Campos de texto y herramientas
 
-`AddInput` permite campos de una línea o multilínea, con texto de solo lectura cuando corresponde. El texto largo tiene un área desplazable y el cursor permanece visible al escribir. Los valores pertenecen a la sesión: no se guardan en disco.
+`AddInput` permite campos de una línea o multilínea, con texto de solo lectura cuando corresponde. El texto largo tiene un área desplazable y el cursor permanece visible al escribir. Los valores editables se incluyen en los perfiles salvo `Persist=false`.
 
 ```luau
 local notas = general:AddInput({Name = "Notas", MultiLine = true, Height = 180,
@@ -105,13 +166,13 @@ ventana:ShowSettingsInNavigation("Espacio", "Ajustes")
 ventana:OpenProfile()
 ```
 
-La demostración incluye herramientas de distribución, controles de movimiento, registros locales de navegación, un bloc de notas y ayuda. Registros no recopila datos del juego ni transmite información. Las notas se conservan al navegar, cambiar de idioma y minimizar hasta cerrar o recargar la demostración.
+La demostración incluye herramientas de distribución, controles de movimiento, registros locales de navegación, un bloc de notas y ayuda. Registros no recopila datos del juego ni transmite información. Las notas se conservan también al recargar mediante el perfil local activo.
 
 ## Perfil y selectores con imágenes
 
 La tarjeta del perfil abre una página con los datos de la cuenta y muestra una flecha. El pie muestra el avatar y el nombre del jugador local, con `@usuario` cuando es distinto del nombre visible y hay espacio. Si la imagen falla, permanecen las iniciales. Se pueden personalizar mediante `CreateWindow({Profile = {DisplayName = "Nombre", Username = "usuario", Avatar = fuente}})`.
 
-`AddDropdown` conserva las listas de cadenas y admite opciones con `Value`, `Label`, `Image` y una `Description` opcional. `AddImageDropdown` es un alias explícito. `Get()` y la función asociada reciben `Value`; `GetLabel()` devuelve la etiqueta de presentación.
+`AddDropdown` conserva las listas de cadenas y admite opciones con `Value`, `Label`, `Image` y una `Description` opcional. `AddImageDropdown` es un alias explícito. `Get()` y la función asociada reciben `Value`; `GetLabel()` devuelve la etiqueta de presentación. Usa `TranslateValues=false` para nombres proporcionados por el usuario que no deben traducirse.
 
 ```luau
 general:AddImageDropdown({Name = "Tipo de cielo", Default = "dia", Values = {
@@ -173,12 +234,16 @@ src/
   Tab.luau            navegación y páginas
   Section.luau        grupos y filas
   PropertyLayout.luau distribución medida de textos y campos
+  Control.luau        IDs, actualización y ciclo de vida de controles
+  State.luau          exportación y aplicación validada del estado
+  Profiles.luau       perfiles locales, respaldo y autoguardado
+  Typography.luau     escala de texto por ventana
   ImageSource.luau    resolución, caché y carga cancelable de imágenes
   components/         inspector, perfil, búsqueda, configuraciones y presentación
   controls/           botón, interruptor, deslizador y selector
 ```
 
-La generación también produce `tests/runtime.bundle.luau`, excluido de Git. Ejecútalo completo en un cliente de Roblox mediante Potassium. Usa instancias y conexiones reales, crea ventanas temporales y las limpia. Las dos advertencias de las funciones que fallan intencionalmente forman parte de la prueba de aislamiento de errores.
+La generación también produce `tests/runtime.bundle.luau`, excluido de Git. Incluye `runtime.spec.luau` y los demás `tests/*.spec.luau`. Ejecútalo completo en un cliente de Roblox mediante Potassium. Usa instancias, entrada y conexiones reales, crea ventanas temporales y las limpia. Las advertencias de funciones y almacenamiento que fallan intencionalmente forman parte de las pruebas de recuperación.
 
 La identidad visual y su comprobación se registran en [las notas de v0.4.12](docs/design/studio-v0412-identidad.md). La composición, el perfil, las imágenes y la verificación móvil se registran en [las notas de v0.4.11](docs/design/studio-v0411-perfil-imagenes.md). Los registros históricos de [composición](docs/design/studio-v048-composicion.md), [español](docs/design/studio-v047-espanol.md), [distribución](docs/design/studio-v046-layout.md), [sombra](docs/design/studio-v045-shadow.md) y [movimiento](docs/design/studio-v0410-movimiento.md) documentan las mejoras previas.
 

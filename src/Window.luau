@@ -15,6 +15,11 @@ local Search = require("components/Search")
 local Navigation = require("components/Navigation")
 local Icons = require("Icons")
 local Locale = require("Locale")
+local State = require("State")
+local Profiles = require("Profiles")
+local Notifications = require("components/Notifications")
+local Typography = require("Typography")
+local Keyboard = require("components/Keyboard")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local Window = {}
@@ -29,9 +34,12 @@ function Window.new(options)
     rt.Animations = options.Animations ~= false
     local root = rt:Mount()
     Icons.mount(rt, root)
-    local self = setmetatable({Runtime = rt, Root = root, Tabs = {}, _destroyed = false,
+    local textScale = math.clamp(UI.number(options.TextScale,1),1,1.3)
+    Typography.mount(rt,root,textScale)
+    local self = setmetatable({Runtime = rt, Root = root, Tabs = {}, ControlsById = {}, TabsById = {}, _destroyed = false,
         Width = 1100, Height = DESKTOP_HEIGHT, Scale = 1, OpenDropdown = nil, Minimized = false}, Window)
     self.Language = options.Language == "pt" and "pt" or "es"
+    self.TextScale = textScale
     self.ToggleKey = options.ToggleKey == nil and Enum.KeyCode.RightShift or options.ToggleKey
     if self.ToggleKey ~= false and (typeof(self.ToggleKey) ~= "EnumItem" or self.ToggleKey.EnumType ~= Enum.KeyCode) then
         self.ToggleKey = Enum.KeyCode.RightShift
@@ -119,7 +127,7 @@ function Window.new(options)
     UI.corner(status, 12)
     self.Statusbar = status
     UI.line(status, 0, 0, 916)
-    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.4.20", 730, 0, 160, 28, 11, T.Muted, T.Mono)
+    local version = UI.text(status, "Version", "LUAU  /  LUMI 0.5.0", 730, 0, 160, 28, 11, T.Muted, T.Mono)
     version.TextXAlignment = Enum.TextXAlignment.Right
     self.StatusVersion = version
     self.Blocker = UI.button(root, "PopoverDismiss", "", 0, 0, 0, 0)
@@ -175,6 +183,14 @@ function Window.new(options)
     self:Fit()
     table.insert(liveWindows, self)
     self.Locale = Locale.new(self, self.Language)
+    self.Notifications = Notifications.new(self)
+    if type(options.Config)=="table" then self.Profiles=Profiles.new(self,options.Config) end
+    self.Keyboard = Keyboard.new(self)
+    rt.OnError=function()
+        if not self._destroyed and not self._closing then
+            self:Notify({Title="No se pudo completar la acción",Message="Revisa los valores e inténtalo de nuevo.",Kind="Error",Duration=6})
+        end
+    end
     task.defer(function()
         if self._destroyed or self._closing or self._entranceInterrupted or rt.Animations == false then return end
         self.UIScale.Scale = self.Scale * 0.99
@@ -210,7 +226,7 @@ function Window:Fit()
     local verticalMargin = self.Mobile and self.SafeTop + 8 or 32
     self.Height = math.max(280, math.min(self.Mobile and 768 or PREFERRED_HEIGHT, size.Y - verticalMargin))
     if not self.Mobile then self.NavigationOpen = false end
-    self.SidebarWidth = self.Mobile and self.Width or 228
+    self.SidebarWidth = self.Mobile and self.Width or (228+math.floor(((self.Preferences.TextScale or 1)-1)*200))
     local sideWidth = self.SidebarWidth
     self.Inspector.Visible = not compact and not self.Mobile and self.Preferences.Inspector
     self.PanelWidth = self.Width - (self.Inspector.Visible and INSPECTOR_WIDTH + PANEL_GAP or 0)
@@ -222,10 +238,12 @@ function Window:Fit()
     self.Sidebar.Visible = not self.Mobile or self.NavigationOpen == true
     self.TopEdge.Size = UDim2.fromOffset(self.Panel.Size.X.Offset - 24, 1)
     self.Sidebar.Size = UDim2.fromOffset(sideWidth, self.Height)
-    self.Sidebar.Brand.Size = UDim2.fromOffset(sideWidth - (self.Mobile and 124 or 70), 30)
-    self.Sidebar.BrandSub.Size = UDim2.fromOffset(sideWidth - 40, 14)
+    local textFactor=self.Preferences.TextScale or 1
+    self.Sidebar.Brand.Size = UDim2.fromOffset(sideWidth - (self.Mobile and 124 or 70), math.ceil(32*textFactor))
+    self.Sidebar.BrandSub.Size = UDim2.fromOffset(sideWidth - 40, math.ceil(16*textFactor))
     self.Sidebar.BrandSub.Text = Fonts.tracked(sideWidth < 170 and Textos.biblioteca or Textos.interfaz)
     local short = self.Height < 480
+    self.NavigationUI:Fit()
     local navTop = short and 88 or 106
     self.Sidebar.BrandSub.Position = UDim2.fromOffset(21, short and 60 or 65)
     self.Sidebar.BrandWaves.Visible = not short
@@ -273,6 +291,8 @@ function Window:Fit()
     for _, tab in ipairs(self.Tabs) do tab:Relayout() end
     self:SetCenter(self.Center or size / 2)
     self.Presentation:Fit()
+    if self.Notifications then self.Notifications:Fit() end
+    if self.Context and self.Context.Fit then self.Context:Fit() end
 end
 
 function Window:SetCenter(center, follow)
@@ -287,6 +307,7 @@ function Window:SetCenter(center, follow)
     self.Main.Position = UDim2.fromOffset(x, y)
     if follow and previous then self.Presentation:Follow(self.Center - previous)
     else self.Presentation:StopFollow() end
+    if previous and previous~=self.Center and self.Profiles and not self._applyingState then self.Profiles:Changed() end
 end
 
 function Window:BeginPointer(input, update, finish)
@@ -343,7 +364,7 @@ end
 Window._closeDropdown = Window.ClosePopup
 
 function Window:Focus(control)
-    if self._destroyed or self._closing then return end
+    if self._destroyed or self._closing or control._destroyed then return end
     local changed = self.SelectedControl ~= control
     if self.SelectedControl and self.SelectedControl.FocusIndicator then
         self.SelectedControl.FocusIndicator.Visible = false
@@ -375,10 +396,44 @@ end
 
 function Window:OpenSettings() return self.Settings:Open() end
 
+function Window:GetControl(id) return self.ControlsById[id] end
+
+function Window:GetState() return State.Export(self) end
+function Window:ApplyState(state,options) return State.Apply(self,state,options) end
+function Window:Notify(options) return self.Notifications:Push(options or {}) end
+function Window:SaveProfile(name)
+    if not self.Profiles then return false,"El guardado local no está configurado." end
+    local ok,problem=self.Profiles:Save(name)
+    if ok then self.Settings:RefreshProfiles() end
+    return ok,problem
+end
+function Window:LoadProfile(name,options)
+    if not self.Profiles then return false,"El guardado local no está configurado." end
+    local ok,problem=self.Profiles:Load(name,options)
+    if ok then self.Settings:RefreshProfiles() end
+    return ok,problem
+end
+function Window:ListProfiles()
+    if self.Profiles then return self.Profiles:List() end
+    return {}
+end
+function Window:GetActiveProfile() return self.Profiles and self.Profiles:GetActive() or nil end
+function Window:Ready()
+    self:FinishPages()
+    if self.Profiles then
+        local ok,problem=self.Profiles:Ready()
+        self.Settings:RefreshProfiles()
+        if self.Settings.ProfileName and self:GetActiveProfile() then self.Settings.ProfileName:Set(self:GetActiveProfile(),true) end
+        return ok,problem
+    end
+    return true
+end
+
 function Window:SetLanguage(language)
     if not self.Locale:Set(language) then return false end
     self.Language, self.Preferences.Language = language, language
     if self.Settings.Controls.Language then self.Settings.Controls.Language:Set(language, true) end
+    if self.Profiles and not self._applyingState then self.Profiles:Changed() end
     return true
 end
 
@@ -425,6 +480,7 @@ function Window:SelectTab(tab)
         tab.Motion:Fade(0.35, 0, Motion.Time.Page)
     end
     self.Breadcrumb.Text = Textos.espacio .. " / " .. tab.Name
+    if self.Profiles and not self._applyingState then self.Profiles:Changed() end
     self.NavigationUI:Reveal(tab)
     if self.SelectedControl and self.SelectedControl.FocusIndicator then
         self.SelectedControl.FocusIndicator.Visible = false
@@ -466,6 +522,10 @@ end
 
 function Window:Close()
     if self._destroyed or self._closing then return end
+    if self.Profiles then
+        local ok,problem=self.Profiles:Flush()
+        if not ok then self.Profiles:_saveFailed(problem);return false,problem end
+    end
     self:FinishEntrance()
     self.Presentation:FinishTransition()
     self:EndPointer()

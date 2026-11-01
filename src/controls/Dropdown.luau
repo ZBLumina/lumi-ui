@@ -32,6 +32,7 @@ function Dropdown.new(section, options)
     UI.corner(selector, 7)
     local border = UI.stroke(selector, T.Line)
     local label = UI.text(selector, "Selection", selected == nil and Textos.vacio or selected, 12, 0, 178, 31, 13, T.Secondary)
+    label:SetAttribute("LumiUserText",options.TranslateValues==false)
     local preview, binding
     if pictures then
         preview, binding = Thumbnail.new(rt, selector, nil, 6, 5, 32, 22)
@@ -40,6 +41,7 @@ function Dropdown.new(section, options)
     UI.chevron(selector, 197, 15)
     c.Input, c.Values = selector, values
     c.Options, c.HasImages = entries, pictures
+    c.TranslateValues=options.TranslateValues~=false
     local function selectedEntry()
         local index = table.find(values, selected)
         return index and entries[index]
@@ -92,7 +94,9 @@ function Dropdown.new(section, options)
         local scale = window.Scale
         local relative = (selector.AbsolutePosition - window.Main.AbsolutePosition) / scale
         local panelWidth = window.PanelWidth
-        local rowHeight = (pictures or detailed) and (window.Mobile and 56 or 52) or (window.Mobile and 44 or 32)
+        local textFactor=window.TextScale or 1
+        local rowHeight = (pictures or detailed) and math.max(window.Mobile and 56 or 52,math.ceil(44*textFactor)+8)
+            or math.max(window.Mobile and 44 or 32,math.ceil(24*textFactor)+8)
         local width = math.min(window.Panel.Size.X.Offset - 16, math.max(pictures and 244 or 180, selector.AbsoluteSize.X / scale))
         local wanted = math.min(266, math.max(1, #values) * rowHeight + 38)
         local inputHeight = selector.AbsoluteSize.Y / scale
@@ -136,10 +140,12 @@ function Dropdown.new(section, options)
             UI.corner(item, 4)
             if pictures then Thumbnail.new(popupRuntime, item, entry.Image, 7, (rowHeight - 32) / 2, 48, 32) end
             local textX = pictures and 64 or 8
-            local textHeight = entry.Description and 19 or rowHeight
-            UI.text(item, "Label", entry.Label, textX, entry.Description and 7 or 0, 167, textHeight, 13,
-                value == selected and T.Accent or T.Text).Size = UDim2.new(1, -(textX + 30), 0, textHeight)
-            if entry.Description then UI.text(item, "Description", entry.Description, textX, 27, 120, 17, 11, T.Muted).Size = UDim2.new(1, -(textX + 30), 0, 17) end
+            local textHeight = entry.Description and math.ceil(19*textFactor) or rowHeight
+            local optionLabel=UI.text(item, "Label", entry.Label, textX, entry.Description and 7 or 0, 167, textHeight, 13,
+                value == selected and T.Accent or T.Text)
+            optionLabel.Size = UDim2.new(1, -(textX + 30), 0, textHeight)
+            optionLabel:SetAttribute("LumiUserText",options.TranslateValues==false)
+            if entry.Description then UI.text(item, "Description", entry.Description, textX, 8+textHeight, 120, math.ceil(17*textFactor), 11, T.Muted).Size = UDim2.new(1, -(textX + 30), 0, math.ceil(17*textFactor)) end
             if value == selected then UI.check(item, width - 39, rowHeight / 2 - 3) end
             UI.hover(popupRuntime, item, value == selected and T.AccentWash or T.Raised, T.Hover)
             popupRuntime:Connect(item.Activated, function()

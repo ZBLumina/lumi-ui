@@ -2,9 +2,22 @@ local Window = require("Window")
 local Images = require("ImageSource")
 local environment = type(getgenv) == "function" and getgenv() or _G
 local previous = environment.__LumiUI
-if type(previous) == "table" and type(previous.Destroy) == "function" then previous:Destroy() end
+if type(previous) == "table" and type(previous.Destroy) == "function" then
+    -- Reinjection is an intentional handoff. Commit a pending debounce before
+    -- disposing the old runtime; direct Destroy still cancels pending work.
+    for _,window in ipairs(previous._windows or {}) do
+        if window.Profiles and not window._destroyed then
+            local ok,problem=window.Profiles:Flush()
+            if not ok then
+                window.Profiles:_saveFailed(problem)
+                error("[Lumi UI] No se pudo guardar; la ventana anterior sigue abierta.",0)
+            end
+        end
+    end
+    previous:Destroy()
+end
 
-local Lumi = {Version = "0.4.20", _windows = {}, _destroyed = false}
+local Lumi = {Version = "0.5.0", _windows = {}, _destroyed = false}
 
 function Lumi:CreateWindow(options)
     assert(not self._destroyed, "[Lumi UI] La biblioteca está cerrada; vuelve a cargarla para continuar")

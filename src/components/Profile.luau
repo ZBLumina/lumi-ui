@@ -110,7 +110,9 @@ end
 function Profile:Fit(width, short, bottom)
     if not alive(self) then return end
     width = math.max(0, math.floor(UI.number(width, self.Frame.Size.X.Offset)))
-    local height = short and 50 or 60
+    local factor=self.Window.TextScale or 1
+    local height = (short and 50 or 60)+math.ceil((factor-1)*50)
+    local nameHeight=math.ceil(18*factor)
     local compact = short or width < 124
     local avatarSize = compact and 32 or 34
     local gap = compact and 8 or 10
@@ -128,15 +130,15 @@ function Profile:Fit(width, short, bottom)
     self.Avatar.Visible = width >= avatarSize
     self._placeholder.Size = UDim2.fromOffset(avatarSize, avatarSize)
     self.NameLabel.Position = UDim2.fromOffset(textX, nameY)
-    self.NameLabel.Size = UDim2.fromOffset(textWidth, 18)
+    self.NameLabel.Size = UDim2.fromOffset(textWidth, nameHeight)
     self.NameLabel.Visible = textWidth > 0
-    self.UserLabel.Position = UDim2.fromOffset(textX, nameY + 18)
-    self.UserLabel.Size = UDim2.fromOffset(textWidth, 16)
+    self.UserLabel.Position = UDim2.fromOffset(textX, nameY + nameHeight)
+    self.UserLabel.Size = UDim2.fromOffset(textWidth, math.ceil(16*factor))
     self.UserLabel.Visible = showUser
-    self.Status.Position = UDim2.fromOffset(textX + 9, nameY + 19)
-    self.Status.Size = UDim2.fromOffset(math.max(0, textWidth - 9), 15)
+    self.Status.Position = UDim2.fromOffset(textX + 9, nameY + nameHeight + 1)
+    self.Status.Size = UDim2.fromOffset(math.max(0, textWidth - 9), math.ceil(15*factor))
     self.Status.Visible = not showUser and textWidth >= 50
-    self.StatusDot.Position = UDim2.fromOffset(textX, nameY + 25)
+    self.StatusDot.Position = UDim2.fromOffset(textX, nameY + nameHeight + 7)
     self.StatusDot.Visible = self.Status.Visible
     self.Frame.Chevron.Position = UDim2.fromOffset(width - 25, height / 2 - 8)
 end

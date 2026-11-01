@@ -205,12 +205,15 @@ async function main() {
   const built = library(modules);
   const demo = normalize(await readFile(path.join(root, 'examples', 'potassium-pilot.luau'), 'utf8'));
   const tests = normalize(await readFile(path.join(root, 'tests', 'runtime.spec.luau'), 'utf8'));
+  const extraNames = (await readdir(path.join(root, 'tests'))).filter(name => name.endsWith('.spec.luau') && name !== 'runtime.spec.luau').sort(compare);
+  const extraTests = await Promise.all(extraNames.map(name => readFile(path.join(root, 'tests', name), 'utf8')));
+  const runtimeTests = tests.replace('local function cleanupCase()', extraTests.join('\n') + '\nlocal function cleanupCase()');
   const wrap = (body) => `-- Generado por scripts/build.mjs.\nlocal Lumi = (function()\n${built}end)()\n\n${body}`;
   // Compute and validate every artifact before touching an output directory.
   const outputs = new Map([
     ['dist/LumiUI.luau', built],
     ['dist/LumiUI.pilot.luau', wrap(demo)],
-    ['tests/runtime.bundle.luau', `-- Generado por scripts/build.mjs.\nlocal function ReloadLumi()\n${built}end\nlocal Lumi = ReloadLumi()\n\n${tests}`],
+    ['tests/runtime.bundle.luau', `-- Generado por scripts/build.mjs.\nlocal function ReloadLumi()\n${built}end\nlocal Lumi = ReloadLumi()\n\n${runtimeTests}`],
   ]);
   const stale = [];
   for (const [file, content] of outputs) {

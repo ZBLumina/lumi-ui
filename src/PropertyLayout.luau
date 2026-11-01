@@ -54,7 +54,11 @@ function Layout.measure(control, width)
         result.BoundsY = result.HitY + result.HitHeight + 2
         result.LaneX, result.LaneWidth = PAD, available
         result.BoundsWidth = math.max(1, (available - 12) / 2)
-        result.Height = (control.ShowBounds == false and result.HitY + result.HitHeight or result.BoundsY + 14) + VERTICAL
+        result.BoundsHeight = 14
+        for _,label in ipairs(control.BoundsLabels or {}) do
+            result.BoundsHeight = math.max(result.BoundsHeight, textHeight(label, result.BoundsWidth, 14))
+        end
+        result.Height = (control.ShowBounds == false and result.HitY + result.HitHeight or result.BoundsY + result.BoundsHeight) + VERTICAL
     end
     return result
 end

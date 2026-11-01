@@ -65,6 +65,7 @@ function Slider.new(section, options)
     high.Position = UDim2.new(1, -108, 0, 74)
     high.TextXAlignment = Enum.TextXAlignment.Right
     c.ShowBounds = options.ShowBounds ~= false
+    c.BoundsLabels = {low, high}
     low.Visible, high.Visible = c.ShowBounds, c.ShowBounds
     c.Layout = function(place)
         field.Position = UDim2.fromOffset(place.ControlX, place.ControlY)
@@ -73,9 +74,9 @@ function Slider.new(section, options)
         track.Size = UDim2.fromOffset(place.LaneWidth, 4)
         hit.Position = UDim2.fromOffset(place.LaneX, place.HitY)
         hit.Size = UDim2.fromOffset(place.LaneWidth, place.HitHeight)
-        low.Position, low.Size = UDim2.fromOffset(place.LaneX, place.BoundsY), UDim2.fromOffset(place.BoundsWidth, 14)
+        low.Position, low.Size = UDim2.fromOffset(place.LaneX, place.BoundsY), UDim2.fromOffset(place.BoundsWidth, place.BoundsHeight)
         high.Position = UDim2.fromOffset(place.LaneX + place.LaneWidth - place.BoundsWidth, place.BoundsY)
-        high.Size = UDim2.fromOffset(place.BoundsWidth, 14)
+        high.Size = UDim2.fromOffset(place.BoundsWidth, place.BoundsHeight)
     end
     local dragging, hovered, focused = false, false, false
     local function emphasize()
@@ -108,6 +109,7 @@ function Slider.new(section, options)
         return true
     end
     rt:Connect(hit.InputBegan, function(input)
+        if not c:CanInteract() then return end
         if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
         if window._closing then return end
         c:Focus()
@@ -138,6 +140,7 @@ function Slider.new(section, options)
     rt:Connect(hit.SelectionGained, function() focused = true; c:Focus(); emphasize() end)
     rt:Connect(hit.SelectionLost, function() focused = false; emphasize() end)
     rt:Connect(Input.InputBegan, function(input)
+        if not c:CanInteract() then return end
         if GuiService.SelectedObject ~= hit or Input:GetFocusedTextBox() then return end
         if input.KeyCode == Enum.KeyCode.Left then c:Set(value - step)
         elseif input.KeyCode == Enum.KeyCode.Right then c:Set(value + step) end
